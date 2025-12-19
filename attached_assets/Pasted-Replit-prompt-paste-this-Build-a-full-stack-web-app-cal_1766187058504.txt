@@ -1,0 +1,233 @@
+Replit prompt (paste this)
+
+Build a full-stack web app called “Outbound OS” that helps me craft structured networking outreach messages (SDR/BDR-style), run A/B tests, and track outcomes by outreach type. Focus on a tight guided workflow, reliable data capture, and analytics. V1 is single-user, local-first.
+
+Core user stories
+
+As a user, I can add a contact manually or upload a LinkedIn profile PDF, extract key fields, and edit them.
+
+As a user, I can create an outreach message via a guided wizard that enforces a strict structure.
+
+As a user, I can generate channel-specific versions of the message:
+
+LinkedIn message to an existing connection
+
+LinkedIn connection request note (tight character limit)
+
+Email outreach (includes subject line)
+
+As a user, I can create A/B experiments for a message, log which variant I used for each send, and track outcomes.
+
+As a user, I can see a dashboard of success rates and funnel metrics by outreach type, campaign, and time period.
+
+As a user, I can export data to CSV.
+
+Non-goals for v1
+
+No direct sending via LinkedIn or email. Provide copy-to-clipboard and a logging workflow.
+
+No multi-user auth. Single-user is fine.
+
+App structure (screens and navigation)
+
+Left navigation with:
+
+Dashboard
+
+Contacts
+
+Composer
+
+Experiments
+
+Outreach Log
+
+Settings
+
+Dashboard
+
+Cards: total sent, responses, positive responses, meetings booked, conversions.
+
+Funnel chart: sent → responded → positive → booked → converted.
+
+Filters: date range, outreach type, campaign, tags.
+
+Tables: performance by outreach type, performance by experiment/variant.
+
+Contacts
+
+List with search and filters.
+
+Contact detail page with extracted profile fields, notes, and outreach history.
+
+Add contact modal: manual entry OR upload PDF.
+
+PDF extraction shows parsed fields and lets user edit and save.
+
+Contact fields:
+
+name, company, role/title, linkedin_url, email
+
+headline, about, location
+
+experience (free text or structured list), education, skills, keywords (tags)
+
+notes, tags (industry/persona/seniority/region)
+
+Composer (guided wizard)
+
+A step-by-step wizard that saves inputs and produces drafts that follow this strict structure:
+
+Template sections:
+
+Personalization hook (1 line)
+
+Relevance/value hypothesis (1–2 lines)
+
+Credibility/proof (1 line)
+
+Clear ask/CTA (1 line)
+
+Logistics and close (optional line)
+
+Wizard inputs (required unless marked optional):
+
+Outreach goal (intro chat, referral, partnership, recruiting, advice)
+
+Channel/type (LinkedIn existing, LinkedIn connect request, Email)
+
+Personalization source (select from extracted profile fields) and a chosen hook
+
+Value hypothesis (what I can offer / why this matters)
+
+Credibility proof point (optional)
+
+Ask/CTA (15 min chat, quick question, referral, etc.)
+
+Timeframe (this week/next week) and scheduling preference (optional)
+
+Tone (default from settings)
+
+Length preference (short/medium/long where applicable)
+
+Channel constraints:
+
+LinkedIn connection request note: very short, enforce hard character max (set to 300 chars).
+
+LinkedIn existing connection: short to medium, readable with line breaks.
+
+Email: include subject line patterns from Settings; body can be longer.
+
+Composer outputs:
+
+Generated message + a “Regenerate variants” button that preserves structure.
+
+Show 3 variants at once (A, B, C), each editable.
+
+Copy-to-clipboard for each variant.
+
+“Log outreach” button that creates an outreach attempt linked to the contact and variant.
+
+Important: Use a deterministic template engine (not an external LLM call). Generate drafts from the user’s wizard inputs and contact profile fields. Make it easy to modify rules later.
+
+Experiments (A/B testing)
+
+Create experiment: name, outreach type, hypothesis, variable being tested (hook vs CTA vs length vs tone), variant A text, variant B text, start/end date (optional).
+
+Assign an experiment to a contact/outreach attempt at logging time.
+
+Stats: counts and rates per variant for responded, positive, booked, converted.
+
+Add a simple “significance” indicator using a two-proportion z-test with a clear note that it is approximate, and only show it when sample size is adequate (for example, both variants have at least 20 sends).
+
+Outreach Log
+
+Table of attempts with filters: date range, outreach type, status/outcome, experiment, campaign, tags.
+
+Each attempt fields:
+
+contact_id
+
+date_sent
+
+outreach_type (linkedin_connected, linkedin_connect_request, email)
+
+campaign (string)
+
+message_variant_label (A/B/C or custom)
+
+message_body (stored snapshot)
+
+subject (for email)
+
+experiment_id (optional), experiment_variant (A/B)
+
+outcomes (boolean or date fields): responded, positive_response, meeting_booked, converted
+
+notes
+
+Inline editing for outcome fields to update as replies come in.
+
+Settings
+
+Default tone (professional, friendly, direct)
+
+Default CTA text options
+
+Email signature block
+
+Email subject patterns (for example: “Quick question about {company}”, “{name} x {your_name}”)
+
+Template rule toggles (include proof line yes/no, include logistics line yes/no)
+
+Character limit settings for connection request.
+
+Data and storage
+
+Use SQLite for persistence.
+
+Provide an API layer (backend) with endpoints for contacts, uploads/parsing, messages, outreach attempts, experiments, analytics, export.
+
+Implement CSV export for contacts and outreach attempts.
+
+PDF parsing
+
+Accept a PDF upload.
+
+Extract text server-side and parse into fields with heuristics:
+
+headline and about sections
+
+current role/company
+
+experience, education, skills keywords if present
+
+Show the extracted fields to the user for confirmation/editing before saving.
+
+Technical requirements
+
+React front end with clean UI (fast, minimal).
+
+Backend can be Node/Express or Python/FastAPI, whichever is simplest for PDF extraction and SQLite.
+
+Use robust validation and error handling.
+
+Provide seed data option for quick demo.
+
+Include clear empty states and onboarding hints.
+
+Acceptance criteria
+
+I can add a contact via PDF, confirm extracted fields, and save.
+
+I can run the Composer wizard and produce channel-specific drafts that respect constraints.
+
+I can log an outreach attempt with a chosen variant and later update outcomes.
+
+I can create an A/B experiment and see per-variant performance and a basic significance indicator.
+
+Dashboard and filters work and reflect stored data.
+
+CSV export works.
+
+Build this as a working v1. Prioritize correctness, usability, and a cohesive workflow over advanced styling.
