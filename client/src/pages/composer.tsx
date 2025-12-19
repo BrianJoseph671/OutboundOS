@@ -634,14 +634,14 @@ export default function Composer() {
                 <div className="space-y-2">
                   <Label htmlFor="experiment">A/B Experiment (optional)</Label>
                   <Select
-                    value={state.experimentId}
-                    onValueChange={(v) => setState((s) => ({ ...s, experimentId: v }))}
+                    value={state.experimentId || "none"}
+                    onValueChange={(v) => setState((s) => ({ ...s, experimentId: v === "none" ? "" : v }))}
                   >
                     <SelectTrigger data-testid="select-composer-experiment">
                       <SelectValue placeholder="Select an experiment" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">None</SelectItem>
+                      <SelectItem value="none">None</SelectItem>
                       {activeExperiments.map((e) => (
                         <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
                       ))}
