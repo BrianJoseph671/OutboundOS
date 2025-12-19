@@ -11,7 +11,8 @@ import {
 } from "@shared/schema";
 
 const require = createRequire(import.meta.url);
-const pdfParse = require("pdf-parse");
+const pdfParseModule = require("pdf-parse");
+const pdfParse = pdfParseModule.default || pdfParseModule;
 
 const upload = multer({ storage: multer.memoryStorage() });
 
