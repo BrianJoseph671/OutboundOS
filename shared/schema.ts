@@ -43,7 +43,7 @@ export const outreachAttempts = pgTable("outreach_attempts", {
   notes: text("notes"),
 });
 
-export const insertOutreachAttemptSchema = createInsertSchema(outreachAttempts).omit({ id: true });
+export const insertOutreachAttemptSchema = createInsertSchema(outreachAttempts).omit({ id: true, dateSent: true });
 export type InsertOutreachAttempt = z.infer<typeof insertOutreachAttemptSchema>;
 export type OutreachAttempt = typeof outreachAttempts.$inferSelect;
 
