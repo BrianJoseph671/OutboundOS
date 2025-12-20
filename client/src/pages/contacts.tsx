@@ -13,14 +13,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import {
   Search,
   Plus,
-  Upload,
   Building2,
   Mail,
   Linkedin,
@@ -282,9 +280,6 @@ function ContactDetail({
 
 function AddContactModal({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState("manual");
-  const [pdfParsedData, setPdfParsedData] = useState<Partial<InsertContact> | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
 
   const [formData, setFormData] = useState<Partial<InsertContact>>({
     name: "",
@@ -333,39 +328,6 @@ function AddContactModal({ open, onOpenChange }: { open: boolean; onOpenChange: 
       notes: "",
       tags: "",
     });
-    setPdfParsedData(null);
-  };
-
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (!file.type.includes("pdf")) {
-      toast({ title: "Please upload a PDF file", variant: "destructive" });
-      return;
-    }
-
-    setIsUploading(true);
-    const formDataFile = new FormData();
-    formDataFile.append("file", file);
-
-    try {
-      const response = await fetch("/api/parse-pdf", {
-        method: "POST",
-        body: formDataFile,
-      });
-
-      if (!response.ok) throw new Error("Failed to parse PDF");
-
-      const parsed = await response.json();
-      setPdfParsedData(parsed);
-      setFormData((prev) => ({ ...prev, ...parsed }));
-      toast({ title: "PDF parsed successfully. Review and save." });
-    } catch {
-      toast({ title: "Failed to parse PDF", variant: "destructive" });
-    } finally {
-      setIsUploading(false);
-    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -377,50 +339,19 @@ function AddContactModal({ open, onOpenChange }: { open: boolean; onOpenChange: 
     createMutation.mutate(formData as InsertContact);
   };
 
-  const currentData = activeTab === "upload" && pdfParsedData ? { ...formData, ...pdfParsedData } : formData;
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add Contact</DialogTitle>
         </DialogHeader>
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="manual" data-testid="tab-manual-entry">Manual Entry</TabsTrigger>
-            <TabsTrigger value="upload" data-testid="tab-upload-pdf">Upload PDF</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="upload" className="space-y-4">
-            <div className="border-2 border-dashed border-muted rounded-md p-8 text-center">
-              <Upload className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-              <p className="text-sm text-muted-foreground mb-4">
-                Upload a LinkedIn profile PDF to extract contact information
-              </p>
-              <Input
-                type="file"
-                accept=".pdf"
-                onChange={handleFileUpload}
-                className="max-w-xs mx-auto"
-                disabled={isUploading}
-                data-testid="input-pdf-upload"
-              />
-              {isUploading && <p className="text-sm text-muted-foreground mt-2">Parsing PDF...</p>}
-            </div>
-            {pdfParsedData && (
-              <p className="text-sm text-chart-2">
-                PDF parsed! Review the extracted fields below and save.
-              </p>
-            )}
-          </TabsContent>
-
-          <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+        <form onSubmit={handleSubmit} className="space-y-4 mt-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="name">Name *</Label>
                 <Input
                   id="name"
-                  value={currentData.name || ""}
+                  value={formData.name || ""}
                   onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
                   placeholder="John Smith"
                   data-testid="input-contact-name"
@@ -431,7 +362,7 @@ function AddContactModal({ open, onOpenChange }: { open: boolean; onOpenChange: 
                 <Input
                   id="email"
                   type="email"
-                  value={currentData.email || ""}
+                  value={formData.email || ""}
                   onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
                   placeholder="john@company.com"
                   data-testid="input-contact-email"
@@ -444,7 +375,7 @@ function AddContactModal({ open, onOpenChange }: { open: boolean; onOpenChange: 
                 <Label htmlFor="company">Company</Label>
                 <Input
                   id="company"
-                  value={currentData.company || ""}
+                  value={formData.company || ""}
                   onChange={(e) => setFormData((prev) => ({ ...prev, company: e.target.value }))}
                   placeholder="Acme Inc"
                   data-testid="input-contact-company"
@@ -454,7 +385,7 @@ function AddContactModal({ open, onOpenChange }: { open: boolean; onOpenChange: 
                 <Label htmlFor="role">Role / Title</Label>
                 <Input
                   id="role"
-                  value={currentData.role || ""}
+                  value={formData.role || ""}
                   onChange={(e) => setFormData((prev) => ({ ...prev, role: e.target.value }))}
                   placeholder="VP of Sales"
                   data-testid="input-contact-role"
@@ -467,7 +398,7 @@ function AddContactModal({ open, onOpenChange }: { open: boolean; onOpenChange: 
                 <Label htmlFor="linkedinUrl">LinkedIn URL</Label>
                 <Input
                   id="linkedinUrl"
-                  value={currentData.linkedinUrl || ""}
+                  value={formData.linkedinUrl || ""}
                   onChange={(e) => setFormData((prev) => ({ ...prev, linkedinUrl: e.target.value }))}
                   placeholder="https://linkedin.com/in/..."
                   data-testid="input-contact-linkedin"
@@ -477,7 +408,7 @@ function AddContactModal({ open, onOpenChange }: { open: boolean; onOpenChange: 
                 <Label htmlFor="location">Location</Label>
                 <Input
                   id="location"
-                  value={currentData.location || ""}
+                  value={formData.location || ""}
                   onChange={(e) => setFormData((prev) => ({ ...prev, location: e.target.value }))}
                   placeholder="San Francisco, CA"
                   data-testid="input-contact-location"
@@ -489,7 +420,7 @@ function AddContactModal({ open, onOpenChange }: { open: boolean; onOpenChange: 
               <Label htmlFor="headline">Headline</Label>
               <Input
                 id="headline"
-                value={currentData.headline || ""}
+                value={formData.headline || ""}
                 onChange={(e) => setFormData((prev) => ({ ...prev, headline: e.target.value }))}
                 placeholder="Sales Leader | Growth Expert"
                 data-testid="input-contact-headline"
@@ -500,7 +431,7 @@ function AddContactModal({ open, onOpenChange }: { open: boolean; onOpenChange: 
               <Label htmlFor="about">About</Label>
               <Textarea
                 id="about"
-                value={currentData.about || ""}
+                value={formData.about || ""}
                 onChange={(e) => setFormData((prev) => ({ ...prev, about: e.target.value }))}
                 placeholder="Brief summary..."
                 rows={3}
@@ -513,7 +444,7 @@ function AddContactModal({ open, onOpenChange }: { open: boolean; onOpenChange: 
                 <Label htmlFor="experience">Experience</Label>
                 <Textarea
                   id="experience"
-                  value={currentData.experience || ""}
+                  value={formData.experience || ""}
                   onChange={(e) => setFormData((prev) => ({ ...prev, experience: e.target.value }))}
                   placeholder="Work history..."
                   rows={3}
@@ -524,7 +455,7 @@ function AddContactModal({ open, onOpenChange }: { open: boolean; onOpenChange: 
                 <Label htmlFor="education">Education</Label>
                 <Textarea
                   id="education"
-                  value={currentData.education || ""}
+                  value={formData.education || ""}
                   onChange={(e) => setFormData((prev) => ({ ...prev, education: e.target.value }))}
                   placeholder="Education history..."
                   rows={3}
@@ -537,7 +468,7 @@ function AddContactModal({ open, onOpenChange }: { open: boolean; onOpenChange: 
               <Label htmlFor="skills">Skills (comma-separated)</Label>
               <Input
                 id="skills"
-                value={currentData.skills || ""}
+                value={formData.skills || ""}
                 onChange={(e) => setFormData((prev) => ({ ...prev, skills: e.target.value }))}
                 placeholder="Sales, Leadership, Strategy"
                 data-testid="input-contact-skills"
@@ -548,7 +479,7 @@ function AddContactModal({ open, onOpenChange }: { open: boolean; onOpenChange: 
               <Label htmlFor="tags">Tags (comma-separated)</Label>
               <Input
                 id="tags"
-                value={currentData.tags || ""}
+                value={formData.tags || ""}
                 onChange={(e) => setFormData((prev) => ({ ...prev, tags: e.target.value }))}
                 placeholder="Enterprise, Decision Maker, West Coast"
                 data-testid="input-contact-tags"
@@ -559,7 +490,7 @@ function AddContactModal({ open, onOpenChange }: { open: boolean; onOpenChange: 
               <Label htmlFor="notes">Notes</Label>
               <Textarea
                 id="notes"
-                value={currentData.notes || ""}
+                value={formData.notes || ""}
                 onChange={(e) => setFormData((prev) => ({ ...prev, notes: e.target.value }))}
                 placeholder="Additional notes..."
                 rows={2}
@@ -576,7 +507,6 @@ function AddContactModal({ open, onOpenChange }: { open: boolean; onOpenChange: 
               </Button>
             </div>
           </form>
-        </Tabs>
       </DialogContent>
     </Dialog>
   );
