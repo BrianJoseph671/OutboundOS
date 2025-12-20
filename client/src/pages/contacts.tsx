@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import {
   Search,
@@ -281,6 +282,7 @@ function ContactDetail({
 function AddContactModal({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const { toast } = useToast();
 
+  const [activeTab, setActiveTab] = useState("manual");
   const [formData, setFormData] = useState<Partial<InsertContact>>({
     name: "",
     company: "",
@@ -297,6 +299,8 @@ function AddContactModal({ open, onOpenChange }: { open: boolean; onOpenChange: 
     notes: "",
     tags: "",
   });
+  const [pdfData, setPdfData] = useState<Partial<InsertContact> | null>(null);
+  const [isParsingPdf, setIsParsingPdf] = useState(false);
 
   const createMutation = useMutation({
     mutationFn: (data: InsertContact) => apiRequest("POST", "/api/contacts", data),
@@ -332,11 +336,37 @@ function AddContactModal({ open, onOpenChange }: { open: boolean; onOpenChange: 
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name?.trim()) {
+    const dataToSubmit = activeTab === "pdf" && pdfData ? pdfData : formData;
+    if (!dataToSubmit.name?.trim()) {
       toast({ title: "Name is required", variant: "destructive" });
       return;
     }
-    createMutation.mutate(formData as InsertContact);
+    createMutation.mutate(dataToSubmit as InsertContact);
+  };
+
+  const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsParsingPdf(true);
+    try {
+      const text = await file.text();
+      const response = await fetch("/api/parse-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      if (!response.ok) throw new Error("Failed to parse PDF");
+      const parsed = await response.json();
+      setPdfData(parsed);
+      setFormData((prev) => ({ ...prev, ...parsed }));
+      toast({ title: "PDF parsed successfully" });
+    } catch (error) {
+      toast({ title: "PDF must be text-based or copy text from PDF manually", variant: "destructive" });
+      console.error(error);
+    } finally {
+      setIsParsingPdf(false);
+    }
   };
 
   return (
@@ -345,7 +375,38 @@ function AddContactModal({ open, onOpenChange }: { open: boolean; onOpenChange: 
         <DialogHeader>
           <DialogTitle>Add Contact</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-4">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="pdf">Upload PDF</TabsTrigger>
+            <TabsTrigger value="manual">Manual Entry</TabsTrigger>
+          </TabsList>
+          <TabsContent value="pdf" className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="pdf-upload">LinkedIn Profile PDF</Label>
+              <Input
+                id="pdf-upload"
+                type="file"
+                accept=".pdf"
+                onChange={handlePdfUpload}
+                disabled={isParsingPdf}
+                data-testid="input-pdf-upload"
+              />
+              {isParsingPdf && <p className="text-sm text-muted-foreground">Parsing PDF...</p>}
+            </div>
+            {pdfData && (
+              <div className="p-4 bg-muted rounded-md space-y-3 max-h-96 overflow-y-auto">
+                <h3 className="font-medium text-sm">Extracted Information</h3>
+                {pdfData.name && <p><span className="font-medium">Name:</span> {pdfData.name}</p>}
+                {pdfData.headline && <p><span className="font-medium">Headline:</span> {pdfData.headline}</p>}
+                {pdfData.company && <p><span className="font-medium">Company:</span> {pdfData.company}</p>}
+                {pdfData.role && <p><span className="font-medium">Role:</span> {pdfData.role}</p>}
+                {pdfData.location && <p><span className="font-medium">Location:</span> {pdfData.location}</p>}
+                {pdfData.about && <p><span className="font-medium">About:</span> {pdfData.about.slice(0, 100)}...</p>}
+              </div>
+            )}
+          </TabsContent>
+          <TabsContent value="manual">
+            <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="name">Name *</Label>
@@ -507,6 +568,16 @@ function AddContactModal({ open, onOpenChange }: { open: boolean; onOpenChange: 
               </Button>
             </div>
           </form>
+            </TabsContent>
+        </Tabs>
+        <div className="flex justify-end gap-2 pt-4 mt-4 border-t">
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button onClick={handleSubmit} disabled={createMutation.isPending} data-testid="button-save-contact">
+            {createMutation.isPending ? "Saving..." : "Save Contact"}
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   );
