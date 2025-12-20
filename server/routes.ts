@@ -1,6 +1,5 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { createRequire } from "module";
 import { storage } from "./storage";
 import multer from "multer";
 import {
@@ -10,12 +9,14 @@ import {
   insertSettingsSchema,
 } from "@shared/schema";
 
-const require = createRequire(import.meta.url);
-const pdfParseModule = require("pdf-parse");
-// pdf-parse exports as default in the CommonJS module
-const pdfParse = typeof pdfParseModule === 'function' ? pdfParseModule : pdfParseModule.default;
-
 const upload = multer({ storage: multer.memoryStorage() });
+
+// Dynamic import for pdf-parse (CommonJS module)
+async function parsePdfBuffer(buffer: Buffer): Promise<{ text: string }> {
+  const pdfParseModule = await import("pdf-parse");
+  const pdfParse = pdfParseModule.default || pdfParseModule;
+  return pdfParse(buffer);
+}
 
 function parseLinkedInPdf(text: string) {
   const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
@@ -182,7 +183,7 @@ export async function registerRoutes(
         return res.status(400).json({ error: "No file uploaded" });
       }
 
-      const data = await pdfParse(req.file.buffer);
+      const data = await parsePdfBuffer(req.file.buffer);
       const parsed = parseLinkedInPdf(data.text);
       res.json(parsed);
     } catch (error) {
