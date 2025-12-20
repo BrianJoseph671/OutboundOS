@@ -12,7 +12,8 @@ import {
 
 const require = createRequire(import.meta.url);
 const pdfParseModule = require("pdf-parse");
-const pdfParse = pdfParseModule.default || pdfParseModule;
+// pdf-parse exports as default in the CommonJS module
+const pdfParse = typeof pdfParseModule === 'function' ? pdfParseModule : pdfParseModule.default;
 
 const upload = multer({ storage: multer.memoryStorage() });
 
