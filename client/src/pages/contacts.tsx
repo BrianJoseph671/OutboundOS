@@ -358,8 +358,28 @@ function AddContactModal({ open, onOpenChange }: { open: boolean; onOpenChange: 
     console.log("[PDF Debug] Upload metadata:", uploadMetadata);
 
     setIsParsingPdf(true);
+    
+    // Track all error conditions for debugging
+    const errorConditions = {
+      fileTextFailed: false,
+      fetchFailed: false,
+      responseNotOk: false,
+      jsonParseFailed: false,
+      otherError: false,
+      errorMessage: "",
+    };
+    
     try {
-      const text = await file.text();
+      let text: string;
+      try {
+        text = await file.text();
+      } catch (textError) {
+        errorConditions.fileTextFailed = true;
+        errorConditions.errorMessage = String(textError);
+        console.log("[PDF Debug] file.text() failed:", textError);
+        console.log("[PDF Debug] Boolean: fileTextFailed =", errorConditions.fileTextFailed);
+        throw textError;
+      }
       
       // DEBUG: Text extraction analysis
       const extractionAnalysis = {
@@ -372,21 +392,43 @@ function AddContactModal({ open, onOpenChange }: { open: boolean; onOpenChange: 
       };
       console.log("[PDF Debug] Extraction analysis:", extractionAnalysis);
 
-      const response = await fetch("/api/parse-pdf", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
-      });
+      let response: Response;
+      try {
+        response = await fetch("/api/parse-pdf", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text }),
+        });
+      } catch (fetchError) {
+        errorConditions.fetchFailed = true;
+        errorConditions.errorMessage = String(fetchError);
+        console.log("[PDF Debug] fetch() failed:", fetchError);
+        console.log("[PDF Debug] Boolean: fetchFailed =", errorConditions.fetchFailed);
+        throw fetchError;
+      }
       
       // DEBUG: Response status
       console.log("[PDF Debug] API response status:", response.status, response.ok);
       
-      // Boolean condition that triggers 'PDF must be text-based' error
-      const triggerCondition = !response.ok;
-      console.log("[PDF Debug] Error trigger condition (!response.ok):", triggerCondition);
+      // Boolean condition #1: response.ok check
+      errorConditions.responseNotOk = !response.ok;
+      console.log("[PDF Debug] Boolean: responseNotOk (!response.ok) =", errorConditions.responseNotOk);
       
-      if (!response.ok) throw new Error("Failed to parse PDF");
-      const parsed = await response.json();
+      if (!response.ok) {
+        errorConditions.errorMessage = `Server returned ${response.status}`;
+        throw new Error("Failed to parse PDF");
+      }
+      
+      let parsed;
+      try {
+        parsed = await response.json();
+      } catch (jsonError) {
+        errorConditions.jsonParseFailed = true;
+        errorConditions.errorMessage = String(jsonError);
+        console.log("[PDF Debug] response.json() failed:", jsonError);
+        console.log("[PDF Debug] Boolean: jsonParseFailed =", errorConditions.jsonParseFailed);
+        throw jsonError;
+      }
       
       // DEBUG: Parsed result
       console.log("[PDF Debug] Parsed result:", parsed);
@@ -395,9 +437,23 @@ function AddContactModal({ open, onOpenChange }: { open: boolean; onOpenChange: 
       setFormData((prev) => ({ ...prev, ...parsed }));
       toast({ title: "PDF parsed successfully" });
     } catch (error) {
-      // DEBUG: Error details
-      console.log("[PDF Debug] Error caught:", error);
-      console.log("[PDF Debug] 'PDF must be text-based' toast will be shown");
+      // DEBUG: Final error condition summary
+      if (!errorConditions.fileTextFailed && !errorConditions.fetchFailed && 
+          !errorConditions.responseNotOk && !errorConditions.jsonParseFailed) {
+        errorConditions.otherError = true;
+        errorConditions.errorMessage = String(error);
+      }
+      
+      console.log("[PDF Debug] === ERROR CONDITION SUMMARY ===");
+      console.log("[PDF Debug] Error conditions:", errorConditions);
+      console.log("[PDF Debug] Exact trigger for 'PDF must be text-based' toast:");
+      console.log("[PDF Debug]   fileTextFailed:", errorConditions.fileTextFailed);
+      console.log("[PDF Debug]   fetchFailed:", errorConditions.fetchFailed);
+      console.log("[PDF Debug]   responseNotOk:", errorConditions.responseNotOk);
+      console.log("[PDF Debug]   jsonParseFailed:", errorConditions.jsonParseFailed);
+      console.log("[PDF Debug]   otherError:", errorConditions.otherError);
+      console.log("[PDF Debug] Error message:", errorConditions.errorMessage);
+      console.log("[PDF Debug] Toast will now show");
       
       toast({ title: "PDF must be text-based or copy text from PDF manually", variant: "destructive" });
       console.error(error);
