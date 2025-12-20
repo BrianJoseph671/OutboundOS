@@ -172,15 +172,112 @@ export async function registerRoutes(
   // PDF Parsing - accepts pre-extracted text from client
   app.post("/api/parse-pdf", upload.single("file"), async (req, res) => {
     try {
-      if (!req.body.text) {
+      const text = req.body.text;
+      
+      // DEBUG: Log incoming request details
+      console.log("[PDF Debug] /api/parse-pdf called");
+      console.log("[PDF Debug] Text provided:", !!text);
+      console.log("[PDF Debug] Text length:", text?.length || 0);
+      
+      if (!text) {
+        console.log("[PDF Debug] Error: No text provided");
         return res.status(400).json({ error: "No text provided" });
       }
 
-      const parsed = parseLinkedInPdf(req.body.text);
+      // DEBUG: Analyze text quality
+      const lines = text.split("\n");
+      const nonEmptyLines = lines.filter((l: string) => l.trim().length > 0);
+      console.log("[PDF Debug] Line count:", lines.length);
+      console.log("[PDF Debug] Non-empty line count:", nonEmptyLines.length);
+      console.log("[PDF Debug] First 500 chars:", text.slice(0, 500));
+
+      const parsed = parseLinkedInPdf(text);
+      
+      // DEBUG: Log parsed result
+      console.log("[PDF Debug] Parsed fields found:", Object.keys(parsed).filter(k => parsed[k as keyof typeof parsed]));
+      
       res.json(parsed);
     } catch (error) {
-      console.error("PDF parsing error:", error);
+      console.error("[PDF Debug] PDF parsing error:", error);
       res.status(500).json({ error: "Failed to parse PDF" });
+    }
+  });
+
+  // DEBUG: PDF analysis endpoint - returns detailed extraction info
+  app.post("/debug/pdf", upload.single("file"), async (req, res) => {
+    try {
+      const text = req.body.text || "";
+      const file = req.file;
+      
+      // Analyze the text
+      const lines = text.split("\n");
+      const nonEmptyLines = lines.filter((l: string) => l.trim().length > 0);
+      
+      // Check for binary/non-text content markers
+      const containsBinaryMarkers = /[\x00-\x08\x0E-\x1F]/.test(text.slice(0, 100));
+      const startsWithPdfHeader = text.startsWith("%PDF");
+      const hasReadableContent = /[a-zA-Z]{3,}/.test(text.slice(0, 500));
+      
+      // Simulate page detection (PDFs have page markers like "Page X of Y" or form feeds)
+      const pageMarkers = text.match(/page\s+\d+/gi) || [];
+      const formFeeds = (text.match(/\f/g) || []).length;
+      const estimatedPageCount = Math.max(pageMarkers.length, formFeeds, 1);
+      
+      // Character count analysis per "page" (split by form feeds or estimate)
+      const pages = text.split(/\f/).filter(Boolean);
+      const charCountPerPage = pages.map((p, i) => ({
+        page: i + 1,
+        charCount: p.length,
+        lineCount: p.split("\n").length,
+      }));
+      
+      // Boolean conditions that could trigger errors
+      const errorConditions = {
+        noTextProvided: !text,
+        textIsEmpty: text.length === 0,
+        textTooShort: text.length < 10,
+        containsBinaryMarkers,
+        startsWithPdfHeader,
+        noReadableContent: !hasReadableContent,
+        wouldTriggerTextBasedError: containsBinaryMarkers || startsWithPdfHeader || !hasReadableContent,
+      };
+      
+      // Parse and show what would be extracted
+      const parsed = parseLinkedInPdf(text);
+      const parsedFieldsFound = Object.entries(parsed)
+        .filter(([_, v]) => v !== undefined)
+        .map(([k, v]) => ({ field: k, charCount: String(v).length, preview: String(v).slice(0, 50) }));
+      
+      const debugInfo = {
+        uploadMetadata: file ? {
+          originalName: file.originalname,
+          mimeType: file.mimetype,
+          size: file.size,
+          encoding: file.encoding,
+        } : null,
+        textAnalysis: {
+          totalCharCount: text.length,
+          totalLineCount: lines.length,
+          nonEmptyLineCount: nonEmptyLines.length,
+          estimatedPageCount,
+          charCountPerPage: charCountPerPage.length <= 10 ? charCountPerPage : charCountPerPage.slice(0, 10),
+        },
+        first1000Chars: text.slice(0, 1000),
+        contentChecks: {
+          containsBinaryMarkers,
+          startsWithPdfHeader,
+          hasReadableContent,
+        },
+        errorConditions,
+        parsedResult: parsed,
+        parsedFieldsSummary: parsedFieldsFound,
+      };
+      
+      console.log("[PDF Debug] /debug/pdf analysis complete");
+      res.json(debugInfo);
+    } catch (error) {
+      console.error("[PDF Debug] Debug endpoint error:", error);
+      res.status(500).json({ error: "Debug analysis failed", details: String(error) });
     }
   });
 

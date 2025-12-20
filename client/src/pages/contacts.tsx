@@ -348,20 +348,57 @@ function AddContactModal({ open, onOpenChange }: { open: boolean; onOpenChange: 
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // DEBUG: Upload metadata logging
+    const uploadMetadata = {
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type,
+      lastModified: new Date(file.lastModified).toISOString(),
+    };
+    console.log("[PDF Debug] Upload metadata:", uploadMetadata);
+
     setIsParsingPdf(true);
     try {
       const text = await file.text();
+      
+      // DEBUG: Text extraction analysis
+      const extractionAnalysis = {
+        totalCharCount: text.length,
+        lineCount: text.split("\n").length,
+        first1000Chars: text.slice(0, 1000),
+        containsBinaryMarkers: /[\x00-\x08\x0E-\x1F]/.test(text.slice(0, 100)),
+        startsWithPdfHeader: text.startsWith("%PDF"),
+        hasReadableContent: /[a-zA-Z]{3,}/.test(text.slice(0, 500)),
+      };
+      console.log("[PDF Debug] Extraction analysis:", extractionAnalysis);
+
       const response = await fetch("/api/parse-pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text }),
       });
+      
+      // DEBUG: Response status
+      console.log("[PDF Debug] API response status:", response.status, response.ok);
+      
+      // Boolean condition that triggers 'PDF must be text-based' error
+      const triggerCondition = !response.ok;
+      console.log("[PDF Debug] Error trigger condition (!response.ok):", triggerCondition);
+      
       if (!response.ok) throw new Error("Failed to parse PDF");
       const parsed = await response.json();
+      
+      // DEBUG: Parsed result
+      console.log("[PDF Debug] Parsed result:", parsed);
+      
       setPdfData(parsed);
       setFormData((prev) => ({ ...prev, ...parsed }));
       toast({ title: "PDF parsed successfully" });
     } catch (error) {
+      // DEBUG: Error details
+      console.log("[PDF Debug] Error caught:", error);
+      console.log("[PDF Debug] 'PDF must be text-based' toast will be shown");
+      
       toast({ title: "PDF must be text-based or copy text from PDF manually", variant: "destructive" });
       console.error(error);
     } finally {
