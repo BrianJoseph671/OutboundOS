@@ -10,8 +10,6 @@ import {
 import { Button } from "@/components/ui/button";
 import {
   Send,
-  MessageSquare,
-  ThumbsUp,
   Calendar,
   TrendingUp,
   Filter,
@@ -23,8 +21,6 @@ import type { OutreachAttempt, Experiment } from "@shared/schema";
 
 interface DashboardMetrics {
   totalSent: number;
-  responded: number;
-  positiveResponses: number;
   meetingsBooked: number;
   converted: number;
 }
@@ -84,8 +80,6 @@ function MetricCard({
 function FunnelChart({ metrics }: { metrics: DashboardMetrics }) {
   const stages = [
     { label: "Sent", value: metrics.totalSent, color: "bg-chart-1" },
-    { label: "Responded", value: metrics.responded, color: "bg-chart-4" },
-    { label: "Positive", value: metrics.positiveResponses, color: "bg-chart-2" },
     { label: "Booked", value: metrics.meetingsBooked, color: "bg-chart-3" },
     { label: "Converted", value: metrics.converted, color: "bg-chart-5" },
   ];
@@ -286,8 +280,6 @@ export default function Dashboard() {
 
   const metrics: DashboardMetrics = {
     totalSent: filteredAttempts.length,
-    responded: filteredAttempts.filter((a) => a.responded).length,
-    positiveResponses: filteredAttempts.filter((a) => a.positiveResponse).length,
     meetingsBooked: filteredAttempts.filter((a) => a.meetingBooked).length,
     converted: filteredAttempts.filter((a) => a.converted).length,
   };
@@ -380,11 +372,10 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <MetricCard title="Total Sent" value={metrics.totalSent} icon={Send} />
-        <MetricCard title="Responses" value={metrics.responded} icon={MessageSquare} />
-        <MetricCard title="Positive Responses" value={metrics.positiveResponses} icon={ThumbsUp} />
         <MetricCard title="Meetings Booked" value={metrics.meetingsBooked} icon={Calendar} />
+        <MetricCard title="Converted" value={metrics.converted} icon={TrendingUp} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
