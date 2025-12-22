@@ -1,0 +1,59 @@
+Fix the PDF parsing by switching to pdf.js-extract library:
+
+In the terminal, run these commands:
+
+bashnpm uninstall pdf-parse pdfjs-dist
+npm install pdf.js-extract
+
+In /server/routes.ts, find the app.post("/api/parse-pdf" route (around line 200) and replace the entire route handler with this code:
+
+typescriptapp.post("/api/parse-pdf", upload.single("file"), async (req, res) => {
+  try {
+    let text = "";
+    let extractionSource = "request_body_text";
+
+    if (req.file) {
+      extractionSource = "file_upload_pdf_extract";
+      console.log("[PDF Debug] File uploaded:", {
+        originalName: req.file.originalname,
+        size: req.file.size,
+      });
+
+      try {
+        const PDFExtract = (await import("pdf.js-extract")).default;
+        const pdfExtract = new PDFExtract();
+        
+        // Extract text from buffer
+        const data = await pdfExtract.extractBuffer(req.file.buffer);
+        
+        // Combine all text from all pages
+        text = data.pages
+          .map(page => page.content.map(item => item.str).join(" "))
+          .join("\n");
+        
+        console.log("[PDF Debug] pdf.js-extract successful");
+        console.log("[PDF Debug] Pages:", data.pages.length);
+        console.log("[PDF Debug] Extracted", text.length, "characters");
+        console.log("[PDF Debug] First 500 chars:", text.slice(0, 500));
+      } catch (pdfError) {
+        console.log("[PDF Debug] pdf.js-extract failed:", pdfError);
+        return res.status(500).json({ error: "Failed to parse PDF" });
+      }
+    }
+
+    if (!text) {
+      return res.status(400).json({ error: "No text provided" });
+    }
+
+    const parsed = parseLinkedInPdf(text);
+    console.log("[PDF Debug] Parsed fields:", Object.keys(parsed).filter(k => parsed[k as keyof typeof parsed]));
+    
+    res.json(parsed);
+  } catch (error) {
+    console.error("[PDF Debug] Error:", error);
+    res.status(500).json({ error: "Failed to parse PDF" });
+  }
+});
+
+Remove any pdf-parse or pdfjs-dist import statements from the top of the file
+Restart the server after making these changes
