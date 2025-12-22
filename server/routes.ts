@@ -11,9 +11,32 @@ import {
 } from "@shared/schema";
 
 const require = createRequire(import.meta.url);
-const pdfParse = require("pdf-parse");
 
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({ 
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 } // 50MB limit
+});
+
+async function extractPdfText(buffer: Buffer): Promise<{ text: string; pageCount: number }> {
+  try {
+    // Use pdfjs-dist for Node.js
+    const pdfjs = require("pdfjs-dist");
+    const pdf = await pdfjs.getDocument({ data: buffer }).promise;
+    let extractedText = "";
+    const pageCount = pdf.numPages;
+
+    for (let i = 1; i <= pageCount; i++) {
+      const page = await pdf.getPage(i);
+      const textContent = await page.getTextContent();
+      const pageText = textContent.items.map((item: any) => item.str).join(" ");
+      extractedText += pageText + "\n";
+    }
+
+    return { text: extractedText, pageCount };
+  } catch (error) {
+    throw error;
+  }
+}
 
 function parseLinkedInPdf(text: string) {
   const lines = text
@@ -182,17 +205,14 @@ export async function registerRoutes(
     }
   });
 
-  // PDF Parsing - accepts pre-extracted text from client OR file upload
+  // PDF Parsing - accepts file upload with pdfjs-dist
   app.post("/api/parse-pdf", upload.single("file"), async (req, res) => {
     try {
-      let text = req.body.text;
-      let extractionSource = "request_body_text";
+      let text = "";
       let pageCount = 0;
-      let pdfParseSuccess = false;
 
-      // If file uploaded, try to extract text properly with pdf-parse
+      // If file uploaded, extract text with pdfjs-dist
       if (req.file) {
-        extractionSource = "file_upload_pdf_parse";
         console.log("[PDF Debug] /api/parse-pdf - File uploaded:", {
           originalName: req.file.originalname,
           mimeType: req.file.mimetype,
@@ -200,36 +220,21 @@ export async function registerRoutes(
         });
 
         try {
-          const pdfData = await pdfParse(req.file.buffer);
-          text = pdfData.text;
-          pageCount = pdfData.numpages;
-          pdfParseSuccess = true;
-          console.log("[PDF Debug] pdf-parse extraction successful");
+          const result = await extractPdfText(req.file.buffer);
+          text = result.text;
+          pageCount = result.pageCount;
+          console.log("[PDF Debug] pdfjs-dist extraction successful");
           console.log("[PDF Debug] Page count:", pageCount);
           console.log("[PDF Debug] Total char count:", text.length);
           console.log("[PDF Debug] First 1000 chars:", text.slice(0, 1000));
-
-          // Estimate per-page chars (pdf-parse doesn't give true per-page text)
-          if (pageCount > 0) {
-            const avgCharsPerPage = Math.floor(text.length / pageCount);
-            console.log(
-              "[PDF Debug] Avg chars per page (estimated):",
-              avgCharsPerPage,
-            );
-          }
         } catch (pdfError) {
-          console.log(
-            "[PDF Debug] pdf-parse failed, falling back to raw buffer:",
-            pdfError,
-          );
-          text = req.file.buffer.toString("utf-8");
-          extractionSource = "file_upload_raw_buffer";
+          console.log("[PDF Debug] pdfjs-dist failed:", pdfError);
+          return res.status(400).json({ error: "Failed to extract PDF text" });
         }
       }
 
       // DEBUG: Log incoming request details
       console.log("[PDF Debug] /api/parse-pdf called");
-      console.log("[PDF Debug] Extraction source:", extractionSource);
       console.log("[PDF Debug] Text provided:", !!text);
       console.log("[PDF Debug] Text length:", text?.length || 0);
 
@@ -314,26 +319,22 @@ export async function registerRoutes(
       };
 
       try {
-        const pdfData = await pdfParse(file.buffer);
+        const result = await extractPdfText(file.buffer);
         pdfParseResult = {
           success: true,
-          pageCount: pdfData.numpages,
-          totalCharCount: pdfData.text.length,
-          extractedText: pdfData.text,
-          metadata: {
-            info: pdfData.info,
-            version: pdfData.version,
-          },
+          pageCount: result.pageCount,
+          totalCharCount: result.text.length,
+          extractedText: result.text,
         };
         console.log(
-          "[PDF Debug] pdf-parse success. Pages:",
-          pdfData.numpages,
+          "[PDF Debug] pdfjs-dist success. Pages:",
+          result.pageCount,
           "Chars:",
-          pdfData.text.length,
+          result.text.length,
         );
       } catch (e) {
         pdfParseResult.error = String(e);
-        console.log("[PDF Debug] pdf-parse failed:", e);
+        console.log("[PDF Debug] pdfjs-dist failed:", e);
       }
 
       // Method 2: Raw buffer as text (what file.text() does in browser)
