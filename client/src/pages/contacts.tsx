@@ -31,6 +31,7 @@ import {
   Tag,
   X,
   ChevronRight,
+  Trash2,
 } from "lucide-react";
 import type { Contact, InsertContact, OutreachAttempt } from "@shared/schema";
 
@@ -107,11 +108,30 @@ function ContactDetail({
   contact: Contact;
   onClose: () => void;
 }) {
+  const { toast } = useToast();
   const { data: attempts = [] } = useQuery<OutreachAttempt[]>({
     queryKey: ["/api/outreach-attempts", { contactId: contact.id }],
   });
 
   const contactAttempts = attempts.filter((a) => a.contactId === contact.id);
+
+  const deleteMutation = useMutation({
+    mutationFn: () => apiRequest("DELETE", `/api/contacts/${contact.id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
+      toast({ title: "Contact deleted successfully" });
+      onClose();
+    },
+    onError: () => {
+      toast({ title: "Failed to delete contact", variant: "destructive" });
+    },
+  });
+
+  const handleDelete = () => {
+    if (confirm("Are you sure you want to delete this contact?")) {
+      deleteMutation.mutate();
+    }
+  };
 
   const initials = contact.name
     .split(" ")
@@ -166,14 +186,25 @@ function ContactDetail({
             )}
           </div>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onClose}
-          data-testid="button-close-contact"
-        >
-          <X className="w-4 h-4" />
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleDelete}
+            disabled={deleteMutation.isPending}
+            data-testid="button-delete-contact"
+          >
+            <Trash2 className="w-4 h-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onClose}
+            data-testid="button-close-contact"
+          >
+            <X className="w-4 h-4" />
+          </Button>
+        </div>
       </div>
 
       <div className="flex items-center gap-2 flex-wrap">
