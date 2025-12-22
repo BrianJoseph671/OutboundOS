@@ -1,0 +1,128 @@
+Replace the parseLinkedInPdf() function in /server/routes.ts to properly parse LinkedIn PDF format:
+Find the parseLinkedInPdf() function (around line 18) and replace the entire function with this:
+typescriptfunction parseLinkedInPdf(text: string) {
+  const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
+  
+  let name = "";
+  let headline = "";
+  let about = "";
+  let location = "";
+  let experience = "";
+  let education = "";
+  let skills = "";
+  let company = "";
+  let role = "";
+  
+  // Find name - usually first substantial line after "Contact" or at the very top
+  const nameIndex = lines.findIndex(line => 
+    line.length > 5 && 
+    line.length < 100 && 
+    !line.toLowerCase().includes('contact') &&
+    !line.toLowerCase().includes('linkedin') &&
+    !line.toLowerCase().includes('www.') &&
+    /^[A-Z]/.test(line) &&
+    !line.includes('|')
+  );
+  if (nameIndex >= 0) {
+    name = lines[nameIndex].replace(/\(.*?\)/g, '').trim(); // Remove nicknames in parentheses
+  }
+  
+  // Find headline - line with pipe separators after name
+  const headlineIndex = lines.findIndex((line, idx) => 
+    idx > nameIndex && 
+    line.includes('|') && 
+    line.length > 10 &&
+    !line.toLowerCase().includes('page')
+  );
+  if (headlineIndex >= 0) {
+    headline = lines[headlineIndex];
+  }
+  
+  // Find location - line with state/country after headline
+  const locationIndex = lines.findIndex((line, idx) => 
+    idx > headlineIndex && 
+    (line.includes(', United States') || 
+     line.match(/,\s*(TX|CA|NY|IL|FL|MA|WA|CO|GA|NC|VA|PA|AZ|OH|MI|TN|NJ|MD|IN|MO|WI|MN|OR|SC|AL|LA|KY|OK|CT|UT|IA|NV|AR|MS|KS|NM|NE|WV|ID|HI|ME|NH|RI|MT|DE|SD|AK|ND|VT|WY)/))
+  );
+  if (locationIndex >= 0) {
+    location = lines[locationIndex];
+  }
+  
+  // Find Summary section
+  const summaryStart = lines.findIndex(line => line.toLowerCase() === 'summary');
+  const experienceStart = lines.findIndex(line => line.toLowerCase() === 'experience');
+  if (summaryStart >= 0 && experienceStart > summaryStart) {
+    about = lines.slice(summaryStart + 1, experienceStart).join(' ');
+  }
+  
+  // Find current company and role from Experience section
+  if (experienceStart >= 0) {
+    // First company name after Experience header (usually 1-2 lines after)
+    for (let i = experienceStart + 1; i < Math.min(experienceStart + 10, lines.length); i++) {
+      const line = lines[i];
+      // Company names are usually standalone, capitalized, not dates
+      if (line.length > 2 && 
+          line.length < 100 &&
+          /^[A-Z]/.test(line) &&
+          !line.match(/\d{4}/) && // No years
+          !line.toLowerCase().includes('present') &&
+          !line.toLowerCase().includes('less than') &&
+          !line.includes(',')) {
+        company = line;
+        
+        // Role is usually the next non-empty line
+        for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
+          const roleLine = lines[j];
+          if (roleLine.length > 2 && 
+              roleLine.length < 100 &&
+              !roleLine.match(/\d{4}/) &&
+              !roleLine.includes('(') &&
+              !roleLine.toLowerCase().includes('area')) {
+            role = roleLine;
+            break;
+          }
+        }
+        break;
+      }
+    }
+    
+    // Get full experience text
+    const educationStart = lines.findIndex(line => line.toLowerCase() === 'education');
+    const expEnd = educationStart >= 0 ? educationStart : lines.length;
+    experience = lines.slice(experienceStart + 1, expEnd).join('\n').slice(0, 1000);
+  }
+  
+  // Find Education section
+  const educationIndex = lines.findIndex(line => line.toLowerCase() === 'education');
+  if (educationIndex >= 0) {
+    education = lines.slice(educationIndex + 1, Math.min(educationIndex + 20, lines.length))
+      .join('\n')
+      .slice(0, 500);
+  }
+  
+  // Find Skills section (if exists)
+  const skillsStart = lines.findIndex(line => line.toLowerCase() === 'top skills' || line.toLowerCase() === 'skills');
+  if (skillsStart >= 0) {
+    const nextSection = lines.findIndex((line, idx) => 
+      idx > skillsStart && 
+      (line.toLowerCase() === 'languages' || 
+       line.toLowerCase() === 'certifications' ||
+       line.toLowerCase() === 'summary')
+    );
+    const skillEnd = nextSection >= 0 ? nextSection : Math.min(skillsStart + 15, lines.length);
+    skills = lines.slice(skillsStart + 1, skillEnd).join(', ').slice(0, 500);
+  }
+  
+  return {
+    name: name || undefined,
+    headline: headline || undefined,
+    about: about || undefined,
+    location: location || undefined,
+    experience: experience || undefined,
+    education: education || undefined,
+    skills: skills || undefined,
+    company: company || undefined,
+    role: role || undefined,
+  };
+}
+After replacing the function, restart the server and test the PDF upload.
