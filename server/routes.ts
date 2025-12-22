@@ -16,8 +16,11 @@ const pdfParse = require("pdf-parse");
 const upload = multer({ storage: multer.memoryStorage() });
 
 function parseLinkedInPdf(text: string) {
-  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
-  
+  const lines = text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+
   let name = "";
   let headline = "";
   let about = "";
@@ -39,12 +42,12 @@ function parseLinkedInPdf(text: string) {
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    
+
     if (i === 0 && !name) {
       name = line;
       continue;
     }
-    
+
     if (i === 1 && name && !headline) {
       headline = line;
       continue;
@@ -62,7 +65,10 @@ function parseLinkedInPdf(text: string) {
       currentSection = "skills";
       continue;
     }
-    if (sectionPatterns.about.test(line) || sectionPatterns.summary.test(line)) {
+    if (
+      sectionPatterns.about.test(line) ||
+      sectionPatterns.summary.test(line)
+    ) {
       currentSection = "about";
       continue;
     }
@@ -86,8 +92,11 @@ function parseLinkedInPdf(text: string) {
       about += (about ? " " : "") + line;
     }
 
-    if (line.toLowerCase().includes("location") || 
-        (line.includes(",") && (line.includes("CA") || line.includes("NY") || line.includes("TX")))) {
+    if (
+      line.toLowerCase().includes("location") ||
+      (line.includes(",") &&
+        (line.includes("CA") || line.includes("NY") || line.includes("TX")))
+    ) {
       if (!location) {
         location = line.replace(/location:?/i, "").trim();
       }
@@ -115,7 +124,7 @@ function parseLinkedInPdf(text: string) {
 
 export async function registerRoutes(
   httpServer: Server,
-  app: Express
+  app: Express,
 ): Promise<Server> {
   // Contacts
   app.get("/api/contacts", async (req, res) => {
@@ -180,7 +189,7 @@ export async function registerRoutes(
       let extractionSource = "request_body_text";
       let pageCount = 0;
       let pdfParseSuccess = false;
-      
+
       // If file uploaded, try to extract text properly with pdf-parse
       if (req.file) {
         extractionSource = "file_upload_pdf_parse";
@@ -189,7 +198,7 @@ export async function registerRoutes(
           mimeType: req.file.mimetype,
           size: req.file.size,
         });
-        
+
         try {
           const pdfData = await pdfParse(req.file.buffer);
           text = pdfData.text;
@@ -199,25 +208,31 @@ export async function registerRoutes(
           console.log("[PDF Debug] Page count:", pageCount);
           console.log("[PDF Debug] Total char count:", text.length);
           console.log("[PDF Debug] First 1000 chars:", text.slice(0, 1000));
-          
+
           // Estimate per-page chars (pdf-parse doesn't give true per-page text)
           if (pageCount > 0) {
             const avgCharsPerPage = Math.floor(text.length / pageCount);
-            console.log("[PDF Debug] Avg chars per page (estimated):", avgCharsPerPage);
+            console.log(
+              "[PDF Debug] Avg chars per page (estimated):",
+              avgCharsPerPage,
+            );
           }
         } catch (pdfError) {
-          console.log("[PDF Debug] pdf-parse failed, falling back to raw buffer:", pdfError);
+          console.log(
+            "[PDF Debug] pdf-parse failed, falling back to raw buffer:",
+            pdfError,
+          );
           text = req.file.buffer.toString("utf-8");
           extractionSource = "file_upload_raw_buffer";
         }
       }
-      
+
       // DEBUG: Log incoming request details
       console.log("[PDF Debug] /api/parse-pdf called");
       console.log("[PDF Debug] Extraction source:", extractionSource);
       console.log("[PDF Debug] Text provided:", !!text);
       console.log("[PDF Debug] Text length:", text?.length || 0);
-      
+
       if (!text) {
         console.log("[PDF Debug] Error: No text provided - will return 400");
         console.log("[PDF Debug] Boolean condition: !text =", !text);
@@ -227,26 +242,35 @@ export async function registerRoutes(
       // DEBUG: Analyze text quality
       const lines = text.split("\n");
       const nonEmptyLines = lines.filter((l: string) => l.trim().length > 0);
-      const containsBinaryMarkers = /[\x00-\x08\x0E-\x1F]/.test(text.slice(0, 100));
+      const containsBinaryMarkers = /[\x00-\x08\x0E-\x1F]/.test(
+        text.slice(0, 100),
+      );
       const hasReadableContent = /[a-zA-Z]{3,}/.test(text.slice(0, 500));
-      
+
       console.log("[PDF Debug] Line count:", lines.length);
       console.log("[PDF Debug] Non-empty line count:", nonEmptyLines.length);
-      console.log("[PDF Debug] Contains binary markers:", containsBinaryMarkers);
+      console.log(
+        "[PDF Debug] Contains binary markers:",
+        containsBinaryMarkers,
+      );
       console.log("[PDF Debug] Has readable content:", hasReadableContent);
       console.log("[PDF Debug] First 1000 chars:", text.slice(0, 1000));
 
       const parsed = parseLinkedInPdf(text);
-      
+
       // DEBUG: Log parsed result
-      const fieldsFound = Object.keys(parsed).filter(k => parsed[k as keyof typeof parsed]);
+      const fieldsFound = Object.keys(parsed).filter(
+        (k) => parsed[k as keyof typeof parsed],
+      );
       console.log("[PDF Debug] Parsed fields found:", fieldsFound);
       console.log("[PDF Debug] Fields count:", fieldsFound.length);
-      
+
       res.json(parsed);
     } catch (error) {
       console.error("[PDF Debug] PDF parsing error:", error);
-      console.log("[PDF Debug] Will return 500 - this triggers client catch block");
+      console.log(
+        "[PDF Debug] Will return 500 - this triggers client catch block",
+      );
       res.status(500).json({ error: "Failed to parse PDF" });
     }
   });
@@ -256,14 +280,14 @@ export async function registerRoutes(
   app.post("/debug/pdf", upload.single("file"), async (req, res) => {
     try {
       const file = req.file;
-      
+
       if (!file) {
-        return res.status(400).json({ 
+        return res.status(400).json({
           error: "No file uploaded",
-          usage: "POST multipart/form-data with field 'file' containing PDF"
+          usage: "POST multipart/form-data with field 'file' containing PDF",
         });
       }
-      
+
       // Upload metadata
       const uploadMetadata = {
         originalName: file.originalname,
@@ -273,7 +297,7 @@ export async function registerRoutes(
         bufferLength: file.buffer.length,
       };
       console.log("[PDF Debug] Upload metadata:", uploadMetadata);
-      
+
       // Method 1: Proper PDF parsing with pdf-parse
       let pdfParseResult: {
         success: boolean;
@@ -288,7 +312,7 @@ export async function registerRoutes(
         totalCharCount: 0,
         extractedText: "",
       };
-      
+
       try {
         const pdfData = await pdfParse(file.buffer);
         pdfParseResult = {
@@ -301,72 +325,88 @@ export async function registerRoutes(
             version: pdfData.version,
           },
         };
-        console.log("[PDF Debug] pdf-parse success. Pages:", pdfData.numpages, "Chars:", pdfData.text.length);
+        console.log(
+          "[PDF Debug] pdf-parse success. Pages:",
+          pdfData.numpages,
+          "Chars:",
+          pdfData.text.length,
+        );
       } catch (e) {
         pdfParseResult.error = String(e);
         console.log("[PDF Debug] pdf-parse failed:", e);
       }
-      
+
       // Method 2: Raw buffer as text (what file.text() does in browser)
       const rawText = file.buffer.toString("utf-8");
       const rawTextAnalysis = {
         totalCharCount: rawText.length,
         lineCount: rawText.split("\n").length,
-        containsBinaryMarkers: /[\x00-\x08\x0E-\x1F]/.test(rawText.slice(0, 100)),
+        containsBinaryMarkers: /[\x00-\x08\x0E-\x1F]/.test(
+          rawText.slice(0, 100),
+        ),
         startsWithPdfHeader: rawText.startsWith("%PDF"),
         hasReadableContent: /[a-zA-Z]{3,}/.test(rawText.slice(0, 500)),
         first100Chars: rawText.slice(0, 100),
       };
-      
+
       // Use the properly extracted text for analysis
-      const text = pdfParseResult.success ? pdfParseResult.extractedText : rawText;
+      const text = pdfParseResult.success
+        ? pdfParseResult.extractedText
+        : rawText;
       const lines = text.split("\n");
       const nonEmptyLines = lines.filter((l: string) => l.trim().length > 0);
-      
+
       // Per-page character counts (if pdf-parse succeeded, estimate by splitting text)
-      const charCountPerPage: { page: number; charCount: number; }[] = [];
+      const charCountPerPage: { page: number; charCount: number }[] = [];
       if (pdfParseResult.success && pdfParseResult.pageCount > 0) {
         // Estimate per-page by splitting text evenly (pdf-parse doesn't give per-page text)
-        const avgCharsPerPage = Math.floor(pdfParseResult.totalCharCount / pdfParseResult.pageCount);
+        const avgCharsPerPage = Math.floor(
+          pdfParseResult.totalCharCount / pdfParseResult.pageCount,
+        );
         for (let i = 0; i < pdfParseResult.pageCount; i++) {
           charCountPerPage.push({
             page: i + 1,
-            charCount: i === pdfParseResult.pageCount - 1 
-              ? pdfParseResult.totalCharCount - (avgCharsPerPage * i)
-              : avgCharsPerPage,
+            charCount:
+              i === pdfParseResult.pageCount - 1
+                ? pdfParseResult.totalCharCount - avgCharsPerPage * i
+                : avgCharsPerPage,
           });
         }
       }
-      
+
       // Boolean conditions that trigger 'PDF must be text-based' error
       const errorConditions = {
         // Current client-side flow uses file.text() which produces garbage for binary PDFs
         clientUsesFileText: true,
         fileTextProducesBinaryGarbage: rawTextAnalysis.containsBinaryMarkers,
-        
+
         // What happens with current implementation:
-        currentFlowWouldFail: rawTextAnalysis.containsBinaryMarkers && !rawTextAnalysis.hasReadableContent,
-        
+        currentFlowWouldFail:
+          rawTextAnalysis.containsBinaryMarkers &&
+          !rawTextAnalysis.hasReadableContent,
+
         // pdf-parse success indicates the PDF CAN be parsed properly
         pdfParseWouldSucceed: pdfParseResult.success,
-        
+
         // The exact trigger for "PDF must be text-based" toast:
         triggerCondition: {
-          description: "Toast triggers when catch block in handlePdfUpload is entered",
+          description:
+            "Toast triggers when catch block in handlePdfUpload is entered",
           causes: [
             "!response.ok (server returned 4xx/5xx error)",
             "response.json() throws (invalid JSON response)",
-            "Any fetch or processing exception"
+            "Any fetch or processing exception",
           ],
-          currentBehavior: "Since parseLinkedInPdf always returns an object (even empty), the toast currently only shows on server/network errors, NOT on garbage text input. The real problem is that extraction returns empty fields.",
+          currentBehavior:
+            "Since parseLinkedInPdf always returns an object (even empty), the toast currently only shows on server/network errors, NOT on garbage text input. The real problem is that extraction returns empty fields.",
         },
-        
+
         // Summary
-        summary: pdfParseResult.success 
+        summary: pdfParseResult.success
           ? "This PDF can be properly parsed. The current file.text() approach loses the content. Use pdf-parse instead."
           : "PDF parsing failed: " + pdfParseResult.error,
       };
-      
+
       // Parse with LinkedIn parser to show what current flow extracts
       let linkedInParsed: Record<string, unknown> = {};
       let linkedInParseError = null;
@@ -375,14 +415,18 @@ export async function registerRoutes(
       } catch (e) {
         linkedInParseError = String(e);
       }
-      
+
       const parsedFieldsFound = Object.entries(linkedInParsed)
         .filter(([_, v]) => v !== undefined && v !== "")
-        .map(([k, v]) => ({ field: k, charCount: String(v).length, preview: String(v).slice(0, 50) }));
-      
+        .map(([k, v]) => ({
+          field: k,
+          charCount: String(v).length,
+          preview: String(v).slice(0, 50),
+        }));
+
       const debugInfo = {
         uploadMetadata,
-        
+
         // Real PDF parsing results
         pdfParsing: {
           method: "pdf-parse library",
@@ -394,13 +438,14 @@ export async function registerRoutes(
           error: pdfParseResult.error,
           metadata: pdfParseResult.metadata,
         },
-        
+
         // What current file.text() approach produces
         rawBufferAsText: {
-          method: "file.buffer.toString('utf-8') - simulates browser file.text()",
+          method:
+            "file.buffer.toString('utf-8') - simulates browser file.text()",
           ...rawTextAnalysis,
         },
-        
+
         // Text analysis (using proper extracted text if available)
         textAnalysis: {
           source: pdfParseResult.success ? "pdf-parse" : "raw buffer",
@@ -408,10 +453,10 @@ export async function registerRoutes(
           totalLineCount: lines.length,
           nonEmptyLineCount: nonEmptyLines.length,
         },
-        
+
         // Error conditions
         errorConditions,
-        
+
         // LinkedIn parsing results
         linkedInParsing: {
           parseError: linkedInParseError,
@@ -420,12 +465,14 @@ export async function registerRoutes(
           fieldsExtractedCount: parsedFieldsFound.length,
         },
       };
-      
+
       console.log("[PDF Debug] /debug/pdf analysis complete");
       res.json(debugInfo);
     } catch (error) {
       console.error("[PDF Debug] Debug endpoint error:", error);
-      res.status(500).json({ error: "Debug analysis failed", details: String(error) });
+      res
+        .status(500)
+        .json({ error: "Debug analysis failed", details: String(error) });
     }
   });
 
@@ -464,7 +511,10 @@ export async function registerRoutes(
 
   app.patch("/api/outreach-attempts/:id", async (req, res) => {
     try {
-      const attempt = await storage.updateOutreachAttempt(req.params.id, req.body);
+      const attempt = await storage.updateOutreachAttempt(
+        req.params.id,
+        req.body,
+      );
       if (!attempt) {
         return res.status(404).json({ error: "Outreach attempt not found" });
       }
@@ -520,7 +570,10 @@ export async function registerRoutes(
 
   app.patch("/api/experiments/:id", async (req, res) => {
     try {
-      const experiment = await storage.updateExperiment(req.params.id, req.body);
+      const experiment = await storage.updateExperiment(
+        req.params.id,
+        req.body,
+      );
       if (!experiment) {
         return res.status(404).json({ error: "Experiment not found" });
       }
@@ -578,8 +631,16 @@ export async function registerRoutes(
   app.get("/api/export/contacts", async (req, res) => {
     try {
       const contacts = await storage.getContacts();
-      
-      const headers = ["Name", "Company", "Role", "Email", "LinkedIn URL", "Location", "Tags"];
+
+      const headers = [
+        "Name",
+        "Company",
+        "Role",
+        "Email",
+        "LinkedIn URL",
+        "Location",
+        "Tags",
+      ];
       const rows = contacts.map((c) => [
         c.name || "",
         c.company || "",
@@ -589,12 +650,14 @@ export async function registerRoutes(
         c.location || "",
         c.tags || "",
       ]);
-      
+
       const csv = [
         headers.join(","),
-        ...rows.map((row) => row.map((cell) => `"${(cell || "").replace(/"/g, '""')}"`).join(",")),
+        ...rows.map((row) =>
+          row.map((cell) => `"${(cell || "").replace(/"/g, '""')}"`).join(","),
+        ),
       ].join("\n");
-      
+
       res.setHeader("Content-Type", "text/csv");
       res.setHeader("Content-Disposition", "attachment; filename=contacts.csv");
       res.send(csv);
@@ -608,12 +671,21 @@ export async function registerRoutes(
       const attempts = await storage.getOutreachAttempts();
       const contacts = await storage.getContacts();
       const contactMap = new Map(contacts.map((c) => [c.id, c]));
-      
+
       const headers = [
-        "Date", "Contact", "Company", "Type", "Campaign", "Variant",
-        "Responded", "Positive", "Booked", "Converted", "Notes"
+        "Date",
+        "Contact",
+        "Company",
+        "Type",
+        "Campaign",
+        "Variant",
+        "Responded",
+        "Positive",
+        "Booked",
+        "Converted",
+        "Notes",
       ];
-      
+
       const rows = attempts.map((a) => {
         const contact = contactMap.get(a.contactId);
         return [
@@ -630,14 +702,19 @@ export async function registerRoutes(
           a.notes || "",
         ];
       });
-      
+
       const csv = [
         headers.join(","),
-        ...rows.map((row) => row.map((cell) => `"${(cell || "").replace(/"/g, '""')}"`).join(",")),
+        ...rows.map((row) =>
+          row.map((cell) => `"${(cell || "").replace(/"/g, '""')}"`).join(","),
+        ),
       ].join("\n");
-      
+
       res.setHeader("Content-Type", "text/csv");
-      res.setHeader("Content-Disposition", "attachment; filename=outreach-attempts.csv");
+      res.setHeader(
+        "Content-Disposition",
+        "attachment; filename=outreach-attempts.csv",
+      );
       res.send(csv);
     } catch (error) {
       res.status(500).json({ error: "Failed to export outreach attempts" });

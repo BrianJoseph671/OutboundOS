@@ -34,7 +34,13 @@ import {
 } from "lucide-react";
 import type { Contact, InsertContact, OutreachAttempt } from "@shared/schema";
 
-function ContactCard({ contact, onClick }: { contact: Contact; onClick: () => void }) {
+function ContactCard({
+  contact,
+  onClick,
+}: {
+  contact: Contact;
+  onClick: () => void;
+}) {
   const initials = contact.name
     .split(" ")
     .map((n) => n[0])
@@ -63,7 +69,9 @@ function ContactCard({ contact, onClick }: { contact: Contact; onClick: () => vo
               <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
             </div>
             {contact.role && (
-              <p className="text-sm text-muted-foreground truncate">{contact.role}</p>
+              <p className="text-sm text-muted-foreground truncate">
+                {contact.role}
+              </p>
             )}
             {contact.company && (
               <p className="text-sm text-muted-foreground truncate flex items-center gap-1 mt-1">
@@ -79,7 +87,9 @@ function ContactCard({ contact, onClick }: { contact: Contact; onClick: () => vo
                   </Badge>
                 ))}
                 {tags.length > 3 && (
-                  <span className="text-xs text-muted-foreground">+{tags.length - 3}</span>
+                  <span className="text-xs text-muted-foreground">
+                    +{tags.length - 3}
+                  </span>
                 )}
               </div>
             )}
@@ -115,10 +125,14 @@ function ContactDetail({
 
   const getTypeLabel = (type: string) => {
     switch (type) {
-      case "linkedin_connected": return "LinkedIn";
-      case "linkedin_connect_request": return "LinkedIn Request";
-      case "email": return "Email";
-      default: return type;
+      case "linkedin_connected":
+        return "LinkedIn";
+      case "linkedin_connect_request":
+        return "LinkedIn Request";
+      case "email":
+        return "Email";
+      default:
+        return type;
     }
   };
 
@@ -131,7 +145,9 @@ function ContactDetail({
           </AvatarFallback>
         </Avatar>
         <div className="flex-1">
-          <h2 className="text-xl font-semibold" data-testid="text-contact-name">{contact.name}</h2>
+          <h2 className="text-xl font-semibold" data-testid="text-contact-name">
+            {contact.name}
+          </h2>
           {contact.headline && (
             <p className="text-muted-foreground mt-1">{contact.headline}</p>
           )}
@@ -150,7 +166,12 @@ function ContactDetail({
             )}
           </div>
         </div>
-        <Button variant="ghost" size="icon" onClick={onClose} data-testid="button-close-contact">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onClose}
+          data-testid="button-close-contact"
+        >
           <X className="w-4 h-4" />
         </Button>
       </div>
@@ -200,7 +221,9 @@ function ContactDetail({
             <User className="w-4 h-4" />
             About
           </h3>
-          <p className="text-sm text-muted-foreground whitespace-pre-wrap">{contact.about}</p>
+          <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+            {contact.about}
+          </p>
         </div>
       )}
 
@@ -210,7 +233,9 @@ function ContactDetail({
             <Briefcase className="w-4 h-4" />
             Experience
           </h3>
-          <p className="text-sm text-muted-foreground whitespace-pre-wrap">{contact.experience}</p>
+          <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+            {contact.experience}
+          </p>
         </div>
       )}
 
@@ -220,7 +245,9 @@ function ContactDetail({
             <GraduationCap className="w-4 h-4" />
             Education
           </h3>
-          <p className="text-sm text-muted-foreground whitespace-pre-wrap">{contact.education}</p>
+          <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+            {contact.education}
+          </p>
         </div>
       )}
 
@@ -243,14 +270,18 @@ function ContactDetail({
             <FileText className="w-4 h-4" />
             Notes
           </h3>
-          <p className="text-sm text-muted-foreground whitespace-pre-wrap">{contact.notes}</p>
+          <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+            {contact.notes}
+          </p>
         </div>
       )}
 
       <div className="space-y-3">
         <h3 className="text-sm font-medium">Outreach History</h3>
         {contactAttempts.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No outreach attempts yet.</p>
+          <p className="text-sm text-muted-foreground">
+            No outreach attempts yet.
+          </p>
         ) : (
           <div className="space-y-2">
             {contactAttempts.map((attempt) => (
@@ -259,16 +290,24 @@ function ContactDetail({
                 className="flex items-center justify-between gap-4 p-3 bg-muted/50 rounded-md"
               >
                 <div>
-                  <p className="text-sm font-medium">{getTypeLabel(attempt.outreachType)}</p>
+                  <p className="text-sm font-medium">
+                    {getTypeLabel(attempt.outreachType)}
+                  </p>
                   <p className="text-xs text-muted-foreground">
                     {new Date(attempt.dateSent).toLocaleDateString()}
                     {attempt.campaign && ` • ${attempt.campaign}`}
                   </p>
                 </div>
                 <div className="flex items-center gap-1">
-                  {attempt.responded && <Badge variant="secondary">Responded</Badge>}
-                  {attempt.positiveResponse && <Badge className="bg-chart-2">Positive</Badge>}
-                  {attempt.meetingBooked && <Badge className="bg-chart-3">Booked</Badge>}
+                  {attempt.responded && (
+                    <Badge variant="secondary">Responded</Badge>
+                  )}
+                  {attempt.positiveResponse && (
+                    <Badge className="bg-chart-2">Positive</Badge>
+                  )}
+                  {attempt.meetingBooked && (
+                    <Badge className="bg-chart-3">Booked</Badge>
+                  )}
                 </div>
               </div>
             ))}
@@ -279,7 +318,13 @@ function ContactDetail({
   );
 }
 
-function AddContactModal({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+function AddContactModal({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
   const { toast } = useToast();
 
   const [activeTab, setActiveTab] = useState("manual");
@@ -303,7 +348,8 @@ function AddContactModal({ open, onOpenChange }: { open: boolean; onOpenChange: 
   const [isParsingPdf, setIsParsingPdf] = useState(false);
 
   const createMutation = useMutation({
-    mutationFn: (data: InsertContact) => apiRequest("POST", "/api/contacts", data),
+    mutationFn: (data: InsertContact) =>
+      apiRequest("POST", "/api/contacts", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
       toast({ title: "Contact created successfully" });
@@ -348,115 +394,42 @@ function AddContactModal({ open, onOpenChange }: { open: boolean; onOpenChange: 
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // DEBUG: Upload metadata logging
-    const uploadMetadata = {
+    console.log("[PDF Debug] Upload metadata:", {
       fileName: file.name,
       fileSize: file.size,
       fileType: file.type,
-      lastModified: new Date(file.lastModified).toISOString(),
-    };
-    console.log("[PDF Debug] Upload metadata:", uploadMetadata);
+    });
 
     setIsParsingPdf(true);
-    
-    // Track all error conditions for debugging
-    const errorConditions = {
-      fileTextFailed: false,
-      fetchFailed: false,
-      responseNotOk: false,
-      jsonParseFailed: false,
-      otherError: false,
-      errorMessage: "",
-    };
-    
-    try {
-      let text: string;
-      try {
-        text = await file.text();
-      } catch (textError) {
-        errorConditions.fileTextFailed = true;
-        errorConditions.errorMessage = String(textError);
-        console.log("[PDF Debug] file.text() failed:", textError);
-        console.log("[PDF Debug] Boolean: fileTextFailed =", errorConditions.fileTextFailed);
-        throw textError;
-      }
-      
-      // DEBUG: Text extraction analysis
-      const extractionAnalysis = {
-        totalCharCount: text.length,
-        lineCount: text.split("\n").length,
-        first1000Chars: text.slice(0, 1000),
-        containsBinaryMarkers: /[\x00-\x08\x0E-\x1F]/.test(text.slice(0, 100)),
-        startsWithPdfHeader: text.startsWith("%PDF"),
-        hasReadableContent: /[a-zA-Z]{3,}/.test(text.slice(0, 500)),
-      };
-      console.log("[PDF Debug] Extraction analysis:", extractionAnalysis);
 
-      let response: Response;
-      try {
-        response = await fetch("/api/parse-pdf", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text }),
-        });
-      } catch (fetchError) {
-        errorConditions.fetchFailed = true;
-        errorConditions.errorMessage = String(fetchError);
-        console.log("[PDF Debug] fetch() failed:", fetchError);
-        console.log("[PDF Debug] Boolean: fetchFailed =", errorConditions.fetchFailed);
-        throw fetchError;
-      }
-      
-      // DEBUG: Response status
-      console.log("[PDF Debug] API response status:", response.status, response.ok);
-      
-      // Boolean condition #1: response.ok check
-      errorConditions.responseNotOk = !response.ok;
-      console.log("[PDF Debug] Boolean: responseNotOk (!response.ok) =", errorConditions.responseNotOk);
-      
+    try {
+      // Send file using FormData (not JSON!)
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch("/api/parse-pdf", {
+        method: "POST",
+        body: formData, // Browser sets Content-Type automatically
+      });
+
+      console.log("[PDF Debug] API response:", response.status, response.ok);
+
       if (!response.ok) {
-        errorConditions.errorMessage = `Server returned ${response.status}`;
         throw new Error("Failed to parse PDF");
       }
-      
-      let parsed;
-      try {
-        parsed = await response.json();
-      } catch (jsonError) {
-        errorConditions.jsonParseFailed = true;
-        errorConditions.errorMessage = String(jsonError);
-        console.log("[PDF Debug] response.json() failed:", jsonError);
-        console.log("[PDF Debug] Boolean: jsonParseFailed =", errorConditions.jsonParseFailed);
-        throw jsonError;
-      }
-      
-      // DEBUG: Parsed result
+
+      const parsed = await response.json();
       console.log("[PDF Debug] Parsed result:", parsed);
-      
+
       setPdfData(parsed);
       setFormData((prev) => ({ ...prev, ...parsed }));
       toast({ title: "PDF parsed successfully" });
     } catch (error) {
-      // DEBUG: Final error condition summary
-      if (!errorConditions.fileTextFailed && !errorConditions.fetchFailed && 
-          !errorConditions.responseNotOk && !errorConditions.jsonParseFailed) {
-        errorConditions.otherError = true;
-        errorConditions.errorMessage = String(error);
-      }
-      
-      console.log("[PDF Debug] === ERROR CONDITION SUMMARY ===");
-      console.log("[PDF Debug] Error conditions:", errorConditions);
-      console.log("[PDF Debug] Exact trigger for 'PDF must be text-based' toast:");
-      console.log("[PDF Debug]   fileTextFailed:", errorConditions.fileTextFailed);
-      console.log("[PDF Debug]   fetchFailed:", errorConditions.fetchFailed);
-      console.log("[PDF Debug]   responseNotOk:", errorConditions.responseNotOk);
-      console.log("[PDF Debug]   jsonParseFailed:", errorConditions.jsonParseFailed);
-      console.log("[PDF Debug]   otherError:", errorConditions.otherError);
-      console.log("[PDF Debug] Error message:", errorConditions.errorMessage);
-      console.log("[PDF Debug] Toast will now show");
-      
-      toast({ title: "PDF must be text-based or copy text from PDF manually", variant: "destructive" });
-      console.error(error);
+      console.error("[PDF Debug] Error:", error);
+      toast({
+        title: "Failed to parse PDF",
+        variant: "destructive",
+      });
     } finally {
       setIsParsingPdf(false);
     }
@@ -484,190 +457,283 @@ function AddContactModal({ open, onOpenChange }: { open: boolean; onOpenChange: 
                 disabled={isParsingPdf}
                 data-testid="input-pdf-upload"
               />
-              {isParsingPdf && <p className="text-sm text-muted-foreground">Parsing PDF...</p>}
+              {isParsingPdf && (
+                <p className="text-sm text-muted-foreground">Parsing PDF...</p>
+              )}
             </div>
             {pdfData && (
               <div className="p-4 bg-muted rounded-md space-y-3 max-h-96 overflow-y-auto">
                 <h3 className="font-medium text-sm">Extracted Information</h3>
-                {pdfData.name && <p><span className="font-medium">Name:</span> {pdfData.name}</p>}
-                {pdfData.headline && <p><span className="font-medium">Headline:</span> {pdfData.headline}</p>}
-                {pdfData.company && <p><span className="font-medium">Company:</span> {pdfData.company}</p>}
-                {pdfData.role && <p><span className="font-medium">Role:</span> {pdfData.role}</p>}
-                {pdfData.location && <p><span className="font-medium">Location:</span> {pdfData.location}</p>}
-                {pdfData.about && <p><span className="font-medium">About:</span> {pdfData.about.slice(0, 100)}...</p>}
+                {pdfData.name && (
+                  <p>
+                    <span className="font-medium">Name:</span> {pdfData.name}
+                  </p>
+                )}
+                {pdfData.headline && (
+                  <p>
+                    <span className="font-medium">Headline:</span>{" "}
+                    {pdfData.headline}
+                  </p>
+                )}
+                {pdfData.company && (
+                  <p>
+                    <span className="font-medium">Company:</span>{" "}
+                    {pdfData.company}
+                  </p>
+                )}
+                {pdfData.role && (
+                  <p>
+                    <span className="font-medium">Role:</span> {pdfData.role}
+                  </p>
+                )}
+                {pdfData.location && (
+                  <p>
+                    <span className="font-medium">Location:</span>{" "}
+                    {pdfData.location}
+                  </p>
+                )}
+                {pdfData.about && (
+                  <p>
+                    <span className="font-medium">About:</span>{" "}
+                    {pdfData.about.slice(0, 100)}...
+                  </p>
+                )}
               </div>
             )}
           </TabsContent>
           <TabsContent value="manual">
             <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Name *</Label>
-                <Input
-                  id="name"
-                  value={formData.name || ""}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-                  placeholder="John Smith"
-                  data-testid="input-contact-name"
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Name *</Label>
+                  <Input
+                    id="name"
+                    value={formData.name || ""}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, name: e.target.value }))
+                    }
+                    placeholder="John Smith"
+                    data-testid="input-contact-name"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={formData.email || ""}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        email: e.target.value,
+                      }))
+                    }
+                    placeholder="john@company.com"
+                    data-testid="input-contact-email"
+                  />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={formData.email || ""}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
-                  placeholder="john@company.com"
-                  data-testid="input-contact-email"
-                />
-              </div>
-            </div>
 
-            <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="company">Company</Label>
+                  <Input
+                    id="company"
+                    value={formData.company || ""}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        company: e.target.value,
+                      }))
+                    }
+                    placeholder="Acme Inc"
+                    data-testid="input-contact-company"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="role">Role / Title</Label>
+                  <Input
+                    id="role"
+                    value={formData.role || ""}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, role: e.target.value }))
+                    }
+                    placeholder="VP of Sales"
+                    data-testid="input-contact-role"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="linkedinUrl">LinkedIn URL</Label>
+                  <Input
+                    id="linkedinUrl"
+                    value={formData.linkedinUrl || ""}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        linkedinUrl: e.target.value,
+                      }))
+                    }
+                    placeholder="https://linkedin.com/in/..."
+                    data-testid="input-contact-linkedin"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="location">Location</Label>
+                  <Input
+                    id="location"
+                    value={formData.location || ""}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        location: e.target.value,
+                      }))
+                    }
+                    placeholder="San Francisco, CA"
+                    data-testid="input-contact-location"
+                  />
+                </div>
+              </div>
+
               <div className="space-y-2">
-                <Label htmlFor="company">Company</Label>
+                <Label htmlFor="headline">Headline</Label>
                 <Input
-                  id="company"
-                  value={formData.company || ""}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, company: e.target.value }))}
-                  placeholder="Acme Inc"
-                  data-testid="input-contact-company"
+                  id="headline"
+                  value={formData.headline || ""}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      headline: e.target.value,
+                    }))
+                  }
+                  placeholder="Sales Leader | Growth Expert"
+                  data-testid="input-contact-headline"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="role">Role / Title</Label>
-                <Input
-                  id="role"
-                  value={formData.role || ""}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, role: e.target.value }))}
-                  placeholder="VP of Sales"
-                  data-testid="input-contact-role"
-                />
-              </div>
-            </div>
 
-            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="linkedinUrl">LinkedIn URL</Label>
-                <Input
-                  id="linkedinUrl"
-                  value={formData.linkedinUrl || ""}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, linkedinUrl: e.target.value }))}
-                  placeholder="https://linkedin.com/in/..."
-                  data-testid="input-contact-linkedin"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="location">Location</Label>
-                <Input
-                  id="location"
-                  value={formData.location || ""}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, location: e.target.value }))}
-                  placeholder="San Francisco, CA"
-                  data-testid="input-contact-location"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="headline">Headline</Label>
-              <Input
-                id="headline"
-                value={formData.headline || ""}
-                onChange={(e) => setFormData((prev) => ({ ...prev, headline: e.target.value }))}
-                placeholder="Sales Leader | Growth Expert"
-                data-testid="input-contact-headline"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="about">About</Label>
-              <Textarea
-                id="about"
-                value={formData.about || ""}
-                onChange={(e) => setFormData((prev) => ({ ...prev, about: e.target.value }))}
-                placeholder="Brief summary..."
-                rows={3}
-                data-testid="input-contact-about"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="experience">Experience</Label>
+                <Label htmlFor="about">About</Label>
                 <Textarea
-                  id="experience"
-                  value={formData.experience || ""}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, experience: e.target.value }))}
-                  placeholder="Work history..."
+                  id="about"
+                  value={formData.about || ""}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, about: e.target.value }))
+                  }
+                  placeholder="Brief summary..."
                   rows={3}
-                  data-testid="input-contact-experience"
+                  data-testid="input-contact-about"
                 />
               </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="experience">Experience</Label>
+                  <Textarea
+                    id="experience"
+                    value={formData.experience || ""}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        experience: e.target.value,
+                      }))
+                    }
+                    placeholder="Work history..."
+                    rows={3}
+                    data-testid="input-contact-experience"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="education">Education</Label>
+                  <Textarea
+                    id="education"
+                    value={formData.education || ""}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        education: e.target.value,
+                      }))
+                    }
+                    placeholder="Education history..."
+                    rows={3}
+                    data-testid="input-contact-education"
+                  />
+                </div>
+              </div>
+
               <div className="space-y-2">
-                <Label htmlFor="education">Education</Label>
-                <Textarea
-                  id="education"
-                  value={formData.education || ""}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, education: e.target.value }))}
-                  placeholder="Education history..."
-                  rows={3}
-                  data-testid="input-contact-education"
+                <Label htmlFor="skills">Skills (comma-separated)</Label>
+                <Input
+                  id="skills"
+                  value={formData.skills || ""}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, skills: e.target.value }))
+                  }
+                  placeholder="Sales, Leadership, Strategy"
+                  data-testid="input-contact-skills"
                 />
               </div>
-            </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="skills">Skills (comma-separated)</Label>
-              <Input
-                id="skills"
-                value={formData.skills || ""}
-                onChange={(e) => setFormData((prev) => ({ ...prev, skills: e.target.value }))}
-                placeholder="Sales, Leadership, Strategy"
-                data-testid="input-contact-skills"
-              />
-            </div>
+              <div className="space-y-2">
+                <Label htmlFor="tags">Tags (comma-separated)</Label>
+                <Input
+                  id="tags"
+                  value={formData.tags || ""}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, tags: e.target.value }))
+                  }
+                  placeholder="Enterprise, Decision Maker, West Coast"
+                  data-testid="input-contact-tags"
+                />
+              </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="tags">Tags (comma-separated)</Label>
-              <Input
-                id="tags"
-                value={formData.tags || ""}
-                onChange={(e) => setFormData((prev) => ({ ...prev, tags: e.target.value }))}
-                placeholder="Enterprise, Decision Maker, West Coast"
-                data-testid="input-contact-tags"
-              />
-            </div>
+              <div className="space-y-2">
+                <Label htmlFor="notes">Notes</Label>
+                <Textarea
+                  id="notes"
+                  value={formData.notes || ""}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, notes: e.target.value }))
+                  }
+                  placeholder="Additional notes..."
+                  rows={2}
+                  data-testid="input-contact-notes"
+                />
+              </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="notes">Notes</Label>
-              <Textarea
-                id="notes"
-                value={formData.notes || ""}
-                onChange={(e) => setFormData((prev) => ({ ...prev, notes: e.target.value }))}
-                placeholder="Additional notes..."
-                rows={2}
-                data-testid="input-contact-notes"
-              />
-            </div>
-
-            <div className="flex justify-end gap-2 pt-4">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={createMutation.isPending} data-testid="button-save-contact">
-                {createMutation.isPending ? "Saving..." : "Save Contact"}
-              </Button>
-            </div>
-          </form>
-            </TabsContent>
+              <div className="flex justify-end gap-2 pt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => onOpenChange(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={createMutation.isPending}
+                  data-testid="button-save-contact"
+                >
+                  {createMutation.isPending ? "Saving..." : "Save Contact"}
+                </Button>
+              </div>
+            </form>
+          </TabsContent>
         </Tabs>
         <div className="flex justify-end gap-2 pt-4 mt-4 border-t">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+          >
             Cancel
           </Button>
-          <Button onClick={handleSubmit} disabled={createMutation.isPending} data-testid="button-save-contact">
+          <Button
+            onClick={handleSubmit}
+            disabled={createMutation.isPending}
+            data-testid="button-save-contact"
+          >
             {createMutation.isPending ? "Saving..." : "Save Contact"}
           </Button>
         </div>
@@ -697,10 +763,15 @@ export default function Contacts() {
 
   return (
     <div className="flex gap-6 h-full">
-      <div className={`flex-1 space-y-6 ${selectedContact ? "hidden lg:block lg:max-w-md" : ""}`}>
+      <div
+        className={`flex-1 space-y-6 ${selectedContact ? "hidden lg:block lg:max-w-md" : ""}`}
+      >
         <div className="flex items-center justify-between gap-4">
           <h1 className="text-2xl font-semibold">Contacts</h1>
-          <Button onClick={() => setAddModalOpen(true)} data-testid="button-add-contact">
+          <Button
+            onClick={() => setAddModalOpen(true)}
+            data-testid="button-add-contact"
+          >
             <Plus className="w-4 h-4 mr-2" />
             Add Contact
           </Button>
@@ -746,7 +817,10 @@ export default function Contacts() {
                   : "Add your first contact to start tracking outreach"}
               </p>
               {!search && (
-                <Button onClick={() => setAddModalOpen(true)} data-testid="button-add-first-contact">
+                <Button
+                  onClick={() => setAddModalOpen(true)}
+                  data-testid="button-add-first-contact"
+                >
                   <Plus className="w-4 h-4 mr-2" />
                   Add Contact
                 </Button>
