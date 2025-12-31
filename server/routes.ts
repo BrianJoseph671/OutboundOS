@@ -9,15 +9,14 @@ import {
   insertSettingsSchema,
 } from "@shared/schema";
 
-const upload = multer({ 
+const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 50 * 1024 * 1024 } // 50MB limit
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
 });
 
-
 function parseLinkedInPdf(text: string) {
-  const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
-  
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+
   let name = "";
   let headline = "";
   let about = "";
@@ -27,107 +26,67 @@ function parseLinkedInPdf(text: string) {
   let skills = "";
   let company = "";
   let role = "";
-  
-  // Find name - usually first substantial line after "Contact" or at the very top
-  const nameIndex = lines.findIndex(line => 
-    line.length > 5 && 
-    line.length < 100 && 
-    !line.toLowerCase().includes('contact') &&
-    !line.toLowerCase().includes('linkedin') &&
-    !line.toLowerCase().includes('www.') &&
-    /^[A-Z]/.test(line) &&
-    !line.includes('|')
-  );
-  if (nameIndex >= 0) {
-    name = lines[nameIndex].replace(/\(.*?\)/g, '').trim(); // Remove nicknames in parentheses
+
+  // FIXED POSITIONS (always the same on LinkedIn PDFs):
+
+  // Line 0: "Contact" (skip)
+  // Line 1: Name
+  if (lines.length > 1 && lines[0].toLowerCase() === 'contact') {
+    name = lines[1].replace(/\([^)]*\)/g, '').trim(); // Remove nicknames in parens
   }
-  
-  // Find headline - line with pipe separators after name
-  const headlineIndex = lines.findIndex((line, idx) => 
-    idx > nameIndex && 
-    line.includes('|') && 
-    line.length > 10 &&
-    !line.toLowerCase().includes('page')
-  );
-  if (headlineIndex >= 0) {
-    headline = lines[headlineIndex];
+
+  // Line 3: Headline (line with pipes)
+  if (lines.length > 3 && lines[3].includes('|')) {
+    headline = lines[3];
   }
-  
-  // Find location - line with state/country after headline
-  const locationIndex = lines.findIndex((line, idx) => 
-    idx > headlineIndex && 
-    (line.includes(', United States') || 
-     line.match(/,\s*(TX|CA|NY|IL|FL|MA|WA|CO|GA|NC|VA|PA|AZ|OH|MI|TN|NJ|MD|IN|MO|WI|MN|OR|SC|AL|LA|KY|OK|CT|UT|IA|NV|AR|MS|KS|NM|NE|WV|ID|HI|ME|NH|RI|MT|DE|SD|AK|ND|VT|WY)/))
-  );
-  if (locationIndex >= 0) {
-    location = lines[locationIndex];
+
+  // Line 5: Location (could be anywhere in world, not just US)
+  if (lines.length > 5) {
+    location = lines[5];
   }
-  
-  // Find Summary section
-  const summaryStart = lines.findIndex(line => line.toLowerCase() === 'summary');
-  const experienceStart = lines.findIndex(line => line.toLowerCase() === 'experience');
-  if (summaryStart >= 0 && experienceStart > summaryStart) {
-    about = lines.slice(summaryStart + 1, experienceStart).join(' ');
-  }
-  
-  // Find current company and role from Experience section
-  if (experienceStart >= 0) {
-    // First company name after Experience header (usually 1-2 lines after)
-    for (let i = experienceStart + 1; i < Math.min(experienceStart + 10, lines.length); i++) {
-      const line = lines[i];
-      // Company names are usually standalone, capitalized, not dates
-      if (line.length > 2 && 
-          line.length < 100 &&
-          /^[A-Z]/.test(line) &&
-          !line.match(/\d{4}/) && // No years
-          !line.toLowerCase().includes('present') &&
-          !line.toLowerCase().includes('less than') &&
-          !line.includes(',')) {
-        company = line;
-        
-        // Role is usually the next non-empty line
-        for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
-          const roleLine = lines[j];
-          if (roleLine.length > 2 && 
-              roleLine.length < 100 &&
-              !roleLine.match(/\d{4}/) &&
-              !roleLine.includes('(') &&
-              !roleLine.toLowerCase().includes('area')) {
-            role = roleLine;
-            break;
-          }
-        }
-        break;
-      }
-    }
-    
-    // Get full experience text
-    const educationStart = lines.findIndex(line => line.toLowerCase() === 'education');
-    const expEnd = educationStart >= 0 ? educationStart : lines.length;
-    experience = lines.slice(experienceStart + 1, expEnd).join('\n').slice(0, 1000);
-  }
-  
-  // Find Education section
-  const educationIndex = lines.findIndex(line => line.toLowerCase() === 'education');
-  if (educationIndex >= 0) {
-    education = lines.slice(educationIndex + 1, Math.min(educationIndex + 20, lines.length))
-      .join('\n')
-      .slice(0, 500);
-  }
-  
-  // Find Skills section (if exists)
-  const skillsStart = lines.findIndex(line => line.toLowerCase() === 'top skills' || line.toLowerCase() === 'skills');
-  if (skillsStart >= 0) {
-    const nextSection = lines.findIndex((line, idx) => 
-      idx > skillsStart && 
-      (line.toLowerCase() === 'languages' || 
-       line.toLowerCase() === 'certifications' ||
-       line.toLowerCase() === 'summary')
+
+  // VARIABLE POSITIONS (use section markers):
+
+  const summaryIdx = lines.findIndex(l => l.toLowerCase() === 'summary');
+  const experienceIdx = lines.findIndex(l => l.toLowerCase() === 'experience');
+  const educationIdx = lines.findIndex(l => l.toLowerCase() === 'education');
+  const topSkillsIdx = lines.findIndex(l => l.toLowerCase() === 'top skills');
+
+  // Skills: Between "Top Skills" and next section
+  if (topSkillsIdx >= 0) {
+    const nextSection = Math.min(
+      ...[summaryIdx, experienceIdx, educationIdx]
+        .filter(idx => idx > topSkillsIdx)
+        .concat(lines.length)
     );
-    const skillEnd = nextSection >= 0 ? nextSection : Math.min(skillsStart + 15, lines.length);
-    skills = lines.slice(skillsStart + 1, skillEnd).join(', ').slice(0, 500);
+    skills = lines.slice(topSkillsIdx + 1, nextSection).join(', ');
   }
-  
+
+  // About: Between "Summary" and "Experience"
+  if (summaryIdx >= 0 && experienceIdx > summaryIdx) {
+    about = lines.slice(summaryIdx + 1, experienceIdx).join(' ').slice(0, 1000);
+  }
+
+  // Current company and role: First 2 lines after "Experience"
+  if (experienceIdx >= 0) {
+    if (experienceIdx + 1 < lines.length) {
+      company = lines[experienceIdx + 1];
+    }
+    if (experienceIdx + 2 < lines.length) {
+      role = lines[experienceIdx + 2];
+    }
+
+    // Full experience text
+    const expEnd = educationIdx >= 0 ? educationIdx : Math.min(experienceIdx + 50, lines.length);
+    experience = lines.slice(experienceIdx + 1, expEnd).join('\n').slice(0, 1000);
+  }
+
+  // Education: After "Education" section
+  if (educationIdx >= 0) {
+    const eduEnd = Math.min(educationIdx + 20, lines.length);
+    education = lines.slice(educationIdx + 1, eduEnd).join('\n').slice(0, 500);
+  }
+
   return {
     name: name || undefined,
     headline: headline || undefined,
@@ -215,18 +174,35 @@ export async function registerRoutes(
         try {
           const { PDFExtract } = await import("pdf.js-extract");
           const pdfExtract = new PDFExtract();
-          
+
           // Extract text from buffer
           const data = await pdfExtract.extractBuffer(req.file.buffer);
-          
+
           // Combine all text from all pages
           text = data.pages
-            .map((page: any) => page.content.map((item: any) => item.str).join(" "))
-            .join("\n");
-          
+            .map((page: any) => {
+              // Group items by Y coordinate to detect lines
+              const lines: { [y: number]: string[] } = {};
+              page.content.forEach((item: any) => {
+                const y = Math.round(item.y);
+                if (!lines[y]) lines[y] = [];
+                lines[y].push(item.str);
+              });
+              // Sort by Y coordinate and join
+              return Object.keys(lines)
+                .sort((a, b) => parseInt(a) - parseInt(b))
+                .map((y) => lines[parseInt(y)].join(" "))
+                .join("\n");
+            })
+            .join("\n\n");
+
           console.log("[PDF Debug] pdf.js-extract successful");
           console.log("[PDF Debug] Pages:", data.pages.length);
           console.log("[PDF Debug] Extracted", text.length, "characters");
+          console.log("[PDF Debug] First 30 lines after extraction:");
+          text.split('\n').slice(0, 30).forEach((line, idx) => {
+            console.log(`[Line ${idx}]: "${line}"`);
+          });
           console.log("[PDF Debug] First 500 chars:", text.slice(0, 500));
         } catch (pdfError) {
           console.log("[PDF Debug] pdf.js-extract failed:", pdfError);
@@ -239,8 +215,11 @@ export async function registerRoutes(
       }
 
       const parsed = parseLinkedInPdf(text);
-      console.log("[PDF Debug] Parsed fields:", Object.keys(parsed).filter(k => parsed[k as keyof typeof parsed]));
-      
+      console.log(
+        "[PDF Debug] Parsed fields:",
+        Object.keys(parsed).filter((k) => parsed[k as keyof typeof parsed]),
+      );
+
       res.json(parsed);
     } catch (error) {
       console.error("[PDF Debug] Error:", error);
@@ -290,9 +269,11 @@ export async function registerRoutes(
         const pdfExtract = new PDFExtract();
         const data = await pdfExtract.extractBuffer(file.buffer);
         const extractedText = data.pages
-          .map((page: any) => page.content.map((item: any) => item.str).join(" "))
+          .map((page: any) =>
+            page.content.map((item: any) => item.str).join(" "),
+          )
           .join("\n");
-        
+
         pdfParseResult = {
           success: true,
           pageCount: data.pages.length,

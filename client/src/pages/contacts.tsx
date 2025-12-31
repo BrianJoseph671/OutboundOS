@@ -409,6 +409,7 @@ function AddContactModal({
       notes: "",
       tags: "",
     });
+    setPdfData(null);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -466,8 +467,15 @@ function AddContactModal({
     }
   };
 
+  const handleOpenChange = (newOpen: boolean) => {
+    if (!newOpen) {
+      resetForm();
+    }
+    onOpenChange(newOpen);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add Contact</DialogTitle>
