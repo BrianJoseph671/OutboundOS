@@ -1,0 +1,513 @@
+I need to integrate a Python-based LinkedIn PDF parser into this Express server. Here's what to do:
+
+STEP 1 - Create these two Python files in the project root:
+
+FILE: linkedin_pdf_extractor.py
+```python
+import pdfplumber
+import re
+from typing import Dict, List, Optional
+from collections import defaultdict
+
+def extract_linkedin_profile(pdf_path: str) -> Dict:
+    """Extract structured data using position-based column separation"""
+    
+    with pdfplumber.open(pdf_path) as pdf:
+        # Extract text from both columns separately using positions
+        sidebar_text = []
+        main_text = []
+        
+        for page in pdf.pages:
+            words = page.extract_words()
+            
+            # Determine column boundary (usually around x=200)
+            # LinkedIn PDFs have sidebar on left, main content on right
+            x_threshold = 200  # This is consistent across LinkedIn PDFs
+            
+            # Group words by line (y-position) for each column
+            left_lines = defaultdict(list)
+            right_lines = defaultdict(list)
+            
+            for word in words:
+                y = round(word['top'])  # Group by vertical position
+                
+                if word['x0'] < x_threshold:
+                    left_lines[y].append(word)
+                else:
+                    right_lines[y].append(word)
+            
+            # Reconstruct text for each column
+            for y in sorted(left_lines.keys()):
+                line = ' '.join(w['text'] for w in sorted(left_lines[y], key=lambda x: x['x0']))
+                sidebar_text.append(line)
+            
+            for y in sorted(right_lines.keys()):
+                line = ' '.join(w['text'] for w in sorted(right_lines[y], key=lambda x: x['x0']))
+                main_text.append(line)
+    
+    # Now extract from clean, separated text
+    profile = {}
+    
+    # Extract from main content
+    profile.update(extract_header(main_text))
+    profile['summary'] = extract_summary(main_text)
+    profile['experience'] = extract_experience(main_text)
+    profile['education'] = extract_education(main_text)
+    
+    # Extract from sidebar
+    profile['contact'] = extract_contact(sidebar_text)
+    profile['skills'] = extract_skills(sidebar_text)
+    
+    return profile
+
+
+def extract_header(lines: List[str]) -> Dict:
+    """Extract name, headline, location from main content"""
+    
+    # First non-empty, non-section line should be the name
+    name = None
+    headline_parts = []
+    location = None
+    
+    i = 0
+    while i < len(lines) and i < 10:
+        line = lines[i].strip()
+        
+        if not line:
+            i += 1
+            continue
+        
+        # Skip if it's a section header
+        if line in ['Summary', 'Experience', 'Education']:
+            break
+        
+        # First substantial line is the name
+        if not name:
+            name = line
+            i += 1
+            continue
+        
+        # Check if this is a location
+        # Location patterns: "City, State", "Greater X Area", "City Area", etc.
+        if (re.search(r'^[\w\s]+,\s*[\w\s]+$', line) or 
+            re.search(r'Area$', line) or 
+            line == 'United States'):
+            location = line
+            break
+        
+        # Otherwise it's part of the headline
+        headline_parts.append(line)
+        i += 1
+    
+    headline = ' '.join(headline_parts).strip()
+    
+    return {
+        'name': name,
+        'headline': headline,
+        'location': location
+    }
+
+
+def extract_summary(lines: List[str]) -> Optional[str]:
+    """Extract summary section"""
+    
+    try:
+        start_idx = lines.index('Summary')
+    except ValueError:
+        return None
+    
+    # Find end (next section header)
+    end_idx = len(lines)
+    for i in range(start_idx + 1, len(lines)):
+        if lines[i] in ['Experience', 'Education']:
+            end_idx = i
+            break
+    
+    summary_lines = [l.strip() for l in lines[start_idx + 1:end_idx] if l.strip()]
+    return ' '.join(summary_lines) if summary_lines else None
+
+
+def extract_experience(lines: List[str]) -> List[Dict]:
+    """
+    Extract work experience with proper handling of:
+    Company → [Total Duration] → Title → Dates → Location → Description
+    """
+    
+    try:
+        start_idx = lines.index('Experience')
+    except ValueError:
+        return []
+    
+    # Find end
+    end_idx = len(lines)
+    for i in range(start_idx + 1, len(lines)):
+        if lines[i] in ['Education', 'Licenses & Certifications']:
+            end_idx = i
+            break
+    
+    exp_lines = [l.strip() for l in lines[start_idx + 1:end_idx] if l.strip()]
+    
+    experiences = []
+    i = 0
+    
+    # Patterns
+    date_pattern = r'(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4}\s*-\s*(Present|January|February|March|April|May|June|July|August|September|October|November|December)'
+    duration_pattern = r'\(\d+\s+(year|month)'
+    total_duration_pattern = r'^\d+\s+(year|month)s?$'  # e.g., "6 years"
+    
+    current_company = None
+    
+    while i < len(exp_lines):
+        line = exp_lines[i]
+        
+        # Skip standalone duration markers (company tenure)
+        if re.match(total_duration_pattern, line):
+            i += 1
+            continue
+        
+        # Found a date line with duration - this is a role
+        if re.search(date_pattern, line) and re.search(duration_pattern, line):
+            dates = line
+            title = None
+            company = None
+            location_line = None
+            
+            # Work backwards to find title and company
+            # Pattern: ... Company (maybe total duration) Title Dates
+            
+            # Title is line before dates
+            if i >= 1:
+                title = exp_lines[i - 1]
+            
+            # Check 2 lines back
+            if i >= 2:
+                two_back = exp_lines[i - 2]
+                
+                # If it's total duration, company is 3 back
+                if re.match(total_duration_pattern, two_back):
+                    if i >= 3:
+                        company = exp_lines[i - 3]
+                        current_company = company
+                # Otherwise, two_back is the company
+                elif not re.search(r',|\bArea\b|United States', two_back):
+                    company = two_back
+                    current_company = company
+            
+            # If we didn't find company, use the current one (multiple roles at same company)
+            if not company:
+                company = current_company
+            
+            # Look ahead for location
+            if i + 1 < len(exp_lines):
+                next_line = exp_lines[i + 1]
+                if re.search(r',|\bArea\b|United States', next_line) and not re.search(date_pattern, next_line):
+                    location_line = next_line
+            
+            # Collect description
+            description_parts = []
+            desc_start = i + 1
+            if location_line and i + 1 < len(exp_lines) and exp_lines[i + 1] == location_line:
+                desc_start = i + 2
+            
+            j = desc_start
+            while j < len(exp_lines):
+                desc_line = exp_lines[j]
+                
+                # Stop at next role (another date line)
+                if re.search(date_pattern, desc_line) and re.search(duration_pattern, desc_line):
+                    break
+                
+                # Stop at total duration marker (indicates new company section)
+                if re.match(total_duration_pattern, desc_line):
+                    break
+                
+                # Stop at what looks like a new company
+                # (short capitalized line followed by title/date within a few lines)
+                if (len(desc_line) < 50 and 
+                    j > desc_start and 
+                    desc_line[0].isupper() and
+                    not any(bullet in desc_line for bullet in ['•', '-', '–', '(', ')'])):
+                    # Lookahead to check if this starts a new job entry
+                    found_date = False
+                    for k in range(j, min(j + 4, len(exp_lines))):
+                        if re.search(date_pattern, exp_lines[k]):
+                            found_date = True
+                            break
+                    if found_date:
+                        # This is a new company, reset
+                        current_company = None
+                        break
+                
+                description_parts.append(desc_line)
+                j += 1
+            
+            if title:
+                experiences.append({
+                    'company': company or 'N/A',
+                    'title': title,
+                    'dates': dates,
+                    'location': location_line,
+                    'description': ' '.join(description_parts).strip() if description_parts else None
+                })
+        
+        i += 1
+    
+    return experiences
+
+
+def extract_education(lines: List[str]) -> List[Dict]:
+    """Extract education entries"""
+    
+    try:
+        start_idx = lines.index('Education')
+    except ValueError:
+        return []
+    
+    edu_lines = [l.strip() for l in lines[start_idx + 1:] if l.strip() and not l.startswith('Page ')]
+    
+    education = []
+    i = 0
+    
+    while i < len(edu_lines):
+        line = edu_lines[i]
+        
+        # School name: no dates, no bullets
+        if not re.search(r'\d{4}', line) and not re.search(r'·', line) and len(line) > 3:
+            school = line
+            i += 1
+            
+            # Collect degree lines (have dates or bullet or degree keywords)
+            degree_parts = []
+            while i < len(edu_lines):
+                deg_line = edu_lines[i]
+                
+                # Stop if we hit what looks like another school
+                if (not re.search(r'\d{4}', deg_line) and 
+                    not re.search(r'·', deg_line) and
+                    not any(kw in deg_line for kw in ['Bachelor', 'Master', 'PhD', 'B.A.', 'M.S.', 'MBA', 'B.E.', 'M.B.A']) and
+                    i > start_idx + 1):
+                    break
+                
+                if (re.search(r'\d{4}', deg_line) or 
+                    '·' in deg_line or 
+                    any(kw in deg_line for kw in ['Bachelor', 'Master', 'PhD', 'B.A.', 'M.S.', 'MBA', 'B.E.', 'M.B.A'])):
+                    degree_parts.append(deg_line)
+                    i += 1
+                else:
+                    break
+            
+            if degree_parts:
+                education.append({
+                    'school': school,
+                    'degree': ' '.join(degree_parts)
+                })
+        else:
+            i += 1
+    
+    return education
+
+
+def extract_contact(sidebar_lines: List[str]) -> Dict:
+    """Extract contact info from sidebar"""
+    
+    contact = {}
+    
+    for line in sidebar_lines:
+        # Phone
+        phone_match = re.search(r'(\d{3}[-\s]?\d{3}[-\s]?\d{4})', line)
+        if phone_match:
+            contact['phone'] = phone_match.group(1)
+        
+        # Email  
+        email_match = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', line)
+        if email_match:
+            contact['email'] = email_match.group()
+        
+        # LinkedIn
+        if 'linkedin.com/in/' in line.lower():
+            linkedin_match = re.search(r'linkedin\.com/in/([\w-]+)', line, re.IGNORECASE)
+            if linkedin_match:
+                contact['linkedin'] = f"linkedin.com/in/{linkedin_match.group(1)}"
+    
+    return contact
+
+
+def extract_skills(sidebar_lines: List[str]) -> List[str]:
+    """Extract skills from sidebar"""
+    
+    skills = []
+    in_skills = False
+    
+    for line in sidebar_lines:
+        if 'Top Skills' in line:
+            in_skills = True
+            continue
+        
+        if in_skills:
+            # Stop at next section
+            if any(section in line for section in ['Languages', 'Certifications', 'Honors', 'Publications']):
+                break
+            
+            # Skip meta lines
+            if '(' in line and ')' in line:  # Skip "(Mobile)", "(LinkedIn)", etc.
+                continue
+            
+            if line and not line.startswith('www.'):
+                skills.append(line)
+    
+    return skills
+```
+
+FILE: parse_linkedin.py
+```python
+import sys
+import json
+from linkedin_pdf_extractor import extract_linkedin_profile
+
+if __name__ == '__main__':
+    if len(sys.argv) != 2:
+        print(json.dumps({"error": "Usage: parse_linkedin.py <pdf_path>"}), file=sys.stderr)
+        sys.exit(1)
+    
+    try:
+        result = extract_linkedin_profile(sys.argv[1])
+        print(json.dumps(result))
+    except Exception as e:
+        print(json.dumps({"error": str(e)}), file=sys.stderr)
+        sys.exit(1)
+```
+
+STEP 2 - Install Python dependencies:
+Add to your Replit environment or run:
+```bash
+pip install pdfplumber --break-system-packages
+```
+
+STEP 3 - Replace the /api/parse-pdf endpoint in server.ts with this implementation:
+```typescript
+import { spawn } from 'child_process';
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
+
+// Remove the old parseLinkedInPdf function entirely
+
+// Replace the /api/parse-pdf endpoint:
+app.post("/api/parse-pdf", upload.single("file"), async (req, res) => {
+  let tempFilePath: string | null = null;
+  
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+
+    console.log("[PDF] File uploaded:", req.file.originalname, req.file.size, "bytes");
+
+    // Save to temp file
+    const tempDir = os.tmpdir();
+    tempFilePath = path.join(tempDir, `linkedin-upload-${Date.now()}.pdf`);
+    fs.writeFileSync(tempFilePath, req.file.buffer);
+    console.log("[PDF] Saved to temp file:", tempFilePath);
+
+    // Call Python script
+    const python = spawn('python3', ['parse_linkedin.py', tempFilePath]);
+    
+    let stdout = '';
+    let stderr = '';
+    
+    python.stdout.on('data', (data) => {
+      stdout += data.toString();
+    });
+    
+    python.stderr.on('data', (data) => {
+      stderr += data.toString();
+    });
+    
+    // Set up timeout
+    const timeout = setTimeout(() => {
+      python.kill();
+      if (tempFilePath && fs.existsSync(tempFilePath)) {
+        fs.unlinkSync(tempFilePath);
+      }
+      console.error("[PDF] Parsing timeout after 30 seconds");
+      if (!res.headersSent) {
+        res.status(408).json({ error: "PDF parsing timeout" });
+      }
+    }, 30000);
+    
+    python.on('close', (code) => {
+      clearTimeout(timeout);
+      
+      // Clean up temp file
+      if (tempFilePath && fs.existsSync(tempFilePath)) {
+        try {
+          fs.unlinkSync(tempFilePath);
+          console.log("[PDF] Cleaned up temp file");
+        } catch (e) {
+          console.error("[PDF] Failed to clean up temp file:", e);
+        }
+      }
+      
+      if (code === 0) {
+        try {
+          const result = JSON.parse(stdout);
+          console.log("[PDF] Successfully parsed:", Object.keys(result));
+          res.json(result);
+        } catch (e) {
+          console.error("[PDF] Invalid JSON from parser:", stdout);
+          res.status(500).json({ error: "Invalid JSON from parser", details: stdout });
+        }
+      } else {
+        console.error("[PDF] Python script failed with code", code, "stderr:", stderr);
+        res.status(500).json({ 
+          error: "PDF parsing failed", 
+          details: stderr || "Python script exited with error"
+        });
+      }
+    });
+    
+    python.on('error', (err) => {
+      clearTimeout(timeout);
+      console.error("[PDF] Failed to spawn python process:", err);
+      if (tempFilePath && fs.existsSync(tempFilePath)) {
+        fs.unlinkSync(tempFilePath);
+      }
+      if (!res.headersSent) {
+        res.status(500).json({ 
+          error: "Failed to execute PDF parser", 
+          details: "Make sure Python 3 and pdfplumber are installed"
+        });
+      }
+    });
+    
+  } catch (error) {
+    console.error("[PDF] Error:", error);
+    if (tempFilePath && fs.existsSync(tempFilePath)) {
+      try {
+        fs.unlinkSync(tempFilePath);
+      } catch (e) {
+        console.error("[PDF] Failed to clean up after error:", e);
+      }
+    }
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Failed to process PDF" });
+    }
+  }
+});
+```
+
+STEP 4 - Add these imports at the top of server.ts if not already present:
+```typescript
+import { spawn } from 'child_process';
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
+```
+
+STEP 5 - Test the implementation:
+1. Restart the server
+2. Upload a LinkedIn PDF
+3. Check console logs for "[PDF]" debug messages
+4. Verify the response contains properly extracted fields
+
+The Python-based parser uses position-based extraction (separating sidebar from main content by x-coordinate) which is much more reliable than line-based parsing for LinkedIn PDFs.
