@@ -32,7 +32,13 @@ import {
   X,
   ChevronRight,
   Trash2,
+  Loader2,
+  Check,
+  AlertCircle,
+  Upload,
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Progress } from "@/components/ui/progress";
 import type { Contact, InsertContact, OutreachAttempt } from "@shared/schema";
 
 function ContactCard({
@@ -378,6 +384,19 @@ function AddContactModal({
   const [pdfData, setPdfData] = useState<Partial<InsertContact> | null>(null);
   const [isParsingPdf, setIsParsingPdf] = useState(false);
 
+  // Batch upload state
+  type BatchResult = {
+    filename: string;
+    success: boolean;
+    contact?: Partial<InsertContact>;
+    error?: string;
+    selected: boolean;
+  };
+  const [batchResults, setBatchResults] = useState<BatchResult[]>([]);
+  const [isBatchParsing, setIsBatchParsing] = useState(false);
+  const [batchProgress, setBatchProgress] = useState(0);
+  const [isSavingBatch, setIsSavingBatch] = useState(false);
+
   const createMutation = useMutation({
     mutationFn: (data: InsertContact) =>
       apiRequest("POST", "/api/contacts", data),
@@ -410,6 +429,99 @@ function AddContactModal({
       tags: "",
     });
     setPdfData(null);
+    setBatchResults([]);
+    setBatchProgress(0);
+  };
+
+  const handleBatchUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setIsBatchParsing(true);
+    setBatchProgress(0);
+    setBatchResults([]);
+
+    try {
+      const formData = new FormData();
+      for (let i = 0; i < files.length; i++) {
+        formData.append("files", files[i]);
+      }
+
+      const response = await fetch("/api/parse-pdf-batch", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to parse PDFs");
+      }
+
+      const result = await response.json();
+      
+      const batchItems: BatchResult[] = result.results.map((r: any) => ({
+        filename: r.filename,
+        success: r.success,
+        contact: r.contact,
+        error: r.error,
+        selected: r.success, // Auto-select successful parses
+      }));
+
+      setBatchResults(batchItems);
+      setBatchProgress(100);
+
+      const successCount = batchItems.filter((r) => r.success).length;
+      toast({
+        title: `Parsed ${successCount} of ${files.length} PDFs successfully`,
+        variant: successCount === files.length ? "default" : "destructive",
+      });
+    } catch (error) {
+      console.error("[Batch PDF] Error:", error);
+      toast({
+        title: "Failed to parse PDFs",
+        variant: "destructive",
+      });
+    } finally {
+      setIsBatchParsing(false);
+    }
+  };
+
+  const toggleBatchSelection = (index: number) => {
+    setBatchResults((prev) =>
+      prev.map((r, i) => (i === index ? { ...r, selected: !r.selected } : r))
+    );
+  };
+
+  const handleSaveBatch = async () => {
+    const selectedContacts = batchResults
+      .filter((r) => r.success && r.selected && r.contact?.name)
+      .map((r) => r.contact as InsertContact);
+
+    if (selectedContacts.length === 0) {
+      toast({ title: "No contacts selected to save", variant: "destructive" });
+      return;
+    }
+
+    setIsSavingBatch(true);
+    let savedCount = 0;
+
+    try {
+      for (const contact of selectedContacts) {
+        await apiRequest("POST", "/api/contacts", contact);
+        savedCount++;
+      }
+
+      queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
+      toast({ title: `Saved ${savedCount} contacts successfully` });
+      onOpenChange(false);
+      resetForm();
+    } catch (error) {
+      toast({
+        title: `Saved ${savedCount} contacts, but some failed`,
+        variant: "destructive",
+      });
+    } finally {
+      setIsSavingBatch(false);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -481,8 +593,9 @@ function AddContactModal({
           <DialogTitle>Add Contact</DialogTitle>
         </DialogHeader>
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-4">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="pdf">Upload PDF</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="pdf">Single PDF</TabsTrigger>
+            <TabsTrigger value="batch">Batch Upload</TabsTrigger>
             <TabsTrigger value="manual">Manual Entry</TabsTrigger>
           </TabsList>
           <TabsContent value="pdf" className="space-y-4">
@@ -537,6 +650,118 @@ function AddContactModal({
                     {pdfData.about.slice(0, 100)}...
                   </p>
                 )}
+              </div>
+            )}
+          </TabsContent>
+          <TabsContent value="batch" className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="batch-upload">Upload Multiple LinkedIn PDFs</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  id="batch-upload"
+                  type="file"
+                  accept=".pdf"
+                  multiple
+                  onChange={handleBatchUpload}
+                  disabled={isBatchParsing || isSavingBatch}
+                  data-testid="input-batch-upload"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Select multiple PDF files to import contacts in bulk (up to 20 files)
+              </p>
+            </div>
+
+            {isBatchParsing && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span className="text-sm">Processing PDFs...</span>
+                </div>
+                <Progress value={batchProgress} className="w-full" />
+              </div>
+            )}
+
+            {batchResults.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-medium text-sm">
+                    Parsed Contacts ({batchResults.filter((r) => r.success).length} successful,{" "}
+                    {batchResults.filter((r) => !r.success).length} failed)
+                  </h3>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      setBatchResults((prev) =>
+                        prev.map((r) => ({ ...r, selected: r.success }))
+                      )
+                    }
+                  >
+                    Select All
+                  </Button>
+                </div>
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {batchResults.map((result, index) => (
+                    <div
+                      key={index}
+                      className={`flex items-center gap-3 p-3 rounded-md border ${
+                        result.success ? "bg-muted/50" : "bg-destructive/10 border-destructive/30"
+                      }`}
+                      data-testid={`batch-result-${index}`}
+                    >
+                      {result.success ? (
+                        <Checkbox
+                          checked={result.selected}
+                          onCheckedChange={() => toggleBatchSelection(index)}
+                          data-testid={`checkbox-batch-${index}`}
+                        />
+                      ) : (
+                        <AlertCircle className="w-4 h-4 text-destructive" />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        {result.success ? (
+                          <>
+                            <p className="font-medium text-sm truncate">
+                              {result.contact?.name || "Unknown"}
+                            </p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {result.contact?.role && result.contact?.company
+                                ? `${result.contact.role} at ${result.contact.company}`
+                                : result.contact?.company || result.contact?.role || result.filename}
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            <p className="font-medium text-sm truncate">{result.filename}</p>
+                            <p className="text-xs text-destructive truncate">
+                              {result.error || "Failed to parse"}
+                            </p>
+                          </>
+                        )}
+                      </div>
+                      {result.success && <Check className="w-4 h-4 text-chart-2" />}
+                    </div>
+                  ))}
+                </div>
+                <Button
+                  onClick={handleSaveBatch}
+                  disabled={isSavingBatch || batchResults.filter((r) => r.selected).length === 0}
+                  className="w-full"
+                  data-testid="button-save-batch"
+                >
+                  {isSavingBatch ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-4 h-4 mr-2" />
+                      Save {batchResults.filter((r) => r.selected).length} Contacts
+                    </>
+                  )}
+                </Button>
               </div>
             )}
           </TabsContent>

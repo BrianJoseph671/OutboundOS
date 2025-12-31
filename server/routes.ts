@@ -203,6 +203,127 @@ export async function registerRoutes(
     }
   });
 
+  // Batch PDF Parsing - accepts multiple files and processes them sequentially
+  app.post("/api/parse-pdf-batch", upload.array("files", 20), async (req, res) => {
+    const files = req.files as Express.Multer.File[];
+    
+    if (!files || files.length === 0) {
+      return res.status(400).json({ error: "No files uploaded" });
+    }
+
+    console.log(`[PDF Batch] Processing ${files.length} files`);
+    
+    const results: Array<{
+      filename: string;
+      success: boolean;
+      contact?: any;
+      error?: string;
+    }> = [];
+
+    // Process files sequentially to avoid overwhelming the system
+    for (const file of files) {
+      let tempFilePath: string | null = null;
+      
+      try {
+        console.log(`[PDF Batch] Processing: ${file.originalname}`);
+        
+        // Save to temp file
+        const tempDir = os.tmpdir();
+        tempFilePath = path.join(tempDir, `linkedin-batch-${Date.now()}-${Math.random().toString(36).slice(2)}.pdf`);
+        fs.writeFileSync(tempFilePath, file.buffer);
+
+        // Parse with Python script
+        const result = await new Promise<any>((resolve, reject) => {
+          const python = spawn("python3", ["parse_linkedin.py", tempFilePath!]);
+          let stdout = "";
+          let stderr = "";
+
+          python.stdout.on("data", (data) => { stdout += data.toString(); });
+          python.stderr.on("data", (data) => { stderr += data.toString(); });
+
+          const timeout = setTimeout(() => {
+            python.kill();
+            reject(new Error("PDF parsing timeout"));
+          }, 30000);
+
+          python.on("close", (code) => {
+            clearTimeout(timeout);
+            if (code === 0) {
+              try {
+                resolve(JSON.parse(stdout));
+              } catch (e) {
+                reject(new Error("Invalid JSON from parser"));
+              }
+            } else {
+              reject(new Error(stderr || "Python script failed"));
+            }
+          });
+
+          python.on("error", (err) => {
+            clearTimeout(timeout);
+            reject(err);
+          });
+        });
+
+        // Transform result
+        const experienceArr = result.experience?.map((exp: any) => 
+          `${exp.title} at ${exp.company} (${exp.dates})${exp.description ? '\n' + exp.description : ''}`
+        );
+        const educationArr = result.education?.map((edu: any) => 
+          `${edu.school}: ${edu.degree}`
+        );
+        
+        const transformed = {
+          name: result.name || undefined,
+          headline: result.headline || undefined,
+          about: result.summary || undefined,
+          location: result.location || undefined,
+          experience: experienceArr?.length ? experienceArr.join('\n\n') : undefined,
+          education: educationArr?.length ? educationArr.join('\n') : undefined,
+          skills: result.skills?.length ? result.skills.join(', ') : undefined,
+          company: result.experience?.[0]?.company || undefined,
+          role: result.experience?.[0]?.title || undefined,
+          email: result.contact?.email || undefined,
+          linkedinUrl: result.contact?.linkedin ? `https://${result.contact.linkedin}` : undefined,
+        };
+
+        results.push({
+          filename: file.originalname,
+          success: true,
+          contact: transformed,
+        });
+
+        console.log(`[PDF Batch] Successfully parsed: ${file.originalname}`);
+      } catch (error) {
+        console.error(`[PDF Batch] Failed to parse ${file.originalname}:`, error);
+        results.push({
+          filename: file.originalname,
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      } finally {
+        // Clean up temp file
+        if (tempFilePath && fs.existsSync(tempFilePath)) {
+          try {
+            fs.unlinkSync(tempFilePath);
+          } catch (e) {
+            console.error("[PDF Batch] Failed to clean up temp file:", e);
+          }
+        }
+      }
+    }
+
+    const successCount = results.filter(r => r.success).length;
+    console.log(`[PDF Batch] Complete: ${successCount}/${files.length} successful`);
+    
+    res.json({
+      totalFiles: files.length,
+      successCount,
+      failureCount: files.length - successCount,
+      results,
+    });
+  });
+
   // DEBUG: PDF analysis endpoint - returns detailed extraction info using real PDF parsing
   // Accepts multipart file upload with field name "file"
   app.post("/debug/pdf", upload.single("file"), async (req, res) => {
