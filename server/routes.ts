@@ -1,5 +1,9 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
+import { spawn } from "child_process";
+import fs from "fs";
+import path from "path";
+import os from "os";
 import { storage } from "./storage";
 import multer from "multer";
 import {
@@ -13,92 +17,6 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
 });
-
-function parseLinkedInPdf(text: string) {
-  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-
-  let name = "";
-  let headline = "";
-  let about = "";
-  let location = "";
-  let experience = "";
-  let education = "";
-  let skills = "";
-  let company = "";
-  let role = "";
-
-  // FIXED POSITIONS (always the same on LinkedIn PDFs):
-
-  // Line 0: "Contact" (skip)
-  // Line 1: Name
-  if (lines.length > 1 && lines[0].toLowerCase() === 'contact') {
-    name = lines[1].replace(/\([^)]*\)/g, '').trim(); // Remove nicknames in parens
-  }
-
-  // Line 3: Headline (line with pipes)
-  if (lines.length > 3 && lines[3].includes('|')) {
-    headline = lines[3];
-  }
-
-  // Line 5: Location (could be anywhere in world, not just US)
-  if (lines.length > 5) {
-    location = lines[5];
-  }
-
-  // VARIABLE POSITIONS (use section markers):
-
-  const summaryIdx = lines.findIndex(l => l.toLowerCase() === 'summary');
-  const experienceIdx = lines.findIndex(l => l.toLowerCase() === 'experience');
-  const educationIdx = lines.findIndex(l => l.toLowerCase() === 'education');
-  const topSkillsIdx = lines.findIndex(l => l.toLowerCase() === 'top skills');
-
-  // Skills: Between "Top Skills" and next section
-  if (topSkillsIdx >= 0) {
-    const nextSection = Math.min(
-      ...[summaryIdx, experienceIdx, educationIdx]
-        .filter(idx => idx > topSkillsIdx)
-        .concat(lines.length)
-    );
-    skills = lines.slice(topSkillsIdx + 1, nextSection).join(', ');
-  }
-
-  // About: Between "Summary" and "Experience"
-  if (summaryIdx >= 0 && experienceIdx > summaryIdx) {
-    about = lines.slice(summaryIdx + 1, experienceIdx).join(' ').slice(0, 1000);
-  }
-
-  // Current company and role: First 2 lines after "Experience"
-  if (experienceIdx >= 0) {
-    if (experienceIdx + 1 < lines.length) {
-      company = lines[experienceIdx + 1];
-    }
-    if (experienceIdx + 2 < lines.length) {
-      role = lines[experienceIdx + 2];
-    }
-
-    // Full experience text
-    const expEnd = educationIdx >= 0 ? educationIdx : Math.min(experienceIdx + 50, lines.length);
-    experience = lines.slice(experienceIdx + 1, expEnd).join('\n').slice(0, 1000);
-  }
-
-  // Education: After "Education" section
-  if (educationIdx >= 0) {
-    const eduEnd = Math.min(educationIdx + 20, lines.length);
-    education = lines.slice(educationIdx + 1, eduEnd).join('\n').slice(0, 500);
-  }
-
-  return {
-    name: name || undefined,
-    headline: headline || undefined,
-    about: about || undefined,
-    location: location || undefined,
-    experience: experience || undefined,
-    education: education || undefined,
-    skills: skills || undefined,
-    company: company || undefined,
-    role: role || undefined,
-  };
-}
 
 export async function registerRoutes(
   httpServer: Server,
@@ -160,70 +78,128 @@ export async function registerRoutes(
     }
   });
 
-  // PDF Parsing - accepts file upload with pdf.js-extract
+  // PDF Parsing - uses Python pdfplumber for accurate extraction
   app.post("/api/parse-pdf", upload.single("file"), async (req, res) => {
+    let tempFilePath: string | null = null;
+
     try {
-      let text = "";
+      if (!req.file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
 
-      if (req.file) {
-        console.log("[PDF Debug] File uploaded:", {
-          originalName: req.file.originalname,
-          size: req.file.size,
-        });
+      console.log("[PDF] File uploaded:", req.file.originalname, req.file.size, "bytes");
 
-        try {
-          const { PDFExtract } = await import("pdf.js-extract");
-          const pdfExtract = new PDFExtract();
+      // Save to temp file
+      const tempDir = os.tmpdir();
+      tempFilePath = path.join(tempDir, `linkedin-upload-${Date.now()}.pdf`);
+      fs.writeFileSync(tempFilePath, req.file.buffer);
+      console.log("[PDF] Saved to temp file:", tempFilePath);
 
-          // Extract text from buffer
-          const data = await pdfExtract.extractBuffer(req.file.buffer);
+      // Call Python script
+      const python = spawn("python3", ["parse_linkedin.py", tempFilePath]);
 
-          // Combine all text from all pages
-          text = data.pages
-            .map((page: any) => {
-              // Group items by Y coordinate to detect lines
-              const lines: { [y: number]: string[] } = {};
-              page.content.forEach((item: any) => {
-                const y = Math.round(item.y);
-                if (!lines[y]) lines[y] = [];
-                lines[y].push(item.str);
-              });
-              // Sort by Y coordinate and join
-              return Object.keys(lines)
-                .sort((a, b) => parseInt(a) - parseInt(b))
-                .map((y) => lines[parseInt(y)].join(" "))
-                .join("\n");
-            })
-            .join("\n\n");
+      let stdout = "";
+      let stderr = "";
 
-          console.log("[PDF Debug] pdf.js-extract successful");
-          console.log("[PDF Debug] Pages:", data.pages.length);
-          console.log("[PDF Debug] Extracted", text.length, "characters");
-          console.log("[PDF Debug] First 30 lines after extraction:");
-          text.split('\n').slice(0, 30).forEach((line, idx) => {
-            console.log(`[Line ${idx}]: "${line}"`);
+      python.stdout.on("data", (data) => {
+        stdout += data.toString();
+      });
+
+      python.stderr.on("data", (data) => {
+        stderr += data.toString();
+      });
+
+      // Set up timeout
+      const timeout = setTimeout(() => {
+        python.kill();
+        if (tempFilePath && fs.existsSync(tempFilePath)) {
+          fs.unlinkSync(tempFilePath);
+        }
+        console.error("[PDF] Parsing timeout after 30 seconds");
+        if (!res.headersSent) {
+          res.status(408).json({ error: "PDF parsing timeout" });
+        }
+      }, 30000);
+
+      python.on("close", (code) => {
+        clearTimeout(timeout);
+
+        // Clean up temp file
+        if (tempFilePath && fs.existsSync(tempFilePath)) {
+          try {
+            fs.unlinkSync(tempFilePath);
+            console.log("[PDF] Cleaned up temp file");
+          } catch (e) {
+            console.error("[PDF] Failed to clean up temp file:", e);
+          }
+        }
+
+        if (code === 0) {
+          try {
+            const result = JSON.parse(stdout);
+            console.log("[PDF] Successfully parsed:", Object.keys(result));
+            
+            // Transform Python result to match expected frontend format
+            const experienceArr = result.experience?.map((exp: any) => 
+              `${exp.title} at ${exp.company} (${exp.dates})${exp.description ? '\n' + exp.description : ''}`
+            );
+            const educationArr = result.education?.map((edu: any) => 
+              `${edu.school}: ${edu.degree}`
+            );
+            
+            const transformed = {
+              name: result.name || undefined,
+              headline: result.headline || undefined,
+              about: result.summary || undefined,
+              location: result.location || undefined,
+              experience: experienceArr?.length ? experienceArr.join('\n\n') : undefined,
+              education: educationArr?.length ? educationArr.join('\n') : undefined,
+              skills: result.skills?.length ? result.skills.join(', ') : undefined,
+              company: result.experience?.[0]?.company || undefined,
+              role: result.experience?.[0]?.title || undefined,
+              email: result.contact?.email || undefined,
+              linkedinUrl: result.contact?.linkedin ? `https://${result.contact.linkedin}` : undefined,
+            };
+            
+            res.json(transformed);
+          } catch (e) {
+            console.error("[PDF] Invalid JSON from parser:", stdout);
+            res.status(500).json({ error: "Invalid JSON from parser", details: stdout });
+          }
+        } else {
+          console.error("[PDF] Python script failed with code", code, "stderr:", stderr);
+          res.status(500).json({
+            error: "PDF parsing failed",
+            details: stderr || "Python script exited with error",
           });
-          console.log("[PDF Debug] First 500 chars:", text.slice(0, 500));
-        } catch (pdfError) {
-          console.log("[PDF Debug] pdf.js-extract failed:", pdfError);
-          return res.status(500).json({ error: "Failed to parse PDF" });
+        }
+      });
+
+      python.on("error", (err) => {
+        clearTimeout(timeout);
+        console.error("[PDF] Failed to spawn python process:", err);
+        if (tempFilePath && fs.existsSync(tempFilePath)) {
+          fs.unlinkSync(tempFilePath);
+        }
+        if (!res.headersSent) {
+          res.status(500).json({
+            error: "Failed to execute PDF parser",
+            details: "Make sure Python 3 and pdfplumber are installed",
+          });
+        }
+      });
+    } catch (error) {
+      console.error("[PDF] Error:", error);
+      if (tempFilePath && fs.existsSync(tempFilePath)) {
+        try {
+          fs.unlinkSync(tempFilePath);
+        } catch (e) {
+          console.error("[PDF] Failed to clean up after error:", e);
         }
       }
-
-      if (!text) {
-        return res.status(400).json({ error: "No text provided" });
+      if (!res.headersSent) {
+        res.status(500).json({ error: "Failed to process PDF" });
       }
-
-      const parsed = parseLinkedInPdf(text);
-      console.log(
-        "[PDF Debug] Parsed fields:",
-        Object.keys(parsed).filter((k) => parsed[k as keyof typeof parsed]),
-      );
-
-      res.json(parsed);
-    } catch (error) {
-      console.error("[PDF Debug] Error:", error);
-      res.status(500).json({ error: "Failed to parse PDF" });
     }
   });
 
@@ -362,22 +338,10 @@ export async function registerRoutes(
           : "PDF parsing failed: " + pdfParseResult.error,
       };
 
-      // Parse with LinkedIn parser to show what current flow extracts
-      let linkedInParsed: Record<string, unknown> = {};
-      let linkedInParseError = null;
-      try {
-        linkedInParsed = parseLinkedInPdf(text);
-      } catch (e) {
-        linkedInParseError = String(e);
-      }
-
-      const parsedFieldsFound = Object.entries(linkedInParsed)
-        .filter(([_, v]) => v !== undefined && v !== "")
-        .map(([k, v]) => ({
-          field: k,
-          charCount: String(v).length,
-          preview: String(v).slice(0, 50),
-        }));
+      // LinkedIn parsing now uses Python-based parser (not available in debug endpoint)
+      const linkedInParsed: Record<string, unknown> = {};
+      const linkedInParseError = "LinkedIn parsing uses Python pdfplumber - use /api/parse-pdf endpoint instead";
+      const parsedFieldsFound: { field: string; charCount: number; preview: string }[] = [];
 
       const debugInfo = {
         uploadMetadata,
