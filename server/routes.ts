@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import multer from "multer";
-import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 import {
   insertContactSchema,
   insertOutreachAttemptSchema,
@@ -15,8 +15,8 @@ const upload = multer({
   limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
 });
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
 // Helper function to extract text from PDF using pdf.js-extract
@@ -41,12 +41,18 @@ async function extractPdfText(buffer: Buffer): Promise<string> {
     .join("\n\n");
 }
 
-// Helper function to parse LinkedIn profile text using Claude API
-async function parseWithClaude(text: string): Promise<any> {
-  const message = await anthropic.messages.create({
-    model: "claude-sonnet-4-20250514",
+// Helper function to parse LinkedIn profile text using OpenAI API
+async function parseWithOpenAI(text: string): Promise<any> {
+  const completion = await openai.chat.completions.create({
+    model: "gpt-4-turbo",
     max_tokens: 1024,
+    response_format: { type: "json_object" },
     messages: [
+      {
+        role: "system",
+        content:
+          "You are a helpful assistant that extracts structured data from LinkedIn profiles. Always respond with valid JSON.",
+      },
       {
         role: "user",
         content: `Extract structured information from this LinkedIn profile PDF text. Return ONLY valid JSON with these exact fields (use null for missing fields):
@@ -69,12 +75,11 @@ ${text.slice(0, 15000)}`,
     ],
   });
 
-  const responseText =
-    message.content[0].type === "text" ? message.content[0].text : "";
+  const responseText = completion.choices[0].message.content || "";
 
   const jsonMatch = responseText.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
-    throw new Error("Could not extract JSON from Claude response");
+    throw new Error("Could not extract JSON from OpenAI response");
   }
 
   const parsed = JSON.parse(jsonMatch[0]);
@@ -170,9 +175,9 @@ export async function registerRoutes(
         return res.status(400).json({ error: "No text extracted from PDF" });
       }
 
-      // Use Claude to parse the LinkedIn profile
-      console.log("[PDF] Sending to Claude API for parsing...");
-      const parsed = await parseWithClaude(text);
+      // Use OpenAI to parse the LinkedIn profile
+      console.log("[PDF] Sending to OpenAI API for parsing...");
+      const parsed = await parseWithOpenAI(text);
       console.log("[PDF] Parsed fields:", Object.keys(parsed).filter((k) => parsed[k]));
 
       res.json(parsed);
@@ -212,8 +217,8 @@ export async function registerRoutes(
           throw new Error("No text extracted from PDF");
         }
 
-        // Use Claude to parse
-        const parsed = await parseWithClaude(text);
+        // Use OpenAI to parse
+        const parsed = await parseWithOpenAI(text);
 
         results.push({
           filename: file.originalname,

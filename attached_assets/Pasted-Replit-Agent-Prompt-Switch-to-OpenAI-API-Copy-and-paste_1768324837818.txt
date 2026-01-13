@@ -1,0 +1,65 @@
+Replit Agent Prompt - Switch to OpenAI API
+Copy and paste this:
+
+Switch from Anthropic API to OpenAI API for PDF parsing:
+Step 1: Add OpenAI API Key
+
+Tools → Secrets → Add new secret
+Name: OPENAI_API_KEY
+Value: Your OpenAI API key from https://platform.openai.com/api-keys
+
+Step 2: Switch SDK
+Run in terminal:
+bashnpm uninstall @anthropic-ai/sdk
+npm install openai
+Step 3: Update /server/routes.ts
+Replace the Anthropic import with OpenAI:
+typescriptimport OpenAI from 'openai';
+Replace the client initialization:
+typescriptconst openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+Step 4: Update the API call in the /api/parse-pdf route
+Find this section (around line 250):
+typescriptconst message = await anthropic.messages.create({
+  model: "claude-sonnet-4-20250514",
+  max_tokens: 1024,
+  messages: [{
+    role: "user",
+    content: `Extract structured information...`
+  }]
+});
+
+const responseText = message.content[0].type === 'text' 
+  ? message.content[0].text 
+  : '';
+Replace it with:
+typescriptconst completion = await openai.chat.completions.create({
+  model: "gpt-4-turbo",
+  max_tokens: 1024,
+  response_format: { type: "json_object" },
+  messages: [{
+    role: "system",
+    content: "You are a helpful assistant that extracts structured data from LinkedIn profiles. Always respond with valid JSON."
+  }, {
+    role: "user",
+    content: `Extract structured information from this LinkedIn profile PDF text. Return ONLY valid JSON with these exact fields (use null for missing fields):
+
+{
+  "name": "Full name without nicknames",
+  "headline": "Professional headline (the line with | separators)",
+  "location": "City, State/Country",
+  "company": "Current company name",
+  "role": "Current job title",
+  "about": "Summary/About section text",
+  "experience": "Experience section text (first 1000 chars)",
+  "education": "Education section text (first 500 chars)",
+  "skills": "Comma-separated skills from Top Skills section"
+}
+
+LinkedIn Profile Text:
+${text.slice(0, 15000)}`
+  }]
+});
+
+const responseText = completion.choices[0].message.content || '';
