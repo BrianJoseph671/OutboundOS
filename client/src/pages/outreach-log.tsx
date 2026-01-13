@@ -31,8 +31,9 @@ import {
   MoreHorizontal,
   ChevronDown,
   ChevronUp,
+  Plus,
 } from "lucide-react";
-import type { OutreachAttempt, Contact, Experiment } from "@shared/schema";
+import type { OutreachAttempt, Contact, Experiment, InsertOutreachAttempt } from "@shared/schema";
 import { format } from "date-fns";
 
 const outreachTypeLabels: Record<string, string> = {
@@ -158,6 +159,164 @@ function AttemptDetailModal({
   );
 }
 
+function ManualEntryModal({
+  open,
+  onOpenChange,
+  contacts,
+  onSuccess,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  contacts: Contact[];
+  onSuccess: () => void;
+}) {
+  const { toast } = useToast();
+  const [formData, setFormData] = useState({
+    contactId: "",
+    outreachType: "linkedin_connected",
+    campaign: "",
+    messageBody: "",
+    subject: "",
+    notes: "",
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (data: InsertOutreachAttempt) =>
+      apiRequest("POST", "/api/outreach-attempts", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/outreach-attempts"] });
+      toast({ title: "Outreach entry added" });
+      onOpenChange(false);
+      setFormData({
+        contactId: "",
+        outreachType: "linkedin_connected",
+        campaign: "",
+        messageBody: "",
+        subject: "",
+        notes: "",
+      });
+      onSuccess();
+    },
+    onError: () => {
+      toast({ title: "Failed to add entry", variant: "destructive" });
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.contactId || !formData.messageBody) {
+      toast({ title: "Please fill in required fields", variant: "destructive" });
+      return;
+    }
+    createMutation.mutate(formData as InsertOutreachAttempt);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Add Manual Outreach Entry</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="contact">Contact *</Label>
+            <Select
+              value={formData.contactId}
+              onValueChange={(value) => setFormData((prev) => ({ ...prev, contactId: value }))}
+            >
+              <SelectTrigger data-testid="select-manual-contact">
+                <SelectValue placeholder="Select a contact" />
+              </SelectTrigger>
+              <SelectContent>
+                {contacts.map((contact) => (
+                  <SelectItem key={contact.id} value={contact.id}>
+                    {contact.name} {contact.company ? `(${contact.company})` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="outreach-type">Outreach Type</Label>
+              <Select
+                value={formData.outreachType}
+                onValueChange={(value) => setFormData((prev) => ({ ...prev, outreachType: value }))}
+              >
+                <SelectTrigger data-testid="select-manual-type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="linkedin_connected">LinkedIn Message</SelectItem>
+                  <SelectItem value="linkedin_connect_request">LinkedIn Request</SelectItem>
+                  <SelectItem value="email">Email</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="campaign">Campaign (optional)</Label>
+              <Input
+                id="campaign"
+                value={formData.campaign}
+                onChange={(e) => setFormData((prev) => ({ ...prev, campaign: e.target.value }))}
+                placeholder="e.g., Q1 Outreach"
+                data-testid="input-manual-campaign"
+              />
+            </div>
+          </div>
+
+          {formData.outreachType === "email" && (
+            <div className="space-y-2">
+              <Label htmlFor="subject">Subject Line</Label>
+              <Input
+                id="subject"
+                value={formData.subject}
+                onChange={(e) => setFormData((prev) => ({ ...prev, subject: e.target.value }))}
+                placeholder="Email subject"
+                data-testid="input-manual-subject"
+              />
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <Label htmlFor="message">Message Body *</Label>
+            <Textarea
+              id="message"
+              value={formData.messageBody}
+              onChange={(e) => setFormData((prev) => ({ ...prev, messageBody: e.target.value }))}
+              placeholder="Paste or type the message you sent..."
+              rows={6}
+              data-testid="textarea-manual-message"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="notes">Notes (optional)</Label>
+            <Textarea
+              id="notes"
+              value={formData.notes}
+              onChange={(e) => setFormData((prev) => ({ ...prev, notes: e.target.value }))}
+              placeholder="Any additional context..."
+              rows={2}
+              data-testid="textarea-manual-notes"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={createMutation.isPending} data-testid="button-save-manual-entry">
+              {createMutation.isPending ? "Saving..." : "Add Entry"}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function OutreachLog() {
   const { toast } = useToast();
   const [dateRange, setDateRange] = useState("all");
@@ -168,6 +327,7 @@ export default function OutreachLog() {
   const [selectedAttempt, setSelectedAttempt] = useState<OutreachAttempt | null>(null);
   const [sortField, setSortField] = useState<"dateSent" | "contact">("dateSent");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+  const [showManualEntry, setShowManualEntry] = useState(false);
 
   const { data: attempts = [], isLoading } = useQuery<OutreachAttempt[]>({
     queryKey: ["/api/outreach-attempts"],
@@ -192,7 +352,7 @@ export default function OutreachLog() {
     },
   });
 
-  const campaigns = [...new Set(attempts.map((a) => a.campaign).filter(Boolean))] as string[];
+  const campaigns = Array.from(new Set(attempts.map((a) => a.campaign).filter(Boolean))) as string[];
 
   const filteredAttempts = attempts.filter((attempt) => {
     if (outreachType !== "all" && attempt.outreachType !== outreachType) return false;
@@ -270,10 +430,16 @@ export default function OutreachLog() {
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <h1 className="text-2xl font-semibold">Outreach Log</h1>
-        <Button variant="outline" onClick={handleExport} data-testid="button-export-csv">
-          <Download className="w-4 h-4 mr-2" />
-          Export CSV
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={() => setShowManualEntry(true)} data-testid="button-add-manual-entry">
+            <Plus className="w-4 h-4 mr-2" />
+            Add Entry
+          </Button>
+          <Button variant="outline" onClick={handleExport} data-testid="button-export-csv">
+            <Download className="w-4 h-4 mr-2" />
+            Export CSV
+          </Button>
+        </div>
       </div>
 
       <div className="flex items-center gap-2 flex-wrap">
@@ -465,6 +631,13 @@ export default function OutreachLog() {
           onOpenChange={(open) => !open && setSelectedAttempt(null)}
         />
       )}
+
+      <ManualEntryModal
+        open={showManualEntry}
+        onOpenChange={setShowManualEntry}
+        contacts={contacts}
+        onSuccess={() => {}}
+      />
     </div>
   );
 }
