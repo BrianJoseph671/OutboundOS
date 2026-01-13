@@ -515,9 +515,7 @@ export default function OutreachLog() {
   const [showManualEntry, setShowManualEntry] = useState(false);
   const [editingAttempt, setEditingAttempt] = useState<OutreachAttempt | null>(null);
 
-  // Mark first task as in_progress when creating task list is not possible here
-  // But I will complete both tasks in this turn.
-
+  // No changes needed here, just removing the comment to clean up.
   const { data: attempts = [], isLoading } = useQuery<OutreachAttempt[]>({
     queryKey: ["/api/outreach-attempts"],
   });
