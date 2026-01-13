@@ -213,6 +213,10 @@ function ManualEntryModal({
     createMutation.mutate(formData as InsertOutreachAttempt);
   };
 
+  const sortedContacts = [...contacts].sort((a, b) => {
+    return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+  });
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
@@ -230,7 +234,21 @@ function ManualEntryModal({
                 <SelectValue placeholder="Select a contact" />
               </SelectTrigger>
               <SelectContent>
-                {contacts.map((contact) => (
+                <div className="p-2 border-b">
+                  <Input 
+                    placeholder="Search contacts..." 
+                    className="h-8 text-xs"
+                    onChange={(e) => {
+                      const search = e.target.value.toLowerCase();
+                      const items = document.querySelectorAll('[role="option"]');
+                      items.forEach((item) => {
+                        const text = item.textContent?.toLowerCase() || "";
+                        (item as HTMLElement).style.display = text.includes(search) ? "flex" : "none";
+                      });
+                    }}
+                  />
+                </div>
+                {sortedContacts.map((contact) => (
                   <SelectItem key={contact.id} value={contact.id}>
                     {contact.name} {contact.company ? `(${contact.company})` : ""}
                   </SelectItem>
@@ -363,6 +381,10 @@ function EditEntryModal({
     updateMutation.mutate(formData);
   };
 
+  const sortedContacts = [...contacts].sort((a, b) => {
+    return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+  });
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
@@ -380,7 +402,21 @@ function EditEntryModal({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {contacts.map((contact) => (
+                <div className="p-2 border-b">
+                  <Input 
+                    placeholder="Search contacts..." 
+                    className="h-8 text-xs"
+                    onChange={(e) => {
+                      const search = e.target.value.toLowerCase();
+                      const items = document.querySelectorAll('[role="option"]');
+                      items.forEach((item) => {
+                        const text = item.textContent?.toLowerCase() || "";
+                        (item as HTMLElement).style.display = text.includes(search) ? "flex" : "none";
+                      });
+                    }}
+                  />
+                </div>
+                {sortedContacts.map((contact) => (
                   <SelectItem key={contact.id} value={contact.id}>
                     {contact.name} {contact.company ? `(${contact.company})` : ""}
                   </SelectItem>
@@ -478,6 +514,9 @@ export default function OutreachLog() {
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [showManualEntry, setShowManualEntry] = useState(false);
   const [editingAttempt, setEditingAttempt] = useState<OutreachAttempt | null>(null);
+
+  // Mark first task as in_progress when creating task list is not possible here
+  // But I will complete both tasks in this turn.
 
   const { data: attempts = [], isLoading } = useQuery<OutreachAttempt[]>({
     queryKey: ["/api/outreach-attempts"],
