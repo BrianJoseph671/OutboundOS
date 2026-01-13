@@ -79,7 +79,7 @@ export const insertSettingsSchema = createInsertSchema(settings).omit({ id: true
 export type InsertSettings = z.infer<typeof insertSettingsSchema>;
 export type Settings = typeof settings.$inferSelect;
 
-export const outreachTypes = ["linkedin_connected", "linkedin_connect_request", "email"] as const;
+export const outreachTypes = ["linkedin_connected", "linkedin_connect_request", "linkedin_inmail", "email"] as const;
 export type OutreachType = typeof outreachTypes[number];
 
 export const outreachGoals = ["intro_chat", "referral", "partnership", "recruiting", "advice"] as const;

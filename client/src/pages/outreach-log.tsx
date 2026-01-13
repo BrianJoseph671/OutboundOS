@@ -39,6 +39,7 @@ import { format } from "date-fns";
 const outreachTypeLabels: Record<string, string> = {
   linkedin_connected: "LinkedIn",
   linkedin_connect_request: "LI Request",
+  linkedin_inmail: "InMail",
   email: "Email",
 };
 
@@ -250,6 +251,7 @@ function ManualEntryModal({
                 <SelectContent>
                   <SelectItem value="linkedin_connected">LinkedIn Message</SelectItem>
                   <SelectItem value="linkedin_connect_request">LinkedIn Request</SelectItem>
+                  <SelectItem value="linkedin_inmail">LinkedIn InMail</SelectItem>
                   <SelectItem value="email">Email</SelectItem>
                 </SelectContent>
               </Select>
@@ -266,14 +268,14 @@ function ManualEntryModal({
             </div>
           </div>
 
-          {formData.outreachType === "email" && (
+          {(formData.outreachType === "email" || formData.outreachType === "linkedin_inmail") && (
             <div className="space-y-2">
               <Label htmlFor="subject">Subject Line</Label>
               <Input
                 id="subject"
                 value={formData.subject}
                 onChange={(e) => setFormData((prev) => ({ ...prev, subject: e.target.value }))}
-                placeholder="Email subject"
+                placeholder={formData.outreachType === "email" ? "Email subject" : "InMail subject"}
                 data-testid="input-manual-subject"
               />
             </div>
@@ -452,6 +454,7 @@ export default function OutreachLog() {
             <SelectItem value="all">All types</SelectItem>
             <SelectItem value="linkedin_connected">LinkedIn</SelectItem>
             <SelectItem value="linkedin_connect_request">LI Request</SelectItem>
+            <SelectItem value="linkedin_inmail">InMail</SelectItem>
             <SelectItem value="email">Email</SelectItem>
           </SelectContent>
         </Select>
