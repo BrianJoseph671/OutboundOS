@@ -1,0 +1,117 @@
+Replace the regex-based PDF parser with Claude API for better accuracy:
+Step 1: Add API Key
+Before running this code, add your Anthropic API key to Replit Secrets:
+
+Tools → Secrets → Add new secret
+Name: ANTHROPIC_API_KEY
+Value: Your API key from https://console.anthropic.com/settings/keys
+
+Step 2: Install SDK
+Run in terminal:
+bashnpm install @anthropic-ai/sdk
+Step 3: Update /server/routes.ts
+Add this import at the top of the file (after other imports):
+typescriptimport Anthropic from '@anthropic-ai/sdk';
+Add this right after the imports, before the upload variable:
+typescriptconst anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY,
+});
+Step 4: Delete the entire parseLinkedInPdf() function (we don't need it anymore)
+Step 5: Replace the entire app.post("/api/parse-pdf", ...) route with this:
+typescriptapp.post("/api/parse-pdf", upload.single("file"), async (req, res) => {
+  try {
+    let text = "";
+    
+    if (req.file) {
+      console.log("[PDF Debug] File uploaded:", {
+        originalName: req.file.originalname,
+        size: req.file.size,
+      });
+      
+      try {
+        const { PDFExtract } = await import("pdf.js-extract");
+        const pdfExtract = new PDFExtract();
+        const data = await pdfExtract.extractBuffer(req.file.buffer);
+        
+        text = data.pages
+          .map((page: any) => {
+            const lines: { [y: number]: string[] } = {};
+            page.content.forEach((item: any) => {
+              const y = Math.round(item.y);
+              if (!lines[y]) lines[y] = [];
+              lines[y].push(item.str);
+            });
+            return Object.keys(lines)
+              .sort((a, b) => parseInt(a) - parseInt(b))
+              .map((y) => lines[parseInt(y)].join(" "))
+              .join("\n");
+          })
+          .join("\n\n");
+          
+        console.log("[PDF Debug] Extracted", text.length, "characters");
+      } catch (pdfError) {
+        console.log("[PDF Debug] pdf.js-extract failed:", pdfError);
+        return res.status(500).json({ error: "Failed to extract PDF text" });
+      }
+    }
+    
+    if (!text) {
+      return res.status(400).json({ error: "No text provided" });
+    }
+    
+    // Use Claude to parse the LinkedIn profile
+    console.log("[PDF Debug] Sending to Claude API for parsing...");
+    
+    const message = await anthropic.messages.create({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 1024,
+      messages: [{
+        role: "user",
+        content: `Extract structured information from this LinkedIn profile PDF text. Return ONLY valid JSON with these exact fields (use null for missing fields):
+
+{
+  "name": "Full name without nicknames",
+  "headline": "Professional headline (the line with | separators)",
+  "location": "City, State/Country",
+  "company": "Current company name",
+  "role": "Current job title",
+  "about": "Summary/About section text",
+  "experience": "Experience section text (first 1000 chars)",
+  "education": "Education section text (first 500 chars)",
+  "skills": "Comma-separated skills from Top Skills section"
+}
+
+LinkedIn Profile Text:
+${text.slice(0, 15000)}`
+      }]
+    });
+    
+    // Extract JSON from Claude's response
+    const responseText = message.content[0].type === 'text' 
+      ? message.content[0].text 
+      : '';
+      
+    console.log("[PDF Debug] Claude response:", responseText);
+    
+    // Parse JSON from response (handle if Claude wraps it in markdown)
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error("Could not extract JSON from Claude response");
+    }
+    
+    const parsed = JSON.parse(jsonMatch[0]);
+    
+    // Convert nulls to undefined for consistency
+    Object.keys(parsed).forEach(key => {
+      if (parsed[key] === null) parsed[key] = undefined;
+    });
+    
+    console.log("[PDF Debug] Parsed fields:", Object.keys(parsed).filter(k => parsed[k]));
+    
+    res.json(parsed);
+    
+  } catch (error) {
+    console.error("[PDF Debug] Error:", error);
+    res.status(500).json({ error: "Failed to parse PDF" });
+  }
+});

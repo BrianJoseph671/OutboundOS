@@ -1,11 +1,8 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { spawn } from "child_process";
-import fs from "fs";
-import path from "path";
-import os from "os";
 import { storage } from "./storage";
 import multer from "multer";
+import Anthropic from "@anthropic-ai/sdk";
 import {
   insertContactSchema,
   insertOutreachAttemptSchema,
@@ -17,6 +14,78 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
 });
+
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY,
+});
+
+// Helper function to extract text from PDF using pdf.js-extract
+async function extractPdfText(buffer: Buffer): Promise<string> {
+  const { PDFExtract } = await import("pdf.js-extract");
+  const pdfExtract = new PDFExtract();
+  const data = await pdfExtract.extractBuffer(buffer);
+
+  return data.pages
+    .map((page: any) => {
+      const lines: { [y: number]: string[] } = {};
+      page.content.forEach((item: any) => {
+        const y = Math.round(item.y);
+        if (!lines[y]) lines[y] = [];
+        lines[y].push(item.str);
+      });
+      return Object.keys(lines)
+        .sort((a, b) => parseInt(a) - parseInt(b))
+        .map((y) => lines[parseInt(y)].join(" "))
+        .join("\n");
+    })
+    .join("\n\n");
+}
+
+// Helper function to parse LinkedIn profile text using Claude API
+async function parseWithClaude(text: string): Promise<any> {
+  const message = await anthropic.messages.create({
+    model: "claude-sonnet-4-20250514",
+    max_tokens: 1024,
+    messages: [
+      {
+        role: "user",
+        content: `Extract structured information from this LinkedIn profile PDF text. Return ONLY valid JSON with these exact fields (use null for missing fields):
+
+{
+  "name": "Full name without nicknames",
+  "headline": "Professional headline (the line with | separators)",
+  "location": "City, State/Country",
+  "company": "Current company name",
+  "role": "Current job title",
+  "about": "Summary/About section text",
+  "experience": "Experience section text (first 1000 chars)",
+  "education": "Education section text (first 500 chars)",
+  "skills": "Comma-separated skills from Top Skills section"
+}
+
+LinkedIn Profile Text:
+${text.slice(0, 15000)}`,
+      },
+    ],
+  });
+
+  const responseText =
+    message.content[0].type === "text" ? message.content[0].text : "";
+
+  const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) {
+    throw new Error("Could not extract JSON from Claude response");
+  }
+
+  const parsed = JSON.parse(jsonMatch[0]);
+
+  // Convert nulls to undefined for consistency
+  Object.keys(parsed).forEach((key) => {
+    if (parsed[key] === null) parsed[key] = undefined;
+  });
+
+  return parsed;
+}
 
 export async function registerRoutes(
   httpServer: Server,
@@ -78,10 +147,8 @@ export async function registerRoutes(
     }
   });
 
-  // PDF Parsing - uses Python pdfplumber for accurate extraction
+  // PDF Parsing - uses Claude API for intelligent extraction
   app.post("/api/parse-pdf", upload.single("file"), async (req, res) => {
-    let tempFilePath: string | null = null;
-
     try {
       if (!req.file) {
         return res.status(400).json({ error: "No file uploaded" });
@@ -89,130 +156,42 @@ export async function registerRoutes(
 
       console.log("[PDF] File uploaded:", req.file.originalname, req.file.size, "bytes");
 
-      // Save to temp file
-      const tempDir = os.tmpdir();
-      tempFilePath = path.join(tempDir, `linkedin-upload-${Date.now()}.pdf`);
-      fs.writeFileSync(tempFilePath, req.file.buffer);
-      console.log("[PDF] Saved to temp file:", tempFilePath);
+      // Extract text from PDF
+      let text = "";
+      try {
+        text = await extractPdfText(req.file.buffer);
+        console.log("[PDF] Extracted", text.length, "characters");
+      } catch (pdfError) {
+        console.log("[PDF] pdf.js-extract failed:", pdfError);
+        return res.status(500).json({ error: "Failed to extract PDF text" });
+      }
 
-      // Call Python script
-      const python = spawn("python3", ["parse_linkedin.py", tempFilePath]);
+      if (!text) {
+        return res.status(400).json({ error: "No text extracted from PDF" });
+      }
 
-      let stdout = "";
-      let stderr = "";
+      // Use Claude to parse the LinkedIn profile
+      console.log("[PDF] Sending to Claude API for parsing...");
+      const parsed = await parseWithClaude(text);
+      console.log("[PDF] Parsed fields:", Object.keys(parsed).filter((k) => parsed[k]));
 
-      python.stdout.on("data", (data) => {
-        stdout += data.toString();
-      });
-
-      python.stderr.on("data", (data) => {
-        stderr += data.toString();
-      });
-
-      // Set up timeout
-      const timeout = setTimeout(() => {
-        python.kill();
-        if (tempFilePath && fs.existsSync(tempFilePath)) {
-          fs.unlinkSync(tempFilePath);
-        }
-        console.error("[PDF] Parsing timeout after 30 seconds");
-        if (!res.headersSent) {
-          res.status(408).json({ error: "PDF parsing timeout" });
-        }
-      }, 30000);
-
-      python.on("close", (code) => {
-        clearTimeout(timeout);
-
-        // Clean up temp file
-        if (tempFilePath && fs.existsSync(tempFilePath)) {
-          try {
-            fs.unlinkSync(tempFilePath);
-            console.log("[PDF] Cleaned up temp file");
-          } catch (e) {
-            console.error("[PDF] Failed to clean up temp file:", e);
-          }
-        }
-
-        if (code === 0) {
-          try {
-            const result = JSON.parse(stdout);
-            console.log("[PDF] Successfully parsed:", Object.keys(result));
-            
-            // Transform Python result to match expected frontend format
-            const experienceArr = result.experience?.map((exp: any) => 
-              `${exp.title} at ${exp.company} (${exp.dates})${exp.description ? '\n' + exp.description : ''}`
-            );
-            const educationArr = result.education?.map((edu: any) => 
-              `${edu.school}: ${edu.degree}`
-            );
-            
-            const transformed = {
-              name: result.name || undefined,
-              headline: result.headline || undefined,
-              about: result.summary || undefined,
-              location: result.location || undefined,
-              experience: experienceArr?.length ? experienceArr.join('\n\n') : undefined,
-              education: educationArr?.length ? educationArr.join('\n') : undefined,
-              skills: result.skills?.length ? result.skills.join(', ') : undefined,
-              company: result.experience?.[0]?.company || undefined,
-              role: result.experience?.[0]?.title || undefined,
-              email: result.contact?.email || undefined,
-              linkedinUrl: result.contact?.linkedin ? `https://${result.contact.linkedin}` : undefined,
-            };
-            
-            res.json(transformed);
-          } catch (e) {
-            console.error("[PDF] Invalid JSON from parser:", stdout);
-            res.status(500).json({ error: "Invalid JSON from parser", details: stdout });
-          }
-        } else {
-          console.error("[PDF] Python script failed with code", code, "stderr:", stderr);
-          res.status(500).json({
-            error: "PDF parsing failed",
-            details: stderr || "Python script exited with error",
-          });
-        }
-      });
-
-      python.on("error", (err) => {
-        clearTimeout(timeout);
-        console.error("[PDF] Failed to spawn python process:", err);
-        if (tempFilePath && fs.existsSync(tempFilePath)) {
-          fs.unlinkSync(tempFilePath);
-        }
-        if (!res.headersSent) {
-          res.status(500).json({
-            error: "Failed to execute PDF parser",
-            details: "Make sure Python 3 and pdfplumber are installed",
-          });
-        }
-      });
+      res.json(parsed);
     } catch (error) {
       console.error("[PDF] Error:", error);
-      if (tempFilePath && fs.existsSync(tempFilePath)) {
-        try {
-          fs.unlinkSync(tempFilePath);
-        } catch (e) {
-          console.error("[PDF] Failed to clean up after error:", e);
-        }
-      }
-      if (!res.headersSent) {
-        res.status(500).json({ error: "Failed to process PDF" });
-      }
+      res.status(500).json({ error: "Failed to parse PDF" });
     }
   });
 
-  // Batch PDF Parsing - accepts multiple files and processes them sequentially
+  // Batch PDF Parsing - uses Claude API for intelligent extraction
   app.post("/api/parse-pdf-batch", upload.array("files", 20), async (req, res) => {
     const files = req.files as Express.Multer.File[];
-    
+
     if (!files || files.length === 0) {
       return res.status(400).json({ error: "No files uploaded" });
     }
 
     console.log(`[PDF Batch] Processing ${files.length} files`);
-    
+
     const results: Array<{
       filename: string;
       success: boolean;
@@ -220,77 +199,26 @@ export async function registerRoutes(
       error?: string;
     }> = [];
 
-    // Process files sequentially to avoid overwhelming the system
+    // Process files sequentially to avoid overwhelming the API
     for (const file of files) {
-      let tempFilePath: string | null = null;
-      
       try {
         console.log(`[PDF Batch] Processing: ${file.originalname}`);
-        
-        // Save to temp file
-        const tempDir = os.tmpdir();
-        tempFilePath = path.join(tempDir, `linkedin-batch-${Date.now()}-${Math.random().toString(36).slice(2)}.pdf`);
-        fs.writeFileSync(tempFilePath, file.buffer);
 
-        // Parse with Python script
-        const result = await new Promise<any>((resolve, reject) => {
-          const python = spawn("python3", ["parse_linkedin.py", tempFilePath!]);
-          let stdout = "";
-          let stderr = "";
+        // Extract text from PDF
+        const text = await extractPdfText(file.buffer);
+        console.log(`[PDF Batch] Extracted ${text.length} characters from ${file.originalname}`);
 
-          python.stdout.on("data", (data) => { stdout += data.toString(); });
-          python.stderr.on("data", (data) => { stderr += data.toString(); });
+        if (!text) {
+          throw new Error("No text extracted from PDF");
+        }
 
-          const timeout = setTimeout(() => {
-            python.kill();
-            reject(new Error("PDF parsing timeout"));
-          }, 30000);
-
-          python.on("close", (code) => {
-            clearTimeout(timeout);
-            if (code === 0) {
-              try {
-                resolve(JSON.parse(stdout));
-              } catch (e) {
-                reject(new Error("Invalid JSON from parser"));
-              }
-            } else {
-              reject(new Error(stderr || "Python script failed"));
-            }
-          });
-
-          python.on("error", (err) => {
-            clearTimeout(timeout);
-            reject(err);
-          });
-        });
-
-        // Transform result
-        const experienceArr = result.experience?.map((exp: any) => 
-          `${exp.title} at ${exp.company} (${exp.dates})${exp.description ? '\n' + exp.description : ''}`
-        );
-        const educationArr = result.education?.map((edu: any) => 
-          `${edu.school}: ${edu.degree}`
-        );
-        
-        const transformed = {
-          name: result.name || undefined,
-          headline: result.headline || undefined,
-          about: result.summary || undefined,
-          location: result.location || undefined,
-          experience: experienceArr?.length ? experienceArr.join('\n\n') : undefined,
-          education: educationArr?.length ? educationArr.join('\n') : undefined,
-          skills: result.skills?.length ? result.skills.join(', ') : undefined,
-          company: result.experience?.[0]?.company || undefined,
-          role: result.experience?.[0]?.title || undefined,
-          email: result.contact?.email || undefined,
-          linkedinUrl: result.contact?.linkedin ? `https://${result.contact.linkedin}` : undefined,
-        };
+        // Use Claude to parse
+        const parsed = await parseWithClaude(text);
 
         results.push({
           filename: file.originalname,
           success: true,
-          contact: transformed,
+          contact: parsed,
         });
 
         console.log(`[PDF Batch] Successfully parsed: ${file.originalname}`);
@@ -301,21 +229,12 @@ export async function registerRoutes(
           success: false,
           error: error instanceof Error ? error.message : "Unknown error",
         });
-      } finally {
-        // Clean up temp file
-        if (tempFilePath && fs.existsSync(tempFilePath)) {
-          try {
-            fs.unlinkSync(tempFilePath);
-          } catch (e) {
-            console.error("[PDF Batch] Failed to clean up temp file:", e);
-          }
-        }
       }
     }
 
-    const successCount = results.filter(r => r.success).length;
+    const successCount = results.filter((r) => r.success).length;
     console.log(`[PDF Batch] Complete: ${successCount}/${files.length} successful`);
-    
+
     res.json({
       totalFiles: files.length,
       successCount,
