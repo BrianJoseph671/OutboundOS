@@ -20,9 +20,9 @@ import {
 } from "lucide-react";
 
 const menuItems = [
-  { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Contacts", url: "/contacts", icon: Users },
   { title: "Composer", url: "/composer", icon: PenTool },
+  { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Experiments", url: "/experiments", icon: FlaskConical },
   { title: "Outreach Log", url: "/outreach-log", icon: FileText },
   { title: "Settings", url: "/settings", icon: Settings },
