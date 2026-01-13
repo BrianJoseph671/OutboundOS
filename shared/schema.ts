@@ -19,6 +19,7 @@ export const contacts = pgTable("contacts", {
   keywords: text("keywords"),
   notes: text("notes"),
   tags: text("tags"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
 export const insertContactSchema = createInsertSchema(contacts).omit({ id: true });
