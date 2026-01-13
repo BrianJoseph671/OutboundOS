@@ -32,6 +32,7 @@ import {
   ChevronDown,
   ChevronUp,
   Plus,
+  Pencil,
 } from "lucide-react";
 import type { OutreachAttempt, Contact, Experiment, InsertOutreachAttempt } from "@shared/schema";
 import { format } from "date-fns";
@@ -319,6 +320,152 @@ function ManualEntryModal({
   );
 }
 
+function EditEntryModal({
+  attempt,
+  open,
+  onOpenChange,
+  contacts,
+}: {
+  attempt: OutreachAttempt;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  contacts: Contact[];
+}) {
+  const { toast } = useToast();
+  const [formData, setFormData] = useState({
+    contactId: attempt.contactId,
+    outreachType: attempt.outreachType,
+    campaign: attempt.campaign || "",
+    messageBody: attempt.messageBody,
+    subject: attempt.subject || "",
+    notes: attempt.notes || "",
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: (data: Partial<OutreachAttempt>) =>
+      apiRequest("PATCH", `/api/outreach-attempts/${attempt.id}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/outreach-attempts"] });
+      toast({ title: "Outreach entry updated" });
+      onOpenChange(false);
+    },
+    onError: () => {
+      toast({ title: "Failed to update entry", variant: "destructive" });
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.contactId || !formData.messageBody) {
+      toast({ title: "Please fill in required fields", variant: "destructive" });
+      return;
+    }
+    updateMutation.mutate(formData);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Edit Outreach Entry</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="edit-contact">Contact *</Label>
+            <Select
+              value={formData.contactId}
+              onValueChange={(value) => setFormData((prev) => ({ ...prev, contactId: value }))}
+            >
+              <SelectTrigger data-testid="select-edit-contact">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {contacts.map((contact) => (
+                  <SelectItem key={contact.id} value={contact.id}>
+                    {contact.name} {contact.company ? `(${contact.company})` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-outreach-type">Outreach Type</Label>
+              <Select
+                value={formData.outreachType}
+                onValueChange={(value) => setFormData((prev) => ({ ...prev, outreachType: value }))}
+              >
+                <SelectTrigger data-testid="select-edit-type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="linkedin_connected">LinkedIn Message</SelectItem>
+                  <SelectItem value="linkedin_connect_request">LinkedIn Request</SelectItem>
+                  <SelectItem value="linkedin_inmail">LinkedIn InMail</SelectItem>
+                  <SelectItem value="email">Email</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-campaign">Campaign (optional)</Label>
+              <Input
+                id="edit-campaign"
+                value={formData.campaign}
+                onChange={(e) => setFormData((prev) => ({ ...prev, campaign: e.target.value }))}
+                data-testid="input-edit-campaign"
+              />
+            </div>
+          </div>
+
+          {(formData.outreachType === "email" || formData.outreachType === "linkedin_inmail") && (
+            <div className="space-y-2">
+              <Label htmlFor="edit-subject">Subject Line</Label>
+              <Input
+                id="edit-subject"
+                value={formData.subject}
+                onChange={(e) => setFormData((prev) => ({ ...prev, subject: e.target.value }))}
+                data-testid="input-edit-subject"
+              />
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <Label htmlFor="edit-message">Message Body *</Label>
+            <Textarea
+              id="edit-message"
+              value={formData.messageBody}
+              onChange={(e) => setFormData((prev) => ({ ...prev, messageBody: e.target.value }))}
+              rows={6}
+              data-testid="textarea-edit-message"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="edit-notes">Notes (optional)</Label>
+            <Textarea
+              id="edit-notes"
+              value={formData.notes}
+              onChange={(e) => setFormData((prev) => ({ ...prev, notes: e.target.value }))}
+              rows={2}
+              data-testid="textarea-edit-notes"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={updateMutation.isPending} data-testid="button-save-edit-entry">
+              {updateMutation.isPending ? "Updating..." : "Update Entry"}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function OutreachLog() {
   const { toast } = useToast();
   const [dateRange, setDateRange] = useState("all");
@@ -330,6 +477,7 @@ export default function OutreachLog() {
   const [sortField, setSortField] = useState<"dateSent" | "contact">("dateSent");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [showManualEntry, setShowManualEntry] = useState(false);
+  const [editingAttempt, setEditingAttempt] = useState<OutreachAttempt | null>(null);
 
   const { data: attempts = [], isLoading } = useQuery<OutreachAttempt[]>({
     queryKey: ["/api/outreach-attempts"],
@@ -606,14 +754,24 @@ export default function OutreachLog() {
                           />
                         </td>
                         <td className="py-3 px-4 text-right">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setSelectedAttempt(attempt)}
-                            data-testid={`button-view-attempt-${attempt.id}`}
-                          >
-                            <Eye className="w-4 h-4" />
-                          </Button>
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setEditingAttempt(attempt)}
+                              data-testid={`button-edit-attempt-${attempt.id}`}
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setSelectedAttempt(attempt)}
+                              data-testid={`button-view-attempt-${attempt.id}`}
+                            >
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -641,6 +799,15 @@ export default function OutreachLog() {
         contacts={contacts}
         onSuccess={() => {}}
       />
+
+      {editingAttempt && (
+        <EditEntryModal
+          attempt={editingAttempt}
+          open={!!editingAttempt}
+          onOpenChange={(open) => !open && setEditingAttempt(null)}
+          contacts={contacts}
+        />
+      )}
     </div>
   );
 }
