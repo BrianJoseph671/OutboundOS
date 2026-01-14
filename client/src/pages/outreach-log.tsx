@@ -42,6 +42,7 @@ const outreachTypeLabels: Record<string, string> = {
   linkedin_connect_request: "LI Request",
   linkedin_inmail: "InMail",
   email: "Email",
+  whatsapp: "WhatsApp",
 };
 
 function OutcomeCell({
@@ -272,6 +273,7 @@ function ManualEntryModal({
                   <SelectItem value="linkedin_connect_request">LinkedIn Request</SelectItem>
                   <SelectItem value="linkedin_inmail">LinkedIn InMail</SelectItem>
                   <SelectItem value="email">Email</SelectItem>
+                  <SelectItem value="whatsapp">WhatsApp</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -453,6 +455,7 @@ function EditEntryModal({
                   <SelectItem value="linkedin_connect_request">LinkedIn Request</SelectItem>
                   <SelectItem value="linkedin_inmail">LinkedIn InMail</SelectItem>
                   <SelectItem value="email">Email</SelectItem>
+                  <SelectItem value="whatsapp">WhatsApp</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -667,6 +670,7 @@ export default function OutreachLog() {
             <SelectItem value="linkedin_connect_request">LI Request</SelectItem>
             <SelectItem value="linkedin_inmail">InMail</SelectItem>
             <SelectItem value="email">Email</SelectItem>
+            <SelectItem value="whatsapp">WhatsApp</SelectItem>
           </SelectContent>
         </Select>
         <Select value={statusFilter} onValueChange={setStatusFilter}>

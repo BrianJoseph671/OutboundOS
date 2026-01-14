@@ -132,6 +132,7 @@ function PerformanceTable({ data }: { data: PerformanceByType[] }) {
       case "linkedin_connect_request": return "LinkedIn Request";
       case "linkedin_inmail": return "LinkedIn InMail";
       case "email": return "Email";
+      case "whatsapp": return "WhatsApp";
       default: return type;
     }
   };
@@ -285,7 +286,7 @@ export default function Dashboard() {
     converted: filteredAttempts.filter((a) => a.converted).length,
   };
 
-  const performanceByType: PerformanceByType[] = ["linkedin_connected", "linkedin_connect_request", "linkedin_inmail", "email"]
+  const performanceByType: PerformanceByType[] = ["linkedin_connected", "linkedin_connect_request", "linkedin_inmail", "email", "whatsapp"]
     .map((type) => {
       const typeAttempts = filteredAttempts.filter((a) => a.outreachType === type);
       return {
@@ -355,6 +356,7 @@ export default function Dashboard() {
               <SelectItem value="linkedin_connect_request">LinkedIn Request</SelectItem>
               <SelectItem value="linkedin_inmail">LinkedIn InMail</SelectItem>
               <SelectItem value="email">Email</SelectItem>
+              <SelectItem value="whatsapp">WhatsApp</SelectItem>
             </SelectContent>
           </Select>
           <Select value={campaign} onValueChange={setCampaign}>
