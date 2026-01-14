@@ -128,8 +128,9 @@ function FunnelChart({ metrics }: { metrics: DashboardMetrics }) {
 function PerformanceTable({ data }: { data: PerformanceByType[] }) {
   const getTypeLabel = (type: string) => {
     switch (type) {
-      case "linkedin_connected": return "LinkedIn (Connected)";
-      case "linkedin_connect_request": return "LinkedIn (Request)";
+      case "linkedin_connected": return "LinkedIn Message";
+      case "linkedin_connect_request": return "LinkedIn Request";
+      case "linkedin_inmail": return "LinkedIn InMail";
       case "email": return "Email";
       default: return type;
     }
@@ -284,7 +285,7 @@ export default function Dashboard() {
     converted: filteredAttempts.filter((a) => a.converted).length,
   };
 
-  const performanceByType: PerformanceByType[] = ["linkedin_connected", "linkedin_connect_request", "email"]
+  const performanceByType: PerformanceByType[] = ["linkedin_connected", "linkedin_connect_request", "linkedin_inmail", "email"]
     .map((type) => {
       const typeAttempts = filteredAttempts.filter((a) => a.outreachType === type);
       return {
@@ -350,8 +351,9 @@ export default function Dashboard() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All types</SelectItem>
-              <SelectItem value="linkedin_connected">LinkedIn (Connected)</SelectItem>
-              <SelectItem value="linkedin_connect_request">LinkedIn (Request)</SelectItem>
+              <SelectItem value="linkedin_connected">LinkedIn Message</SelectItem>
+              <SelectItem value="linkedin_connect_request">LinkedIn Request</SelectItem>
+              <SelectItem value="linkedin_inmail">LinkedIn InMail</SelectItem>
               <SelectItem value="email">Email</SelectItem>
             </SelectContent>
           </Select>
