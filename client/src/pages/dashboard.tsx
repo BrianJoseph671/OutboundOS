@@ -271,7 +271,7 @@ export default function Dashboard() {
     queryKey: ["/api/experiments"],
   });
 
-  const campaigns = [...new Set(attempts.map((a) => a.campaign).filter(Boolean))] as string[];
+  const campaigns = Array.from(new Set(attempts.map((a) => a.campaign).filter(Boolean))) as string[];
 
   const filteredAttempts = attempts.filter((attempt) => {
     if (outreachType !== "all" && attempt.outreachType !== outreachType) return false;
