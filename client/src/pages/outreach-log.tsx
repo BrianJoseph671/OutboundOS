@@ -305,11 +305,24 @@ function ManualEntryModal({
             <Textarea
               id="message"
               value={formData.messageBody}
-              onChange={(e) => setFormData((prev) => ({ ...prev, messageBody: e.target.value }))}
+              onChange={(e) => {
+                const text = e.target.value;
+                if (formData.outreachType === "linkedin_connect_request" && text.length > 300) {
+                  return;
+                }
+                setFormData((prev) => ({ ...prev, messageBody: text }));
+              }}
               placeholder="Paste or type the message you sent..."
               rows={6}
               data-testid="textarea-manual-message"
             />
+            {formData.outreachType === "linkedin_connect_request" && (
+              <div className="flex justify-end">
+                <span className={`text-xs ${formData.messageBody.length >= 280 ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>
+                  {formData.messageBody.length} / 300
+                </span>
+              </div>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -471,10 +484,23 @@ function EditEntryModal({
             <Textarea
               id="edit-message"
               value={formData.messageBody}
-              onChange={(e) => setFormData((prev) => ({ ...prev, messageBody: e.target.value }))}
+              onChange={(e) => {
+                const text = e.target.value;
+                if (formData.outreachType === "linkedin_connect_request" && text.length > 300) {
+                  return;
+                }
+                setFormData((prev) => ({ ...prev, messageBody: text }));
+              }}
               rows={6}
               data-testid="textarea-edit-message"
             />
+            {formData.outreachType === "linkedin_connect_request" && (
+              <div className="flex justify-end">
+                <span className={`text-xs ${formData.messageBody.length >= 280 ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>
+                  {formData.messageBody.length} / 300
+                </span>
+              </div>
+            )}
           </div>
 
           <div className="space-y-2">
