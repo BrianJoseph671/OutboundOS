@@ -152,6 +152,19 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/contacts/bulk-delete", async (req, res) => {
+    try {
+      const { ids } = req.body;
+      if (!Array.isArray(ids)) {
+        return res.status(400).json({ error: "Expected array of ids" });
+      }
+      const count = await storage.deleteContacts(ids);
+      res.json({ success: true, count });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete contacts" });
+    }
+  });
+
   // Bulk Contact Import
   app.post("/api/contacts/bulk-import", async (req, res) => {
     try {

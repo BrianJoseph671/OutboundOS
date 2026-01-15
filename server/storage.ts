@@ -14,6 +14,7 @@ export interface IStorage {
   createContact(contact: InsertContact): Promise<Contact>;
   updateContact(id: string, contact: Partial<InsertContact>): Promise<Contact | undefined>;
   deleteContact(id: string): Promise<boolean>;
+  deleteContacts(ids: string[]): Promise<number>;
 
   // Outreach Attempts
   getOutreachAttempts(): Promise<OutreachAttempt[]>;
@@ -61,6 +62,13 @@ export class DatabaseStorage implements IStorage {
   async deleteContact(id: string): Promise<boolean> {
     const [deleted] = await db.delete(contacts).where(eq(contacts.id, id)).returning();
     return !!deleted;
+  }
+
+  async deleteContacts(ids: string[]): Promise<number> {
+    const results = await Promise.all(
+      ids.map(id => db.delete(contacts).where(eq(contacts.id, id)).returning())
+    );
+    return results.filter(r => r.length > 0).length;
   }
 
   // Outreach Attempts

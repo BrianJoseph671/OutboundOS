@@ -1011,12 +1011,28 @@ function AddContactModal({
 }
 
 export default function Contacts() {
+  const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [addModalOpen, setAddModalOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
 
   const { data: contacts = [], isLoading } = useQuery<Contact[]>({
     queryKey: ["/api/contacts"],
+  });
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: (ids: string[]) =>
+      apiRequest("POST", "/api/contacts/bulk-delete", { ids }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
+      toast({ title: `Successfully deleted selected contacts` });
+      setSelectedIds(new Set());
+    },
+    onError: () => {
+      toast({ title: "Failed to delete contacts", variant: "destructive" });
+    },
   });
 
   const sortedContacts = [...contacts].sort((a, b) => {
@@ -1033,6 +1049,28 @@ export default function Contacts() {
     );
   });
 
+  const handleSelect = (id: string, index: number, shiftKey: boolean) => {
+    const next = new Set(selectedIds);
+    
+    if (shiftKey && lastSelectedIndex !== null) {
+      const start = Math.min(lastSelectedIndex, index);
+      const end = Math.max(lastSelectedIndex, index);
+      const rangeIds = filteredContacts.slice(start, end + 1).map(c => c.id);
+      
+      const isSelecting = !selectedIds.has(id);
+      rangeIds.forEach(rangeId => {
+        if (isSelecting) next.add(rangeId);
+        else next.delete(rangeId);
+      });
+    } else {
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+    }
+    
+    setSelectedIds(next);
+    setLastSelectedIndex(index);
+  };
+
   return (
     <div className="flex gap-6 h-full">
       <div
@@ -1040,24 +1078,58 @@ export default function Contacts() {
       >
         <div className="flex items-center justify-between gap-4">
           <h1 className="text-2xl font-semibold">Contacts</h1>
-          <Button
-            onClick={() => setAddModalOpen(true)}
-            data-testid="button-add-contact"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Add Contact
-          </Button>
+          <div className="flex items-center gap-2">
+            {selectedIds.size > 0 && (
+              <Button 
+                variant="destructive" 
+                size="sm"
+                onClick={() => {
+                  if (confirm(`Are you sure you want to delete ${selectedIds.size} contacts?`)) {
+                    bulkDeleteMutation.mutate(Array.from(selectedIds));
+                  }
+                }}
+                disabled={bulkDeleteMutation.isPending}
+                data-testid="button-bulk-delete-contacts"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete ({selectedIds.size})
+              </Button>
+            )}
+            <Button
+              onClick={() => setAddModalOpen(true)}
+              data-testid="button-add-contact"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add Contact
+            </Button>
+          </div>
         </div>
 
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Search contacts..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-            data-testid="input-search-contacts"
-          />
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="Search contacts..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9"
+              data-testid="input-search-contacts"
+            />
+          </div>
+          <div className="flex items-center gap-2 px-2 h-10 border rounded-md bg-muted/30">
+            <Checkbox 
+              checked={filteredContacts.length > 0 && selectedIds.size === filteredContacts.length}
+              onCheckedChange={(checked) => {
+                if (checked) {
+                  setSelectedIds(new Set(filteredContacts.map(c => c.id)));
+                } else {
+                  setSelectedIds(new Set());
+                }
+              }}
+              data-testid="checkbox-select-all-contacts"
+            />
+            <span className="text-xs text-muted-foreground whitespace-nowrap">Select All</span>
+          </div>
         </div>
 
         {isLoading ? (
@@ -1101,12 +1173,39 @@ export default function Contacts() {
           </Card>
         ) : (
           <div className="space-y-3">
-            {filteredContacts.map((contact) => (
-              <ContactCard
-                key={contact.id}
-                contact={contact}
-                onClick={() => setSelectedContact(contact)}
-              />
+            {filteredContacts.map((contact, index) => (
+              <div key={contact.id} className="relative group">
+                <div className="absolute top-1/2 -translate-y-1/2 -left-3 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Checkbox 
+                    checked={selectedIds.has(contact.id)}
+                    onCheckedChange={() => {
+                      const nativeEvent = window.event as unknown as React.MouseEvent;
+                      handleSelect(contact.id, index, !!nativeEvent?.shiftKey);
+                    }}
+                    data-testid={`checkbox-select-contact-${contact.id}`}
+                    className="bg-background shadow-sm"
+                  />
+                </div>
+                {/* Visual indicator for selection when not hovered */}
+                {selectedIds.has(contact.id) && (
+                  <div className="absolute top-1/2 -translate-y-1/2 -left-3 z-10">
+                    <Checkbox 
+                      checked={true}
+                      onCheckedChange={() => {
+                        const nativeEvent = window.event as unknown as React.MouseEvent;
+                        handleSelect(contact.id, index, !!nativeEvent?.shiftKey);
+                      }}
+                      className="bg-background shadow-sm"
+                    />
+                  </div>
+                )}
+                <div className={selectedIds.has(contact.id) ? "translate-x-4 transition-transform" : "transition-transform"}>
+                  <ContactCard
+                    contact={contact}
+                    onClick={() => setSelectedContact(contact)}
+                  />
+                </div>
+              </div>
             ))}
           </div>
         )}
