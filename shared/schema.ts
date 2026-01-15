@@ -89,7 +89,7 @@ export type Settings = typeof settings.$inferSelect;
 export const outreachTypes = ["linkedin_connected", "linkedin_connect_request", "linkedin_inmail", "email", "whatsapp"] as const;
 export type OutreachType = typeof outreachTypes[number];
 
-export const outreachGoals = ["intro_chat", "referral", "partnership", "recruiting", "advice"] as const;
+export const outreachGoals = ["intro_chat", "partnership", "recruiting", "advice"] as const;
 export type OutreachGoal = typeof outreachGoals[number];
 
 export const toneOptions = ["professional", "friendly", "direct"] as const;

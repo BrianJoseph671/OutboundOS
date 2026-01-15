@@ -63,8 +63,7 @@ const steps = [
 ];
 
 const goalLabels: Record<OutreachGoal, string> = {
-  intro_chat: "Intro Chat",
-  referral: "Referral",
+  intro_chat: "Intro to another connection",
   partnership: "Partnership",
   recruiting: "Recruiting",
   advice: "Ask for Advice",
