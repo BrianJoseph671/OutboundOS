@@ -585,6 +585,25 @@ export async function registerRoutes(
 
       const results = { success: 0, failed: 0, errors: [] as string[] };
 
+      // Map human-readable outreach types to database format
+      const outreachTypeMap: Record<string, string> = {
+        "linkedin message": "linkedin_connected",
+        "linkedin_message": "linkedin_connected",
+        "linkedin connected": "linkedin_connected",
+        "linkedin": "linkedin_connected",
+        "linkedin connection request": "linkedin_connect_request",
+        "linkedin connect request": "linkedin_connect_request",
+        "linkedin_connect_request": "linkedin_connect_request",
+        "connection request": "linkedin_connect_request",
+        "inmail": "linkedin_inmail",
+        "linkedin inmail": "linkedin_inmail",
+        "linkedin_inmail": "linkedin_inmail",
+        "email": "email",
+        "whatsapp": "whatsapp",
+        // Already in correct format
+        "linkedin_connected": "linkedin_connected",
+      };
+
       for (const attemptData of attempts) {
         try {
           // Find contact by name to get contactId
@@ -599,24 +618,40 @@ export async function registerRoutes(
             continue;
           }
 
+          // Map outreach type to valid format
+          const rawType = (attemptData.outreachType || "linkedin_connected").toLowerCase().trim();
+          const mappedOutreachType = outreachTypeMap[rawType] || "linkedin_connected";
+
+          // Parse dates - handle both datesent/dateresponse and dateSent/responseDate
+          const dateSentValue = attemptData.datesent || attemptData.dateSent;
+          const responseDateValue = attemptData.dateresponse || attemptData.responseDate;
+
           // Create attempt with contactId
           const attempt = {
             contactId: contact.id,
-            outreachType: attemptData.outreachType,
-            messageVariantLabel: attemptData.messageVariantLabel,
+            outreachType: mappedOutreachType,
+            dateSent: dateSentValue ? new Date(dateSentValue) : new Date(),
+            responseDate: responseDateValue ? new Date(responseDateValue) : null,
+            campaign: attemptData.campaign || null,
+            messageVariantLabel: attemptData.messageVariantLabel || null,
             messageBody: attemptData.messageText || attemptData.messageBody || "",
-            responded:
-              attemptData.responded === "true" || attemptData.responded === true,
-            positiveResponse:
-              attemptData.positiveResponse === "true" ||
-              attemptData.positiveResponse === true,
-            meetingBooked:
-              attemptData.meetingBooked === "true" ||
-              attemptData.meetingBooked === true,
-            converted:
-              attemptData.converted === "true" || attemptData.converted === true,
-            notes: attemptData.notes || undefined,
+            responded: attemptData.responded === "true" || attemptData.responded === true,
+            positiveResponse: attemptData.positiveResponse === "true" || attemptData.positiveResponse === true,
+            meetingBooked: attemptData.meetingBooked === "true" || attemptData.meetingBooked === true,
+            converted: attemptData.converted === "true" || attemptData.converted === true,
+            notes: attemptData.notes || null,
+            companyTier: attemptData.companyTier || null,
+            followUpSent: attemptData.followUpSent === "true" || attemptData.followUpSent === true,
+            respondedAfterFollowup: attemptData.respondedAfterFollowup === "true" || attemptData.respondedAfterFollowup === true,
           };
+
+          // Calculate daysToResponse if we have both dates and responded
+          if (attempt.responded && attempt.dateSent && attempt.responseDate) {
+            const sentDate = new Date(attempt.dateSent);
+            const respDate = new Date(attempt.responseDate);
+            const diffTime = respDate.getTime() - sentDate.getTime();
+            (attempt as any).daysToResponse = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+          }
 
           const validated = insertOutreachAttemptSchema.parse(attempt);
           await storage.createOutreachAttempt(validated);

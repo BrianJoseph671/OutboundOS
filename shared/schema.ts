@@ -50,7 +50,7 @@ export const outreachAttempts = pgTable("outreach_attempts", {
   respondedAfterFollowup: boolean("responded_after_followup").default(false),
 });
 
-export const insertOutreachAttemptSchema = createInsertSchema(outreachAttempts).omit({ id: true, dateSent: true });
+export const insertOutreachAttemptSchema = createInsertSchema(outreachAttempts).omit({ id: true });
 export type InsertOutreachAttempt = z.infer<typeof insertOutreachAttemptSchema>;
 export type OutreachAttempt = typeof outreachAttempts.$inferSelect;
 
