@@ -182,6 +182,7 @@ function ManualEntryModal({
     messageBody: "",
     subject: "",
     notes: "",
+    dateSent: new Date().toISOString().split('T')[0],
   });
 
   const createMutation = useMutation({
@@ -198,6 +199,7 @@ function ManualEntryModal({
         messageBody: "",
         subject: "",
         notes: "",
+        dateSent: new Date().toISOString().split('T')[0],
       });
       onSuccess();
     },
@@ -212,7 +214,11 @@ function ManualEntryModal({
       toast({ title: "Please fill in required fields", variant: "destructive" });
       return;
     }
-    createMutation.mutate(formData as InsertOutreachAttempt);
+    const submissionData = {
+      ...formData,
+      dateSent: new Date(formData.dateSent),
+    };
+    createMutation.mutate(submissionData as InsertOutreachAttempt);
   };
 
   const sortedContacts = [...contacts].sort((a, b) => {
@@ -288,6 +294,17 @@ function ManualEntryModal({
                 data-testid="input-manual-campaign"
               />
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="date-sent">Date Sent</Label>
+            <Input
+              id="date-sent"
+              type="date"
+              value={formData.dateSent}
+              onChange={(e) => setFormData((prev) => ({ ...prev, dateSent: e.target.value }))}
+              data-testid="input-manual-date-sent"
+            />
           </div>
 
           {(formData.outreachType === "email" || formData.outreachType === "linkedin_inmail") && (
@@ -373,6 +390,8 @@ function EditEntryModal({
     messageBody: attempt.messageBody,
     subject: attempt.subject || "",
     notes: attempt.notes || "",
+    dateSent: attempt.dateSent ? new Date(attempt.dateSent).toISOString().split('T')[0] : "",
+    responseDate: attempt.responseDate ? new Date(attempt.responseDate).toISOString().split('T')[0] : "",
   });
 
   const updateMutation = useMutation({
@@ -394,7 +413,14 @@ function EditEntryModal({
       toast({ title: "Please fill in required fields", variant: "destructive" });
       return;
     }
-    updateMutation.mutate(formData);
+    
+    const submissionData = {
+      ...formData,
+      dateSent: formData.dateSent ? new Date(formData.dateSent) : null,
+      responseDate: formData.responseDate ? new Date(formData.responseDate) : null,
+    };
+    
+    updateMutation.mutate(submissionData);
   };
 
   const sortedContacts = [...contacts].sort((a, b) => {
@@ -467,6 +493,29 @@ function EditEntryModal({
                 value={formData.campaign}
                 onChange={(e) => setFormData((prev) => ({ ...prev, campaign: e.target.value }))}
                 data-testid="input-edit-campaign"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-date-sent">Date Sent</Label>
+              <Input
+                id="edit-date-sent"
+                type="date"
+                value={formData.dateSent}
+                onChange={(e) => setFormData((prev) => ({ ...prev, dateSent: e.target.value }))}
+                data-testid="input-edit-date-sent"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-response-date">Date Responded</Label>
+              <Input
+                id="edit-response-date"
+                type="date"
+                value={formData.responseDate}
+                onChange={(e) => setFormData((prev) => ({ ...prev, responseDate: e.target.value }))}
+                data-testid="input-edit-response-date"
               />
             </div>
           </div>
