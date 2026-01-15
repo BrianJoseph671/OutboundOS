@@ -73,10 +73,18 @@ const goalLabels: Record<OutreachGoal, string> = {
 const channelLabels: Record<OutreachType, string> = {
   linkedin_connected: "LinkedIn (Existing Connection)",
   linkedin_connect_request: "LinkedIn Connection Request",
+  linkedin_inmail: "LinkedIn InMail",
   email: "Email",
+  whatsapp: "WhatsApp",
 };
 
-function StepIndicator({ currentStep, steps }: { currentStep: number; steps: typeof steps }) {
+function StepIndicator({
+  currentStep,
+  steps,
+}: {
+  currentStep: number;
+  steps: { id: number; label: string; icon: any }[];
+}) {
   return (
     <div className="flex items-center justify-between mb-8">
       {steps.map((step, idx) => {
@@ -295,6 +303,12 @@ export default function Composer() {
   const { data: settings } = useQuery<Settings>({ queryKey: ["/api/settings"] });
   const { data: experiments = [] } = useQuery<Experiment[]>({ queryKey: ["/api/experiments"] });
 
+  const sortedContacts = useMemo(() => {
+    return [...contacts].sort((a, b) => {
+      return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+    });
+  }, [contacts]);
+
   const selectedContact = contacts.find((c) => c.id === state.contactId);
 
   const activeExperiments = experiments.filter(
@@ -355,7 +369,6 @@ export default function Composer() {
 
     logMutation.mutate({
       contactId: state.contactId,
-      dateSent: new Date(),
       outreachType: state.channel,
       campaign: state.campaign || null,
       messageVariantLabel: variant.label,
@@ -422,10 +435,10 @@ export default function Composer() {
                     <SelectValue placeholder="Choose a contact" />
                   </SelectTrigger>
                   <SelectContent>
-                    {contacts.length === 0 ? (
+                    {sortedContacts.length === 0 ? (
                       <SelectItem value="none" disabled>No contacts yet</SelectItem>
                     ) : (
-                      contacts.map((c) => (
+                      sortedContacts.map((c) => (
                         <SelectItem key={c.id} value={c.id}>
                           {c.name} {c.company && `- ${c.company}`}
                         </SelectItem>
