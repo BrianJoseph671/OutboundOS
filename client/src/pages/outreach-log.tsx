@@ -843,8 +843,8 @@ export default function OutreachLog() {
                         <td className="py-3 px-4">
                           <Checkbox 
                             checked={selectedIds.has(attempt.id)}
-                            onCheckedChange={(_, e) => {
-                              const nativeEvent = e as unknown as React.MouseEvent;
+                            onCheckedChange={() => {
+                              const nativeEvent = window.event as unknown as React.MouseEvent;
                               handleSelect(attempt.id, index, nativeEvent.shiftKey);
                             }}
                             data-testid={`checkbox-select-attempt-${attempt.id}`}
