@@ -14,10 +14,12 @@ import {
   TrendingUp,
   Filter,
   RotateCcw,
+  Clock,
+  RefreshCw,
 } from "lucide-react";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type { OutreachAttempt, Experiment } from "@shared/schema";
+import type { OutreachAttempt, Experiment, Contact } from "@shared/schema";
 
 interface DashboardMetrics {
   totalSent: number;
@@ -39,6 +41,24 @@ interface ExperimentStats {
   experimentName: string;
   variantA: { sent: number; responded: number; positive: number; booked: number };
   variantB: { sent: number; responded: number; positive: number; booked: number };
+}
+
+interface VariantPerformance {
+  variant: string;
+  sent: number;
+  responded: number;
+}
+
+interface TierPerformance {
+  tier: string;
+  sent: number;
+  responded: number;
+}
+
+interface TimingBucket {
+  label: string;
+  count: number;
+  percentage: number;
 }
 
 function MetricCard({
@@ -259,6 +279,154 @@ function ExperimentTable({ data }: { data: ExperimentStats[] }) {
   );
 }
 
+function VariantPerformanceTable({ data }: { data: VariantPerformance[] }) {
+  return (
+    <Card data-testid="card-variant-performance">
+      <CardHeader className="pb-4">
+        <CardTitle className="text-lg font-medium">Performance by Message Variant</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm" data-testid="table-variant-performance">
+            <thead>
+              <tr className="border-b">
+                <th className="text-left py-3 px-2 font-medium text-muted-foreground">Variant Name</th>
+                <th className="text-right py-3 px-2 font-medium text-muted-foreground">Sent</th>
+                <th className="text-right py-3 px-2 font-medium text-muted-foreground">Responded</th>
+                <th className="text-right py-3 px-2 font-medium text-muted-foreground">Response Rate %</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="text-center py-8 text-muted-foreground">
+                    No message variant data yet. Add variant labels to your outreach attempts.
+                  </td>
+                </tr>
+              ) : (
+                data.map((row) => (
+                  <tr key={row.variant} className="border-b last:border-0 hover-elevate" data-testid={`row-variant-${row.variant}`}>
+                    <td className="py-3 px-2 font-medium">{row.variant}</td>
+                    <td className="py-3 px-2 text-right tabular-nums" data-testid={`text-variant-sent-${row.variant}`}>{row.sent}</td>
+                    <td className="py-3 px-2 text-right tabular-nums" data-testid={`text-variant-responded-${row.variant}`}>{row.responded}</td>
+                    <td className="py-3 px-2 text-right tabular-nums" data-testid={`text-variant-rate-${row.variant}`}>
+                      {row.sent > 0 ? ((row.responded / row.sent) * 100).toFixed(1) : 0}%
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function TierPerformanceTable({ data }: { data: TierPerformance[] }) {
+  return (
+    <Card data-testid="card-tier-performance">
+      <CardHeader className="pb-4">
+        <CardTitle className="text-lg font-medium">Performance by Company Tier</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm" data-testid="table-tier-performance">
+            <thead>
+              <tr className="border-b">
+                <th className="text-left py-3 px-2 font-medium text-muted-foreground">Tier</th>
+                <th className="text-right py-3 px-2 font-medium text-muted-foreground">Sent</th>
+                <th className="text-right py-3 px-2 font-medium text-muted-foreground">Responded</th>
+                <th className="text-right py-3 px-2 font-medium text-muted-foreground">Response Rate %</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.map((row) => (
+                <tr key={row.tier} className="border-b last:border-0 hover-elevate" data-testid={`row-tier-${row.tier.replace(/\s/g, "-")}`}>
+                  <td className="py-3 px-2 font-medium">{row.tier}</td>
+                  <td className="py-3 px-2 text-right tabular-nums" data-testid={`text-tier-sent-${row.tier.replace(/\s/g, "-")}`}>{row.sent}</td>
+                  <td className="py-3 px-2 text-right tabular-nums" data-testid={`text-tier-responded-${row.tier.replace(/\s/g, "-")}`}>{row.responded}</td>
+                  <td className="py-3 px-2 text-right tabular-nums" data-testid={`text-tier-rate-${row.tier.replace(/\s/g, "-")}`}>
+                    {row.sent > 0 ? ((row.responded / row.sent) * 100).toFixed(1) : 0}%
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ResponseTimingChart({ data }: { data: TimingBucket[] }) {
+  const maxPercentage = Math.max(...data.map((d) => d.percentage), 1);
+
+  return (
+    <Card data-testid="card-response-timing">
+      <CardHeader className="pb-4">
+        <CardTitle className="text-lg font-medium">Response Timing Distribution</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {data.map((bucket) => (
+          <div key={bucket.label} className="space-y-2" data-testid={`timing-bucket-${bucket.label.replace(/\s/g, "-").replace(/\+/g, "plus")}`}>
+            <div className="flex items-center justify-between text-sm">
+              <span className="font-medium">{bucket.label}</span>
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground tabular-nums" data-testid={`text-timing-count-${bucket.label.replace(/\s/g, "-").replace(/\+/g, "plus")}`}>{bucket.count}</span>
+                <Badge variant="secondary" className="text-xs" data-testid={`text-timing-percent-${bucket.label.replace(/\s/g, "-").replace(/\+/g, "plus")}`}>
+                  {bucket.percentage.toFixed(1)}%
+                </Badge>
+              </div>
+            </div>
+            <div className="h-3 bg-muted rounded-sm overflow-hidden">
+              <div
+                className="h-full bg-chart-2 transition-all duration-500 rounded-sm"
+                style={{ width: `${(bucket.percentage / maxPercentage) * 100}%` }}
+              />
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+function FollowUpConversionCard({
+  followUpSent,
+  respondedAfterFollowup,
+}: {
+  followUpSent: number;
+  respondedAfterFollowup: number;
+}) {
+  const conversionRate = followUpSent > 0 
+    ? ((respondedAfterFollowup / followUpSent) * 100).toFixed(1) 
+    : "0.0";
+
+  return (
+    <Card data-testid="card-followup-conversion">
+      <CardContent className="p-6">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm text-muted-foreground">Follow-up Conversion Rate</p>
+            <p className="text-3xl font-bold mt-1" data-testid="metric-follow-up-conversion-rate">
+              {conversionRate}%
+            </p>
+            <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
+              <span data-testid="text-followup-responded">{respondedAfterFollowup} responded</span>
+              <span>/</span>
+              <span data-testid="text-followup-sent">{followUpSent} follow-ups sent</span>
+            </div>
+          </div>
+          <div className="w-12 h-12 rounded-md bg-muted flex items-center justify-center">
+            <RefreshCw className="w-6 h-6 text-muted-foreground" />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function Dashboard() {
   const [dateRange, setDateRange] = useState("all");
   const [outreachType, setOutreachType] = useState("all");
@@ -323,6 +491,74 @@ export default function Dashboard() {
     };
   });
 
+  // Message Variant Performance
+  const variantLabels = Array.from(
+    new Set(filteredAttempts.map((a) => a.messageVariantLabel).filter(Boolean))
+  ) as string[];
+  
+  const variantPerformance: VariantPerformance[] = variantLabels.map((variant) => {
+    const variantAttempts = filteredAttempts.filter((a) => a.messageVariantLabel === variant);
+    return {
+      variant,
+      sent: variantAttempts.length,
+      responded: variantAttempts.filter((a) => a.responded).length,
+    };
+  });
+
+  // Company Tier Performance - always show expected tiers
+  const expectedTiers = ["Tier 1", "Tier 2", "Tier 3"];
+  const additionalTiers = Array.from(
+    new Set(filteredAttempts.map((a) => a.companyTier).filter(Boolean))
+  ).filter((tier) => !expectedTiers.includes(tier as string)) as string[];
+  const allTiers = [...expectedTiers, ...additionalTiers];
+  
+  const tierPerformance: TierPerformance[] = allTiers.map((tier) => {
+    const tierAttempts = filteredAttempts.filter((a) => a.companyTier === tier);
+    return {
+      tier,
+      sent: tierAttempts.length,
+      responded: tierAttempts.filter((a) => a.responded).length,
+    };
+  });
+
+  // Response Timing Distribution
+  const responsesWithTiming = filteredAttempts.filter(
+    (a) => a.responded && a.daysToResponse !== null && a.daysToResponse !== undefined
+  );
+  const totalResponses = responsesWithTiming.length;
+  
+  const timingBuckets: TimingBucket[] = [
+    {
+      label: "Same day",
+      count: responsesWithTiming.filter((a) => a.daysToResponse === 0).length,
+      percentage: 0,
+    },
+    {
+      label: "1-2 days",
+      count: responsesWithTiming.filter((a) => a.daysToResponse! >= 1 && a.daysToResponse! <= 2).length,
+      percentage: 0,
+    },
+    {
+      label: "3-5 days",
+      count: responsesWithTiming.filter((a) => a.daysToResponse! >= 3 && a.daysToResponse! <= 5).length,
+      percentage: 0,
+    },
+    {
+      label: "6+ days",
+      count: responsesWithTiming.filter((a) => a.daysToResponse! >= 6).length,
+      percentage: 0,
+    },
+  ].map((bucket) => ({
+    ...bucket,
+    percentage: totalResponses > 0 ? (bucket.count / totalResponses) * 100 : 0,
+  }));
+
+  // Follow-up Conversion - only count respondedAfterFollowup where followUpSent is true
+  const followUpSentCount = filteredAttempts.filter((a) => a.followUpSent).length;
+  const respondedAfterFollowupCount = filteredAttempts.filter(
+    (a) => a.followUpSent && a.respondedAfterFollowup
+  ).length;
+
   const resetFilters = () => {
     setDateRange("all");
     setOutreachType("all");
@@ -376,15 +612,28 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <MetricCard title="Total Sent" value={metrics.totalSent} icon={Send} />
         <MetricCard title="Meetings Booked" value={metrics.meetingsBooked} icon={Calendar} />
         <MetricCard title="Converted" value={metrics.converted} icon={TrendingUp} />
+        <FollowUpConversionCard
+          followUpSent={followUpSentCount}
+          respondedAfterFollowup={respondedAfterFollowupCount}
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <FunnelChart metrics={metrics} />
         <PerformanceTable data={performanceByType} />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <VariantPerformanceTable data={variantPerformance} />
+        <TierPerformanceTable data={tierPerformance} />
+      </div>
+
+      <div className="grid grid-cols-1 gap-6">
+        <ResponseTimingChart data={timingBuckets} />
       </div>
     </div>
   );
