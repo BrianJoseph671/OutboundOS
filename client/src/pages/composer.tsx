@@ -57,9 +57,8 @@ interface GeneratedVariant {
 const steps = [
   { id: 1, label: "Contact & Goal", icon: User },
   { id: 2, label: "Channel & Hook", icon: Target },
-  { id: 3, label: "Value & Proof", icon: Lightbulb },
-  { id: 4, label: "CTA & Tone", icon: MessageSquare },
-  { id: 5, label: "Generate", icon: Sparkles },
+  { id: 3, label: "CTA & Tone", icon: MessageSquare },
+  { id: 4, label: "Generate", icon: Sparkles },
 ];
 
 const goalLabels: Record<OutreachGoal, string> = {
@@ -138,10 +137,8 @@ function generateMessage(
   const role = contact?.role || "your role";
 
   const hook = "";
-  const value = state.valueHypothesis || "I think we could have an interesting conversation.";
-  const proof = state.credibilityProof && settings?.includeProofLine !== false
-    ? `\n\n${state.credibilityProof}`
-    : "";
+  const value = "I think we could have an interesting conversation.";
+  const proof = "";
   const cta = state.cta || "Would you be open to a quick chat?";
   const logistics = state.timeframe && settings?.includeLogisticsLine !== false
     ? `\n\nI'm available ${state.timeframe}.`
@@ -159,15 +156,15 @@ function generateMessage(
   
   if (state.channel === "linkedin_connect_request") {
     const limit = settings?.connectionRequestCharLimit || 300;
-    body = `${greeting}\n\n${hook}\n\n${value}\n\n${cta}`.slice(0, limit);
+    body = `${greeting}\n\n${value}\n\n${cta}`.slice(0, limit);
   } else {
-    body = `${greeting}\n\n${hook}\n\n${value}${proof}\n\n${cta}${logistics}`;
+    body = `${greeting}\n\n${value}\n\n${cta}${logistics}`;
   }
 
   if (state.length === "short") {
     body = body.split("\n\n").slice(0, 3).join("\n\n");
   } else if (state.length === "long") {
-    body = body + (proof ? "" : `\n\nI've been working in this space and have seen what works.`);
+    body = body + `\n\nI've been working in this space and have seen what works.`;
   }
 
   let subject: string | undefined;
@@ -378,16 +375,16 @@ export default function Composer() {
     switch (currentStep) {
       case 1: return state.contactId && state.goal;
       case 2: return state.channel && state.personalizationSource;
-      case 3: return state.valueHypothesis && state.cta;
+      case 3: return state.cta;
       case 4: return true;
       default: return true;
     }
   };
 
   const nextStep = () => {
-    if (currentStep < 5) {
+    if (currentStep < 4) {
       setCurrentStep(currentStep + 1);
-      if (currentStep === 4) {
+      if (currentStep === 3) {
         handleGenerate();
       }
     }
@@ -514,51 +511,6 @@ export default function Composer() {
 
           {currentStep === 3 && (
             <div className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="value">Value Hypothesis *</Label>
-                <Textarea
-                  id="value"
-                  value={state.valueHypothesis}
-                  onChange={(e) => setState((s) => ({ ...s, valueHypothesis: e.target.value }))}
-                  placeholder="I think we could explore some synergies between our approaches to enterprise sales..."
-                  rows={3}
-                  data-testid="input-composer-value"
-                />
-                <p className="text-xs text-muted-foreground">
-                  What you can offer or why this conversation matters
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="proof">Credibility / Proof Point (optional)</Label>
-                <Textarea
-                  id="proof"
-                  value={state.credibilityProof}
-                  onChange={(e) => setState((s) => ({ ...s, credibilityProof: e.target.value }))}
-                  placeholder="I've helped 50+ companies implement similar strategies..."
-                  rows={2}
-                  data-testid="input-composer-proof"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="cta">Ask / CTA *</Label>
-                <Input
-                  id="cta"
-                  value={state.cta}
-                  onChange={(e) => setState((s) => ({ ...s, cta: e.target.value }))}
-                  placeholder="a 15-minute chat"
-                  data-testid="input-composer-cta"
-                />
-                <p className="text-xs text-muted-foreground">
-                  What you're asking for (chat, intro, referral, etc.)
-                </p>
-              </div>
-            </div>
-          )}
-
-          {currentStep === 4 && (
-            <div className="space-y-6">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="tone">Tone</Label>
@@ -596,6 +548,20 @@ export default function Composer() {
               </div>
 
               <div className="space-y-2">
+                <Label htmlFor="cta">Ask / CTA *</Label>
+                <Input
+                  id="cta"
+                  value={state.cta}
+                  onChange={(e) => setState((s) => ({ ...s, cta: e.target.value }))}
+                  placeholder="a 15-minute chat"
+                  data-testid="input-composer-cta"
+                />
+                <p className="text-xs text-muted-foreground">
+                  What you're asking for (chat, intro, referral, etc.)
+                </p>
+              </div>
+
+              <div className="space-y-2">
                 <Label htmlFor="timeframe">Timeframe (optional)</Label>
                 <Input
                   id="timeframe"
@@ -628,7 +594,7 @@ export default function Composer() {
             </div>
           )}
 
-          {currentStep === 5 && (
+          {currentStep === 4 && (
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-medium">Generated Variants</h3>
@@ -681,13 +647,13 @@ export default function Composer() {
               <ChevronLeft className="w-4 h-4 mr-2" />
               Back
             </Button>
-            {currentStep < 5 ? (
+            {currentStep < 4 ? (
               <Button
                 onClick={nextStep}
                 disabled={!canProceed()}
                 data-testid="button-composer-next"
               >
-                {currentStep === 4 ? "Generate" : "Next"}
+                {currentStep === 3 ? "Generate" : "Next"}
                 <ChevronRight className="w-4 h-4 ml-2" />
               </Button>
             ) : (
