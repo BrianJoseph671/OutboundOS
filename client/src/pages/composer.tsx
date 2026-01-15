@@ -138,24 +138,12 @@ function generateMessage(
   const company = contact?.company || "your company";
   const role = contact?.role || "your role";
 
-  const hookVariations = {
-    A: state.personalizationHook,
-    B: state.personalizationHook ? `I noticed ${state.personalizationHook.toLowerCase()}` : "",
-    C: state.personalizationHook ? `Really impressed by ${state.personalizationHook.toLowerCase()}` : "",
-  };
-
-  const ctaVariations = {
-    A: state.cta,
-    B: state.cta ? `Would you be open to ${state.cta.toLowerCase()}?` : "",
-    C: state.cta ? `I'd love to ${state.cta.toLowerCase()} if you're available.` : "",
-  };
-
-  const hook = hookVariations[variant] || `Hi ${name},`;
+  const hook = "";
   const value = state.valueHypothesis || "I think we could have an interesting conversation.";
   const proof = state.credibilityProof && settings?.includeProofLine !== false
     ? `\n\n${state.credibilityProof}`
     : "";
-  const cta = ctaVariations[variant] || "Would you be open to a quick chat?";
+  const cta = state.cta || "Would you be open to a quick chat?";
   const logistics = state.timeframe && settings?.includeLogisticsLine !== false
     ? `\n\nI'm available ${state.timeframe}.`
     : "";
@@ -315,16 +303,13 @@ export default function Composer() {
     (e) => e.active && (!state.channel || e.outreachType === state.channel)
   );
 
-  const personalizationOptions = useMemo(() => {
-    if (!selectedContact) return [];
-    const options: { value: string; label: string; content: string }[] = [];
-    if (selectedContact.headline) options.push({ value: "headline", label: "Headline", content: selectedContact.headline });
-    if (selectedContact.about) options.push({ value: "about", label: "About", content: selectedContact.about.slice(0, 100) });
-    if (selectedContact.role) options.push({ value: "role", label: "Role", content: selectedContact.role });
-    if (selectedContact.company) options.push({ value: "company", label: "Company", content: selectedContact.company });
-    if (selectedContact.experience) options.push({ value: "experience", label: "Experience", content: selectedContact.experience.slice(0, 100) });
-    return options;
-  }, [selectedContact]);
+  const personalizationOptions = [
+    { value: "Role", label: "Role" },
+    { value: "Company", label: "Company" },
+    { value: "University", label: "University" },
+    { value: "Extracurricular", label: "Extracurricular" },
+    { value: "Personal", label: "Personal" },
+  ];
 
   const logMutation = useMutation({
     mutationFn: (data: InsertOutreachAttempt) => apiRequest("POST", "/api/outreach-attempts", data),
@@ -393,7 +378,7 @@ export default function Composer() {
   const canProceed = () => {
     switch (currentStep) {
       case 1: return state.contactId && state.goal;
-      case 2: return state.channel && state.personalizationHook;
+      case 2: return state.channel && state.personalizationSource;
       case 3: return state.valueHypothesis && state.cta;
       case 4: return true;
       default: return true;
@@ -507,44 +492,23 @@ export default function Composer() {
                 <Select
                   value={state.personalizationSource}
                   onValueChange={(v) => {
-                    const option = personalizationOptions.find((o) => o.value === v);
                     setState((s) => ({
                       ...s,
                       personalizationSource: v,
-                      personalizationHook: option?.content || "",
                     }));
                   }}
                 >
                   <SelectTrigger data-testid="select-composer-personalization">
-                    <SelectValue placeholder="Select from profile fields" />
+                    <SelectValue placeholder="Select personalization source" />
                   </SelectTrigger>
                   <SelectContent>
-                    {personalizationOptions.length === 0 ? (
-                      <SelectItem value="none" disabled>No profile data available</SelectItem>
-                    ) : (
-                      personalizationOptions.map((o) => (
-                        <SelectItem key={o.value} value={o.value}>
-                          {o.label}: {o.content.slice(0, 40)}...
-                        </SelectItem>
-                      ))
-                    )}
+                    {personalizationOptions.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="hook">Personalization Hook *</Label>
-                <Textarea
-                  id="hook"
-                  value={state.personalizationHook}
-                  onChange={(e) => setState((s) => ({ ...s, personalizationHook: e.target.value }))}
-                  placeholder="Your background in enterprise sales caught my attention..."
-                  rows={3}
-                  data-testid="input-composer-hook"
-                />
-                <p className="text-xs text-muted-foreground">
-                  A specific observation that shows you've done your research
-                </p>
               </div>
             </div>
           )}
