@@ -545,6 +545,7 @@ export default function OutreachLog() {
   const [showManualEntry, setShowManualEntry] = useState(false);
   const [editingAttempt, setEditingAttempt] = useState<OutreachAttempt | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
 
   const { data: attempts = [], isLoading } = useQuery<OutreachAttempt[]>({
     queryKey: ["/api/outreach-attempts"],
@@ -562,6 +563,28 @@ export default function OutreachLog() {
       toast({ title: "Failed to delete entries", variant: "destructive" });
     },
   });
+
+  const handleSelect = (id: string, index: number, shiftKey: boolean) => {
+    const next = new Set(selectedIds);
+    
+    if (shiftKey && lastSelectedIndex !== null) {
+      const start = Math.min(lastSelectedIndex, index);
+      const end = Math.max(lastSelectedIndex, index);
+      const rangeIds = sortedAttempts.slice(start, end + 1).map(a => a.id);
+      
+      const isSelecting = !selectedIds.has(id);
+      rangeIds.forEach(rangeId => {
+        if (isSelecting) next.add(rangeId);
+        else next.delete(rangeId);
+      });
+    } else {
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+    }
+    
+    setSelectedIds(next);
+    setLastSelectedIndex(index);
+  };
 
   const { data: contacts = [] } = useQuery<Contact[]>({
     queryKey: ["/api/contacts"],
@@ -807,7 +830,7 @@ export default function OutreachLog() {
                     </td>
                   </tr>
                 ) : (
-                  sortedAttempts.map((attempt) => {
+                  sortedAttempts.map((attempt, index) => {
                     const contact = contacts.find((c) => c.id === attempt.contactId);
                     const experiment = experiments.find((e) => e.id === attempt.experimentId);
 
@@ -820,11 +843,9 @@ export default function OutreachLog() {
                         <td className="py-3 px-4">
                           <Checkbox 
                             checked={selectedIds.has(attempt.id)}
-                            onCheckedChange={(checked) => {
-                              const next = new Set(selectedIds);
-                              if (checked) next.add(attempt.id);
-                              else next.delete(attempt.id);
-                              setSelectedIds(next);
+                            onCheckedChange={(_, e) => {
+                              const nativeEvent = e as unknown as React.MouseEvent;
+                              handleSelect(attempt.id, index, nativeEvent.shiftKey);
                             }}
                             data-testid={`checkbox-select-attempt-${attempt.id}`}
                           />
