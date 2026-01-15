@@ -9,7 +9,6 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import Dashboard from "@/pages/dashboard";
 import Contacts from "@/pages/contacts";
 import Composer from "@/pages/composer";
-import Experiments from "@/pages/experiments";
 import OutreachLog from "@/pages/outreach-log";
 import Settings from "@/pages/settings";
 import NotFound from "@/pages/not-found";
@@ -20,7 +19,6 @@ function Router() {
       <Route path="/" component={Dashboard} />
       <Route path="/contacts" component={Contacts} />
       <Route path="/composer" component={Composer} />
-      <Route path="/experiments" component={Experiments} />
       <Route path="/outreach-log" component={OutreachLog} />
       <Route path="/settings" component={Settings} />
       <Route component={NotFound} />

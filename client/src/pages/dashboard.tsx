@@ -386,8 +386,6 @@ export default function Dashboard() {
         <FunnelChart metrics={metrics} />
         <PerformanceTable data={performanceByType} />
       </div>
-
-      <ExperimentTable data={experimentStats} />
     </div>
   );
 }
