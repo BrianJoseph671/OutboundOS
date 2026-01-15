@@ -152,6 +152,55 @@ export async function registerRoutes(
     }
   });
 
+  // Bulk Contact Import
+  app.post("/api/contacts/bulk-import", async (req, res) => {
+    try {
+      const contacts = req.body.contacts;
+
+      if (!Array.isArray(contacts)) {
+        return res.status(400).json({ error: "Expected array of contacts" });
+      }
+
+      const results = {
+        success: 0,
+        failed: 0,
+        errors: [] as string[],
+      };
+
+      for (const contactData of contacts) {
+        try {
+          if (!contactData.name) {
+            results.failed++;
+            results.errors.push("Missing name for contact");
+            continue;
+          }
+
+          const existing = await storage.getContacts();
+          const duplicate = existing.find(
+            (c) => c.name.toLowerCase() === contactData.name.toLowerCase(),
+          );
+
+          if (duplicate) {
+            results.failed++;
+            results.errors.push(`Duplicate: ${contactData.name}`);
+            continue;
+          }
+
+          const validatedData = insertContactSchema.parse(contactData);
+          await storage.createContact(validatedData);
+          results.success++;
+        } catch (error) {
+          results.failed++;
+          results.errors.push(`Failed: ${contactData.name}`);
+        }
+      }
+
+      res.json(results);
+    } catch (error) {
+      res.status(500).json({ error: "Bulk import failed" });
+    }
+  });
+
   // PDF Parsing - uses Claude API for intelligent extraction
   app.post("/api/parse-pdf", upload.single("file"), async (req, res) => {
     try {
