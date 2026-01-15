@@ -789,9 +789,10 @@ export default function OutreachLog() {
                     onClick={() => toggleSort("dateSent")}
                   >
                     <span className="flex items-center gap-1">
-                      Date <SortIcon field="dateSent" />
+                      Date Sent <SortIcon field="dateSent" />
                     </span>
                   </th>
+                  <th className="text-left py-3 px-4 font-medium text-muted-foreground">Date Responded</th>
                   <th
                     className="text-left py-3 px-4 font-medium text-muted-foreground cursor-pointer"
                     onClick={() => toggleSort("contact")}
@@ -853,6 +854,9 @@ export default function OutreachLog() {
                         <td className="py-3 px-4 tabular-nums">
                           {format(new Date(attempt.dateSent), "MMM d, yyyy")}
                         </td>
+                        <td className="py-3 px-4 tabular-nums text-muted-foreground">
+                          {attempt.responseDate ? format(new Date(attempt.responseDate), "MMM d, yyyy") : "—"}
+                        </td>
                         <td className="py-3 px-4">
                           <div>
                             <span className="font-medium">{contact?.name || "Unknown"}</span>
@@ -871,7 +875,11 @@ export default function OutreachLog() {
                           <OutcomeCell
                             attempt={attempt}
                             field="responded"
-                            onUpdate={(v) => updateMutation.mutate({ id: attempt.id, responded: v })}
+                            onUpdate={(v) => updateMutation.mutate({ 
+                              id: attempt.id, 
+                              responded: v,
+                              responseDate: v ? new Date() : null 
+                            })}
                           />
                         </td>
                         <td className="py-3 px-4 text-center">
