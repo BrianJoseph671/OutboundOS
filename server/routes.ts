@@ -536,15 +536,51 @@ export async function registerRoutes(
 
   app.patch("/api/outreach-attempts/:id", async (req, res) => {
     try {
+      console.log(`Updating outreach attempt ${req.params.id}:`, req.body);
+      
+      const { id, ...data } = req.body;
+      const updateData: any = { ...data };
+      
+      // Map frontend fields to DB schema if necessary and handle dates
+      if (updateData.dateSent) {
+        const d = new Date(updateData.dateSent);
+        if (!isNaN(d.getTime())) {
+          updateData.dateSent = d;
+        } else {
+          delete updateData.dateSent;
+        }
+      }
+      
+      if (updateData.responseDate) {
+        const d = new Date(updateData.responseDate);
+        if (!isNaN(d.getTime())) {
+          updateData.responseDate = d;
+        } else {
+          updateData.responseDate = null;
+        }
+      } else if (updateData.responseDate === "") {
+        updateData.responseDate = null;
+      }
+
+      // Ensure required fields are not explicitly set to empty strings if they should be null
+      const nullableFields = ['campaign', 'subject', 'notes', 'messageVariantLabel', 'companyTier', 'experimentId', 'experimentVariant'];
+      nullableFields.forEach(field => {
+        if (updateData[field] === "") {
+          updateData[field] = null;
+        }
+      });
+
       const attempt = await storage.updateOutreachAttempt(
         req.params.id,
-        req.body,
+        updateData,
       );
+      
       if (!attempt) {
         return res.status(404).json({ error: "Outreach attempt not found" });
       }
       res.json(attempt);
     } catch (error) {
+      console.error("Update error:", error);
       res.status(500).json({ error: "Failed to update outreach attempt" });
     }
   });

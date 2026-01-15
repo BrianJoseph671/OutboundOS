@@ -414,10 +414,10 @@ function EditEntryModal({
       return;
     }
     
-    const submissionData = {
+    const submissionData: any = {
       ...formData,
-      dateSent: formData.dateSent ? new Date(formData.dateSent) : undefined,
-      responseDate: formData.responseDate ? new Date(formData.responseDate) : undefined,
+      dateSent: formData.dateSent ? new Date(formData.dateSent).toISOString() : undefined,
+      responseDate: formData.responseDate ? new Date(formData.responseDate).toISOString() : null,
     };
     
     updateMutation.mutate(submissionData);
