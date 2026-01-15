@@ -523,29 +523,44 @@ export default function Dashboard() {
 
   // Response Timing Distribution
   const responsesWithTiming = filteredAttempts.filter(
-    (a) => a.responded && a.daysToResponse !== null && a.daysToResponse !== undefined
+    (a) => a.responded && a.dateSent && a.responseDate
   );
+  
+  const calculateDays = (sent: string | Date, response: string | Date) => {
+    const d1 = new Date(sent);
+    const d2 = new Date(response);
+    d1.setHours(0, 0, 0, 0);
+    d2.setHours(0, 0, 0, 0);
+    return Math.floor((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
+  };
+
   const totalResponses = responsesWithTiming.length;
   
   const timingBuckets: TimingBucket[] = [
     {
       label: "Same day",
-      count: responsesWithTiming.filter((a) => a.daysToResponse === 0).length,
+      count: responsesWithTiming.filter((a) => calculateDays(a.dateSent, a.responseDate!) === 0).length,
       percentage: 0,
     },
     {
       label: "1-2 days",
-      count: responsesWithTiming.filter((a) => a.daysToResponse! >= 1 && a.daysToResponse! <= 2).length,
+      count: responsesWithTiming.filter((a) => {
+        const days = calculateDays(a.dateSent, a.responseDate!);
+        return days >= 1 && days <= 2;
+      }).length,
       percentage: 0,
     },
     {
       label: "3-5 days",
-      count: responsesWithTiming.filter((a) => a.daysToResponse! >= 3 && a.daysToResponse! <= 5).length,
+      count: responsesWithTiming.filter((a) => {
+        const days = calculateDays(a.dateSent, a.responseDate!);
+        return days >= 3 && days <= 5;
+      }).length,
       percentage: 0,
     },
     {
       label: "6+ days",
-      count: responsesWithTiming.filter((a) => a.daysToResponse! >= 6).length,
+      count: responsesWithTiming.filter((a) => calculateDays(a.dateSent, a.responseDate!) >= 6).length,
       percentage: 0,
     },
   ].map((bucket) => ({
