@@ -14,12 +14,11 @@ import {
   TrendingUp,
   Filter,
   RotateCcw,
-  Clock,
   RefreshCw,
 } from "lucide-react";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type { OutreachAttempt, Experiment, Contact } from "@shared/schema";
+import type { OutreachAttempt, Experiment } from "@shared/schema";
 
 interface DashboardMetrics {
   totalSent: number;
@@ -41,18 +40,6 @@ interface ExperimentStats {
   experimentName: string;
   variantA: { sent: number; responded: number; positive: number; booked: number };
   variantB: { sent: number; responded: number; positive: number; booked: number };
-}
-
-interface VariantPerformance {
-  variant: string;
-  sent: number;
-  responded: number;
-}
-
-interface TierPerformance {
-  tier: string;
-  sent: number;
-  responded: number;
 }
 
 interface TimingBucket {
@@ -279,86 +266,6 @@ function ExperimentTable({ data }: { data: ExperimentStats[] }) {
   );
 }
 
-function VariantPerformanceTable({ data }: { data: VariantPerformance[] }) {
-  return (
-    <Card data-testid="card-variant-performance">
-      <CardHeader className="pb-4">
-        <CardTitle className="text-lg font-medium">Performance by Message Variant</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm" data-testid="table-variant-performance">
-            <thead>
-              <tr className="border-b">
-                <th className="text-left py-3 px-2 font-medium text-muted-foreground">Variant Name</th>
-                <th className="text-right py-3 px-2 font-medium text-muted-foreground">Sent</th>
-                <th className="text-right py-3 px-2 font-medium text-muted-foreground">Responded</th>
-                <th className="text-right py-3 px-2 font-medium text-muted-foreground">Response Rate %</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.length === 0 ? (
-                <tr>
-                  <td colSpan={4} className="text-center py-8 text-muted-foreground">
-                    No message variant data yet. Add variant labels to your outreach attempts.
-                  </td>
-                </tr>
-              ) : (
-                data.map((row) => (
-                  <tr key={row.variant} className="border-b last:border-0 hover-elevate" data-testid={`row-variant-${row.variant}`}>
-                    <td className="py-3 px-2 font-medium">{row.variant}</td>
-                    <td className="py-3 px-2 text-right tabular-nums" data-testid={`text-variant-sent-${row.variant}`}>{row.sent}</td>
-                    <td className="py-3 px-2 text-right tabular-nums" data-testid={`text-variant-responded-${row.variant}`}>{row.responded}</td>
-                    <td className="py-3 px-2 text-right tabular-nums" data-testid={`text-variant-rate-${row.variant}`}>
-                      {row.sent > 0 ? ((row.responded / row.sent) * 100).toFixed(1) : 0}%
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function TierPerformanceTable({ data }: { data: TierPerformance[] }) {
-  return (
-    <Card data-testid="card-tier-performance">
-      <CardHeader className="pb-4">
-        <CardTitle className="text-lg font-medium">Performance by Company Tier</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm" data-testid="table-tier-performance">
-            <thead>
-              <tr className="border-b">
-                <th className="text-left py-3 px-2 font-medium text-muted-foreground">Tier</th>
-                <th className="text-right py-3 px-2 font-medium text-muted-foreground">Sent</th>
-                <th className="text-right py-3 px-2 font-medium text-muted-foreground">Responded</th>
-                <th className="text-right py-3 px-2 font-medium text-muted-foreground">Response Rate %</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.map((row) => (
-                <tr key={row.tier} className="border-b last:border-0 hover-elevate" data-testid={`row-tier-${row.tier.replace(/\s/g, "-")}`}>
-                  <td className="py-3 px-2 font-medium">{row.tier}</td>
-                  <td className="py-3 px-2 text-right tabular-nums" data-testid={`text-tier-sent-${row.tier.replace(/\s/g, "-")}`}>{row.sent}</td>
-                  <td className="py-3 px-2 text-right tabular-nums" data-testid={`text-tier-responded-${row.tier.replace(/\s/g, "-")}`}>{row.responded}</td>
-                  <td className="py-3 px-2 text-right tabular-nums" data-testid={`text-tier-rate-${row.tier.replace(/\s/g, "-")}`}>
-                    {row.sent > 0 ? ((row.responded / row.sent) * 100).toFixed(1) : 0}%
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
 function ResponseTimingChart({ data }: { data: TimingBucket[] }) {
   const maxPercentage = Math.max(...data.map((d) => d.percentage), 1);
 
@@ -491,36 +398,6 @@ export default function Dashboard() {
     };
   });
 
-  // Message Variant Performance
-  const variantLabels = Array.from(
-    new Set(filteredAttempts.map((a) => a.messageVariantLabel).filter(Boolean))
-  ) as string[];
-  
-  const variantPerformance: VariantPerformance[] = variantLabels.map((variant) => {
-    const variantAttempts = filteredAttempts.filter((a) => a.messageVariantLabel === variant);
-    return {
-      variant,
-      sent: variantAttempts.length,
-      responded: variantAttempts.filter((a) => a.responded).length,
-    };
-  });
-
-  // Company Tier Performance - always show expected tiers
-  const expectedTiers = ["Tier 1", "Tier 2", "Tier 3"];
-  const additionalTiers = Array.from(
-    new Set(filteredAttempts.map((a) => a.companyTier).filter(Boolean))
-  ).filter((tier) => !expectedTiers.includes(tier as string)) as string[];
-  const allTiers = [...expectedTiers, ...additionalTiers];
-  
-  const tierPerformance: TierPerformance[] = allTiers.map((tier) => {
-    const tierAttempts = filteredAttempts.filter((a) => a.companyTier === tier);
-    return {
-      tier,
-      sent: tierAttempts.length,
-      responded: tierAttempts.filter((a) => a.responded).length,
-    };
-  });
-
   // Response Timing Distribution
   const responsesWithTiming = filteredAttempts.filter(
     (a) => a.responded && a.dateSent && a.responseDate
@@ -640,11 +517,6 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <FunnelChart metrics={metrics} />
         <PerformanceTable data={performanceByType} />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <VariantPerformanceTable data={variantPerformance} />
-        <TierPerformanceTable data={tierPerformance} />
       </div>
 
       <div className="grid grid-cols-1 gap-6">
