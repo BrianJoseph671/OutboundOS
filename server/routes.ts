@@ -548,6 +548,19 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/outreach-attempts/bulk-delete", async (req, res) => {
+    try {
+      const { ids } = req.body;
+      if (!Array.isArray(ids)) {
+        return res.status(400).json({ error: "Expected array of ids" });
+      }
+      const count = await storage.deleteOutreachAttempts(ids);
+      res.json({ success: true, count });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete outreach attempts" });
+    }
+  });
+
   // Bulk Outreach Import
   app.post("/api/outreach-attempts/bulk-import", async (req, res) => {
     try {

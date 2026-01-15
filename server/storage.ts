@@ -22,6 +22,7 @@ export interface IStorage {
   createOutreachAttempt(attempt: InsertOutreachAttempt): Promise<OutreachAttempt>;
   updateOutreachAttempt(id: string, attempt: Partial<InsertOutreachAttempt>): Promise<OutreachAttempt | undefined>;
   deleteOutreachAttempt(id: string): Promise<boolean>;
+  deleteOutreachAttempts(ids: string[]): Promise<number>;
 
   // Experiments
   getExperiments(): Promise<Experiment[]>;
@@ -89,6 +90,13 @@ export class DatabaseStorage implements IStorage {
   async deleteOutreachAttempt(id: string): Promise<boolean> {
     const [deleted] = await db.delete(outreachAttempts).where(eq(outreachAttempts.id, id)).returning();
     return !!deleted;
+  }
+
+  async deleteOutreachAttempts(ids: string[]): Promise<number> {
+    const results = await Promise.all(
+      ids.map(id => db.delete(outreachAttempts).where(eq(outreachAttempts.id, id)).returning())
+    );
+    return results.filter(r => r.length > 0).length;
   }
 
   // Experiments

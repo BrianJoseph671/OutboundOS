@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent } from "@/components/ui/card";
@@ -33,6 +33,7 @@ import {
   ChevronUp,
   Plus,
   Pencil,
+  Trash2,
 } from "lucide-react";
 import type { OutreachAttempt, Contact, Experiment, InsertOutreachAttempt } from "@shared/schema";
 import { format } from "date-fns";
@@ -543,10 +544,23 @@ export default function OutreachLog() {
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [showManualEntry, setShowManualEntry] = useState(false);
   const [editingAttempt, setEditingAttempt] = useState<OutreachAttempt | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  // No changes needed here, just removing the comment to clean up.
   const { data: attempts = [], isLoading } = useQuery<OutreachAttempt[]>({
     queryKey: ["/api/outreach-attempts"],
+  });
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: (ids: string[]) =>
+      apiRequest("POST", "/api/outreach-attempts/bulk-delete", { ids }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/outreach-attempts"] });
+      toast({ title: `Successfully deleted selected entries` });
+      setSelectedIds(new Set());
+    },
+    onError: () => {
+      toast({ title: "Failed to delete entries", variant: "destructive" });
+    },
   });
 
   const { data: contacts = [] } = useQuery<Contact[]>({
@@ -647,6 +661,21 @@ export default function OutreachLog() {
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <h1 className="text-2xl font-semibold">Outreach Log</h1>
         <div className="flex items-center gap-2">
+          {selectedIds.size > 0 && (
+            <Button 
+              variant="destructive" 
+              onClick={() => {
+                if (confirm(`Are you sure you want to delete ${selectedIds.size} entries?`)) {
+                  bulkDeleteMutation.mutate(Array.from(selectedIds));
+                }
+              }}
+              disabled={bulkDeleteMutation.isPending}
+              data-testid="button-bulk-delete"
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete Selected ({selectedIds.size})
+            </Button>
+          )}
           <Button onClick={() => setShowManualEntry(true)} data-testid="button-add-manual-entry">
             <Plus className="w-4 h-4 mr-2" />
             Add Entry
@@ -719,6 +748,19 @@ export default function OutreachLog() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted/30">
+                  <th className="py-3 px-4 w-10">
+                    <Checkbox 
+                      checked={sortedAttempts.length > 0 && selectedIds.size === sortedAttempts.length}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setSelectedIds(new Set(sortedAttempts.map(a => a.id)));
+                        } else {
+                          setSelectedIds(new Set());
+                        }
+                      }}
+                      data-testid="checkbox-select-all"
+                    />
+                  </th>
                   <th
                     className="text-left py-3 px-4 font-medium text-muted-foreground cursor-pointer"
                     onClick={() => toggleSort("dateSent")}
@@ -747,7 +789,7 @@ export default function OutreachLog() {
               <tbody>
                 {isLoading ? (
                   <tr>
-                    <td colSpan={9} className="py-8 text-center">
+                    <td colSpan={10} className="py-8 text-center">
                       <div className="animate-pulse flex items-center justify-center gap-2">
                         <div className="w-4 h-4 bg-muted rounded-full" />
                         <div className="w-24 h-4 bg-muted rounded" />
@@ -756,7 +798,7 @@ export default function OutreachLog() {
                   </tr>
                 ) : sortedAttempts.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="py-12 text-center">
+                    <td colSpan={10} className="py-12 text-center">
                       <FileText className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
                       <h3 className="font-medium mb-2">No outreach attempts yet</h3>
                       <p className="text-sm text-muted-foreground">
@@ -775,6 +817,18 @@ export default function OutreachLog() {
                         className="border-b last:border-0 hover:bg-muted/30 transition-colors"
                         data-testid={`row-attempt-${attempt.id}`}
                       >
+                        <td className="py-3 px-4">
+                          <Checkbox 
+                            checked={selectedIds.has(attempt.id)}
+                            onCheckedChange={(checked) => {
+                              const next = new Set(selectedIds);
+                              if (checked) next.add(attempt.id);
+                              else next.delete(attempt.id);
+                              setSelectedIds(next);
+                            }}
+                            data-testid={`checkbox-select-attempt-${attempt.id}`}
+                          />
+                        </td>
                         <td className="py-3 px-4 tabular-nums">
                           {format(new Date(attempt.dateSent), "MMM d, yyyy")}
                         </td>
