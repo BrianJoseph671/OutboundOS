@@ -55,7 +55,9 @@ function ContactCard({
     .toUpperCase()
     .slice(0, 2);
 
-  const tags = contact.tags?.split(",").filter(Boolean) || [];
+  const tags = (contact.tags?.split(",").filter(Boolean) || []).filter(
+    (tag) => tag.trim() !== "demo-import",
+  );
 
   return (
     <Card
@@ -146,7 +148,9 @@ function ContactDetail({
     .toUpperCase()
     .slice(0, 2);
 
-  const tags = contact.tags?.split(",").filter(Boolean) || [];
+  const tags = (contact.tags?.split(",").filter(Boolean) || []).filter(
+    (tag) => tag.trim() !== "demo-import",
+  );
   const skills = contact.skills?.split(",").filter(Boolean) || [];
 
   const getTypeLabel = (type: string) => {
