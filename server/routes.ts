@@ -548,6 +548,65 @@ export async function registerRoutes(
     }
   });
 
+  // Bulk Outreach Import
+  app.post("/api/outreach-attempts/bulk-import", async (req, res) => {
+    try {
+      const attempts = req.body.attempts;
+
+      if (!Array.isArray(attempts)) {
+        return res.status(400).json({ error: "Expected array of attempts" });
+      }
+
+      const results = { success: 0, failed: 0, errors: [] as string[] };
+
+      for (const attemptData of attempts) {
+        try {
+          // Find contact by name to get contactId
+          const contacts = await storage.getContacts();
+          const contact = contacts.find(
+            (c) => c.name.toLowerCase() === attemptData.contactName.toLowerCase(),
+          );
+
+          if (!contact) {
+            results.failed++;
+            results.errors.push(`Contact not found: ${attemptData.contactName}`);
+            continue;
+          }
+
+          // Create attempt with contactId
+          const attempt = {
+            contactId: contact.id,
+            outreachType: attemptData.outreachType,
+            messageVariantLabel: attemptData.messageVariantLabel,
+            messageBody: attemptData.messageText || attemptData.messageBody || "",
+            responded:
+              attemptData.responded === "true" || attemptData.responded === true,
+            positiveResponse:
+              attemptData.positiveResponse === "true" ||
+              attemptData.positiveResponse === true,
+            meetingBooked:
+              attemptData.meetingBooked === "true" ||
+              attemptData.meetingBooked === true,
+            converted:
+              attemptData.converted === "true" || attemptData.converted === true,
+            notes: attemptData.notes || undefined,
+          };
+
+          const validated = insertOutreachAttemptSchema.parse(attempt);
+          await storage.createOutreachAttempt(validated);
+          results.success++;
+        } catch (error) {
+          results.failed++;
+          results.errors.push(`Failed: ${attemptData.contactName} - ${error}`);
+        }
+      }
+
+      res.json(results);
+    } catch (error) {
+      res.status(500).json({ error: "Bulk import failed" });
+    }
+  });
+
   // Experiments
   app.get("/api/experiments", async (req, res) => {
     try {
