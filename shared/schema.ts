@@ -42,6 +42,12 @@ export const outreachAttempts = pgTable("outreach_attempts", {
   meetingBooked: boolean("meeting_booked").default(false),
   converted: boolean("converted").default(false),
   notes: text("notes"),
+  // New analytics columns
+  companyTier: varchar("company_tier", { length: 20 }),
+  responseDate: timestamp("response_date"),
+  daysToResponse: integer("days_to_response"),
+  followUpSent: boolean("follow_up_sent").default(false),
+  respondedAfterFollowup: boolean("responded_after_followup").default(false),
 });
 
 export const insertOutreachAttemptSchema = createInsertSchema(outreachAttempts).omit({ id: true, dateSent: true });
