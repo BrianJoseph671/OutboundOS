@@ -1015,7 +1015,11 @@ export default function Contacts() {
     queryKey: ["/api/contacts"],
   });
 
-  const filteredContacts = contacts.filter((contact) => {
+  const sortedContacts = [...contacts].sort((a, b) => {
+    return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+  });
+
+  const filteredContacts = sortedContacts.filter((contact) => {
     const searchLower = search.toLowerCase();
     return (
       contact.name.toLowerCase().includes(searchLower) ||
