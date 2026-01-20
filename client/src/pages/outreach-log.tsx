@@ -216,9 +216,14 @@ function ManualEntryModal({
     }
     const submissionData = {
       ...formData,
-      dateSent: new Date(formData.dateSent),
+      dateSent: new Date(formData.dateSent).toISOString(),
+      responseDate: null,
+      responded: false,
+      positiveResponse: false,
+      meetingBooked: false,
+      converted: false,
     };
-    createMutation.mutate(submissionData as InsertOutreachAttempt);
+    createMutation.mutate(submissionData as unknown as InsertOutreachAttempt);
   };
 
   const sortedContacts = [...contacts].sort((a, b) => {
@@ -420,7 +425,7 @@ function EditEntryModal({
       responseDate: formData.responseDate ? new Date(formData.responseDate).toISOString() : null,
     };
     
-    updateMutation.mutate(submissionData);
+    updateMutation.mutate(submissionData as unknown as Partial<OutreachAttempt>);
   };
 
   const sortedContacts = [...contacts].sort((a, b) => {
