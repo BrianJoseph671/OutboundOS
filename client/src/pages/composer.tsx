@@ -29,7 +29,10 @@ import {
   MessageSquare,
   Clock,
   Sparkles,
+  Loader2,
+  RotateCw,
 } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import type { Contact, Settings, Experiment, InsertOutreachAttempt, OutreachType, OutreachGoal, ToneOption, LengthOption } from "@shared/schema";
 
 interface ComposerState {
@@ -282,6 +285,10 @@ export default function Composer() {
   });
 
   const [variants, setVariants] = useState<GeneratedVariant[]>([]);
+  
+  // AI generation state
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generationError, setGenerationError] = useState("");
 
   const { data: contacts = [] } = useQuery<Contact[]>({ queryKey: ["/api/contacts"] });
   const { data: settings } = useQuery<Settings>({ queryKey: ["/api/settings"] });
@@ -330,6 +337,88 @@ export default function Composer() {
     toast({ title: "Variants regenerated" });
   };
 
+  const handleGenerateAI = async () => {
+    if (!selectedContact) {
+      toast({ title: "Please select a contact first", variant: "destructive" });
+      return;
+    }
+    
+    if (!state.goal || !state.channel || !state.cta) {
+      toast({ title: "Please fill in Goal, Channel, and CTA fields", variant: "destructive" });
+      return;
+    }
+
+    setIsGenerating(true);
+    setGenerationError("");
+
+    try {
+      const response = await fetch("https://n8n.srv1096794.hstgr.cloud/webhook/generate-outreach", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contactName: selectedContact.name,
+          contactTitle: selectedContact.role || "",
+          contactCompany: selectedContact.company || "",
+          contactLinkedIn: selectedContact.linkedinUrl || "",
+          contactNotes: selectedContact.notes || "",
+          outreachGoal: state.goal,
+          channel: state.channel,
+          personalizationSource: state.personalizationSource || "",
+          tone: state.tone || "professional",
+          length: state.length || "medium",
+          cta: state.cta,
+          timeframe: state.timeframe || "",
+          campaign: state.campaign || ""
+        }),
+        signal: AbortSignal.timeout(60000)
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      // Validate response has message
+      if (!result.message) {
+        throw new Error("No message returned from AI");
+      }
+
+      // Create a variant from AI response
+      const aiVariant: GeneratedVariant = {
+        label: "AI",
+        subject: result.subject || undefined,
+        body: result.message,
+      };
+      setVariants([aiVariant]);
+
+      // Warning for connection requests that are too long
+      if (state.channel === "linkedin_connect_request" && result.characterCount > 300) {
+        toast({
+          title: "Message too long for connection request",
+          description: `${result.characterCount} characters (max 300). Please edit.`,
+          variant: "destructive"
+        });
+      } else {
+        toast({
+          title: "Message generated successfully!",
+          description: `${result.wordCount} words, ${result.personalizationScore} personalization`,
+        });
+      }
+
+    } catch (error: any) {
+      console.error("Generation failed:", error);
+      setGenerationError(error.message || "Unknown error");
+      toast({
+        title: "Failed to generate message",
+        description: "Please try again or write manually",
+        variant: "destructive"
+      });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   const handleCopy = async (variant: GeneratedVariant) => {
     const text = variant.subject
       ? `Subject: ${variant.subject}\n\n${variant.body}`
@@ -357,6 +446,8 @@ export default function Composer() {
       subject: variant.subject || null,
       experimentId: state.experimentId || null,
       experimentVariant: state.experimentId ? variant.label : null,
+      dateSent: new Date(),
+      responseDate: null,
       responded: false,
       positiveResponse: false,
       meetingBooked: false,
@@ -596,44 +687,94 @@ export default function Composer() {
 
           {currentStep === 4 && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-medium">Generated Variants</h3>
-                <Button variant="outline" onClick={handleRegenerate} data-testid="button-regenerate">
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                  Regenerate
+              {/* AI Generation Button */}
+              <div className="space-y-4">
+                <Button
+                  type="button"
+                  onClick={handleGenerateAI}
+                  disabled={isGenerating || !selectedContact}
+                  className="w-full"
+                  size="lg"
+                  data-testid="button-generate-ai"
+                >
+                  {isGenerating ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Generating AI Message...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4 mr-2" />
+                      Generate Message with AI
+                    </>
+                  )}
                 </Button>
+
+                {generationError && (
+                  <Alert variant="destructive">
+                    <AlertDescription>{generationError}</AlertDescription>
+                  </Alert>
+                )}
               </div>
 
-              {variants.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground">
-                  <Sparkles className="w-12 h-12 mx-auto mb-4" />
-                  <p>Click Generate to create message variants</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {variants.map((variant, idx) => (
-                    <div key={variant.label} className="space-y-2">
-                      <VariantCard
-                        variant={variant}
-                        onEdit={(body, subject) => handleVariantEdit(idx, body, subject)}
-                        onCopy={() => handleCopy(variant)}
-                        copied={copiedVariant === variant.label}
-                        channel={state.channel}
-                      />
-                      <Button
-                        variant="outline"
-                        className="w-full"
-                        onClick={() => handleLogOutreach(variant)}
-                        disabled={logMutation.isPending}
-                        data-testid={`button-log-variant-${variant.label}`}
-                      >
-                        <Send className="w-4 h-4 mr-2" />
-                        Log Outreach
-                      </Button>
-                    </div>
-                  ))}
+              {/* Divider */}
+              {variants.length === 0 && (
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-background px-2 text-muted-foreground">or use template variants</span>
+                  </div>
                 </div>
               )}
+
+              {/* Template Variants Section */}
+              <div className="space-y-4">
+                {variants.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Button variant="outline" onClick={handleGenerate} data-testid="button-generate-templates">
+                      <RefreshCw className="w-4 h-4 mr-2" />
+                      Generate Template Variants
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-medium">
+                        {variants.length === 1 && variants[0].label === "AI" ? "AI Generated Message" : "Generated Variants"}
+                      </h3>
+                      <Button variant="outline" onClick={handleRegenerate} data-testid="button-regenerate">
+                        <RefreshCw className="w-4 h-4 mr-2" />
+                        Regenerate Templates
+                      </Button>
+                    </div>
+                    <div className={`grid gap-4 ${variants.length === 1 ? 'grid-cols-1 max-w-xl mx-auto' : 'grid-cols-1 md:grid-cols-3'}`}>
+                      {variants.map((variant, idx) => (
+                        <div key={variant.label} className="space-y-2">
+                          <VariantCard
+                            variant={variant}
+                            onEdit={(body, subject) => handleVariantEdit(idx, body, subject)}
+                            onCopy={() => handleCopy(variant)}
+                            copied={copiedVariant === variant.label}
+                            channel={state.channel}
+                          />
+                          <Button
+                            variant="outline"
+                            className="w-full"
+                            onClick={() => handleLogOutreach(variant)}
+                            disabled={logMutation.isPending}
+                            data-testid={`button-log-variant-${variant.label}`}
+                          >
+                            <Send className="w-4 h-4 mr-2" />
+                            Log Outreach
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           )}
 
