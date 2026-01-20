@@ -352,7 +352,7 @@ export default function Composer() {
     setGenerationError("");
 
     try {
-      const response = await fetch("https://n8n.srv1096794.hstgr.cloud/webhook/generate-outreach", {
+      const response = await fetch("/api/generate-outreach", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
