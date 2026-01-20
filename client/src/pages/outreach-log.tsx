@@ -185,6 +185,7 @@ function ManualEntryModal({
     notes: "",
     dateSent: new Date().toISOString().split('T')[0],
     followUpSent: false,
+    respondedAfterFollowup: false,
   });
 
   const createMutation = useMutation({
@@ -375,6 +376,18 @@ function ManualEntryModal({
             <Label htmlFor="manual-follow-up">Flag as follow-up outreach</Label>
           </div>
 
+          {formData.followUpSent && (
+            <div className="flex items-center space-x-2 ml-6">
+              <Checkbox
+                id="manual-responded-after"
+                checked={formData.respondedAfterFollowup}
+                onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, respondedAfterFollowup: checked === true }))}
+                data-testid="checkbox-manual-responded-after"
+              />
+              <Label htmlFor="manual-responded-after">Responded after this follow-up</Label>
+            </div>
+          )}
+
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
@@ -411,6 +424,7 @@ function EditEntryModal({
     dateSent: attempt.dateSent ? new Date(attempt.dateSent).toISOString().split('T')[0] : "",
     responseDate: attempt.responseDate ? new Date(attempt.responseDate).toISOString().split('T')[0] : "",
     followUpSent: attempt.followUpSent || false,
+    respondedAfterFollowup: attempt.respondedAfterFollowup || false,
   });
 
   const updateMutation = useMutation({
@@ -595,6 +609,18 @@ function EditEntryModal({
             />
             <Label htmlFor="edit-follow-up">Flag as follow-up outreach</Label>
           </div>
+
+          {formData.followUpSent && (
+            <div className="flex items-center space-x-2 ml-6">
+              <Checkbox
+                id="edit-responded-after"
+                checked={formData.respondedAfterFollowup}
+                onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, respondedAfterFollowup: checked === true }))}
+                data-testid="checkbox-edit-responded-after"
+              />
+              <Label htmlFor="edit-responded-after">Responded after this follow-up</Label>
+            </div>
+          )}
 
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

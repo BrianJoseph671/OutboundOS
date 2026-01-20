@@ -445,10 +445,10 @@ export default function Dashboard() {
     percentage: totalResponses > 0 ? (bucket.count / totalResponses) * 100 : 0,
   }));
 
-  // Follow-up Conversion - only count respondedAfterFollowup where followUpSent is true
+  // Follow-up Conversion - count responses on attempts flagged as follow-ups
   const followUpSentCount = filteredAttempts.filter((a) => a.followUpSent).length;
   const respondedAfterFollowupCount = filteredAttempts.filter(
-    (a) => a.followUpSent && a.respondedAfterFollowup
+    (a) => a.followUpSent && a.responded
   ).length;
 
   const resetFilters = () => {
