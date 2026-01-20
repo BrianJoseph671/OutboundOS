@@ -371,7 +371,8 @@ export default function Composer() {
           cta: state.cta,
           timeframe: state.timeframe || "",
           campaign: state.campaign || "",
-          relationshipType: state.relationshipType
+          relationshipType: state.relationshipType,
+          leadTemperature: state.relationshipType === "cold" ? "Cold" : state.relationshipType === "warm" ? "Warm" : "Hot"
         }),
         signal: AbortSignal.timeout(60000)
       });
