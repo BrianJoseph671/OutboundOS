@@ -585,7 +585,11 @@ export default function Composer() {
                   onValueChange={(v) => setState((s) => ({ ...s, relationshipType: v as any }))}
                 >
                   <SelectTrigger data-testid="select-composer-relationship">
-                    <SelectValue placeholder="Select relationship strength" />
+                    <SelectValue>
+                      {state.relationshipType === "cold" && "Cold"}
+                      {state.relationshipType === "warm" && "Warm"}
+                      {state.relationshipType === "hot" && "Hot"}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="cold">
