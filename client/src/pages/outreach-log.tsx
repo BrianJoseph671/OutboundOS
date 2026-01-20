@@ -141,6 +141,7 @@ function AttemptDetailModal({
           <div>
             <Label className="text-xs text-muted-foreground">Outcomes</Label>
             <div className="flex items-center gap-2 mt-2 flex-wrap">
+              {attempt.followUpSent && <Badge variant="outline" className="border-chart-4 text-chart-4">Follow-up</Badge>}
               {attempt.responded && <Badge variant="secondary">Responded</Badge>}
               {attempt.positiveResponse && <Badge className="bg-chart-2">Positive</Badge>}
               {attempt.meetingBooked && <Badge className="bg-chart-3">Meeting Booked</Badge>}
@@ -183,6 +184,7 @@ function ManualEntryModal({
     subject: "",
     notes: "",
     dateSent: new Date().toISOString().split('T')[0],
+    followUpSent: false,
   });
 
   const createMutation = useMutation({
@@ -200,6 +202,7 @@ function ManualEntryModal({
         subject: "",
         notes: "",
         dateSent: new Date().toISOString().split('T')[0],
+        followUpSent: false,
       });
       onSuccess();
     },
@@ -362,6 +365,16 @@ function ManualEntryModal({
             />
           </div>
 
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="manual-follow-up"
+              checked={formData.followUpSent}
+              onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, followUpSent: checked === true }))}
+              data-testid="checkbox-manual-follow-up"
+            />
+            <Label htmlFor="manual-follow-up">Flag as follow-up outreach</Label>
+          </div>
+
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
@@ -397,6 +410,7 @@ function EditEntryModal({
     notes: attempt.notes || "",
     dateSent: attempt.dateSent ? new Date(attempt.dateSent).toISOString().split('T')[0] : "",
     responseDate: attempt.responseDate ? new Date(attempt.responseDate).toISOString().split('T')[0] : "",
+    followUpSent: attempt.followUpSent || false,
   });
 
   const updateMutation = useMutation({
@@ -570,6 +584,16 @@ function EditEntryModal({
               rows={2}
               data-testid="textarea-edit-notes"
             />
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="edit-follow-up"
+              checked={formData.followUpSent}
+              onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, followUpSent: checked === true }))}
+              data-testid="checkbox-edit-follow-up"
+            />
+            <Label htmlFor="edit-follow-up">Flag as follow-up outreach</Label>
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
