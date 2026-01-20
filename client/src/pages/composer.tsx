@@ -39,6 +39,7 @@ interface ComposerState {
   contactId: string;
   goal: OutreachGoal | "";
   channel: OutreachType | "";
+  relationshipType: "cold" | "warm" | "hot";
   personalizationSource: string;
   personalizationHook: string;
   valueHypothesis: string;
@@ -272,6 +273,7 @@ export default function Composer() {
     contactId: "",
     goal: "",
     channel: "",
+    relationshipType: "cold",
     personalizationSource: "",
     personalizationHook: "",
     valueHypothesis: "",
@@ -368,7 +370,8 @@ export default function Composer() {
           length: state.length || "medium",
           cta: state.cta,
           timeframe: state.timeframe || "",
-          campaign: state.campaign || ""
+          campaign: state.campaign || "",
+          relationshipType: state.relationshipType
         }),
         signal: AbortSignal.timeout(60000)
       });
@@ -440,6 +443,7 @@ export default function Composer() {
     logMutation.mutate({
       contactId: state.contactId,
       outreachType: state.channel,
+      relationshipType: state.relationshipType,
       campaign: state.campaign || null,
       messageVariantLabel: variant.label,
       messageBody: variant.body,
@@ -572,6 +576,38 @@ export default function Composer() {
                     Max {settings?.connectionRequestCharLimit || 300} characters
                   </p>
                 )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="relationshipType">Relationship Strength</Label>
+                <Select
+                  value={state.relationshipType}
+                  onValueChange={(v) => setState((s) => ({ ...s, relationshipType: v as any }))}
+                >
+                  <SelectTrigger data-testid="select-composer-relationship">
+                    <SelectValue placeholder="Select relationship strength" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cold">
+                      <div className="flex flex-col">
+                        <span>Cold</span>
+                        <span className="text-[10px] text-muted-foreground font-normal">First time / no intros</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="warm">
+                      <div className="flex flex-col">
+                        <span>Warm</span>
+                        <span className="text-[10px] text-muted-foreground font-normal">Alumni, school connection, or spoken once</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="hot">
+                      <div className="flex flex-col">
+                        <span>Hot</span>
+                        <span className="text-[10px] text-muted-foreground font-normal">Converted / spoken twice+</span>
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-2">

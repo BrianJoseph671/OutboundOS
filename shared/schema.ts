@@ -31,6 +31,7 @@ export const outreachAttempts = pgTable("outreach_attempts", {
   contactId: varchar("contact_id").notNull(),
   dateSent: timestamp("date_sent").notNull().defaultNow(),
   outreachType: text("outreach_type").notNull(),
+  relationshipType: text("relationship_type").default("cold"),
   campaign: text("campaign"),
   messageVariantLabel: text("message_variant_label"),
   messageBody: text("message_body").notNull(),
