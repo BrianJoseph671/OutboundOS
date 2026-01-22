@@ -342,9 +342,6 @@ function TimeSavedCard({ researchCount }: { researchCount: number }) {
             <p className="text-3xl font-bold mt-1" data-testid="metric-time-saved">
               ~{hoursSaved} hours
             </p>
-            <p className="text-xs text-muted-foreground mt-2">
-              vs manual research
-            </p>
           </div>
           <div className="w-12 h-12 rounded-md bg-muted flex items-center justify-center flex-shrink-0">
             <Clock className="w-6 h-6 text-muted-foreground" />
