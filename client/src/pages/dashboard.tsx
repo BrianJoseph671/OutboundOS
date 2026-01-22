@@ -64,8 +64,8 @@ function MetricCard({
     <Card>
       <CardContent className="p-6">
         <div className="flex items-center justify-between gap-4">
-          <div>
-            <p className="text-sm text-muted-foreground">{title}</p>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm text-muted-foreground truncate">{title}</p>
             <p className="text-3xl font-bold mt-1" data-testid={`metric-${title.toLowerCase().replace(/\s/g, "-")}`}>
               {value.toLocaleString()}
             </p>
@@ -76,7 +76,7 @@ function MetricCard({
               </div>
             )}
           </div>
-          <div className="w-12 h-12 rounded-md bg-muted flex items-center justify-center">
+          <div className="w-12 h-12 rounded-md bg-muted flex items-center justify-center flex-shrink-0">
             <Icon className="w-6 h-6 text-muted-foreground" />
           </div>
         </div>
@@ -315,18 +315,13 @@ function FollowUpConversionCard({
     <Card data-testid="card-followup-conversion">
       <CardContent className="p-6">
         <div className="flex items-center justify-between gap-4">
-          <div>
-            <p className="text-sm text-muted-foreground">Follow-up Conversion Rate</p>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm text-muted-foreground truncate">Follow-up Conversion Rate</p>
             <p className="text-3xl font-bold mt-1" data-testid="metric-follow-up-conversion-rate">
               {conversionRate}%
             </p>
-            <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
-              <span data-testid="text-followup-responded">{respondedAfterFollowup} responded</span>
-              <span>/</span>
-              <span data-testid="text-followup-sent">{followUpSent} follow-ups sent</span>
-            </div>
           </div>
-          <div className="w-12 h-12 rounded-md bg-muted flex items-center justify-center">
+          <div className="w-12 h-12 rounded-md bg-muted flex items-center justify-center flex-shrink-0">
             <RefreshCw className="w-6 h-6 text-muted-foreground" />
           </div>
         </div>
@@ -342,8 +337,8 @@ function TimeSavedCard({ researchCount }: { researchCount: number }) {
     <Card data-testid="card-time-saved">
       <CardContent className="p-6">
         <div className="flex items-center justify-between gap-4">
-          <div>
-            <p className="text-sm text-muted-foreground">Time Saved</p>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm text-muted-foreground truncate">Time Saved</p>
             <p className="text-3xl font-bold mt-1" data-testid="metric-time-saved">
               ~{hoursSaved} hours
             </p>
@@ -351,7 +346,7 @@ function TimeSavedCard({ researchCount }: { researchCount: number }) {
               vs manual research
             </p>
           </div>
-          <div className="w-12 h-12 rounded-md bg-muted flex items-center justify-center">
+          <div className="w-12 h-12 rounded-md bg-muted flex items-center justify-center flex-shrink-0">
             <Clock className="w-6 h-6 text-muted-foreground" />
           </div>
         </div>
