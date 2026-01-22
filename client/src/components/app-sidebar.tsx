@@ -21,7 +21,6 @@ import {
 
 const menuItems = [
   { title: "Contacts", url: "/contacts", icon: Users },
-  { title: "Composer", url: "/composer", icon: PenTool },
   { title: "Prospect Research", url: "/prospect-research", icon: FlaskConical },
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Outreach Log", url: "/outreach-log", icon: FileText },
