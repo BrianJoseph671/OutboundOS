@@ -10,9 +10,9 @@ import { Search, Loader2, Copy, Check, User, Building2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 
 interface ResearchResponse {
-  output: {
+  output: Array<{
     content: Array<{ text: string }>;
-  };
+  }>;
 }
 
 export default function ProspectResearch() {
@@ -28,9 +28,13 @@ export default function ProspectResearch() {
       return response.json() as Promise<ResearchResponse>;
     },
     onSuccess: (data) => {
-      const text = data?.output?.content?.[0]?.text || "";
+      const text = data?.output?.[0]?.content?.[0]?.text || "";
       setResearchResult(text);
-      toast({ title: "Research complete" });
+      if (text) {
+        toast({ title: "Research complete" });
+      } else {
+        toast({ title: "No results found", variant: "destructive" });
+      }
     },
     onError: () => {
       toast({ title: "Research failed", description: "Please try again", variant: "destructive" });
