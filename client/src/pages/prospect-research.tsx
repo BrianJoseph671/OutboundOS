@@ -6,8 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Search, Loader2, Copy, Check, User, Building2, Trash2 } from "lucide-react";
+import { Search, Loader2, Copy, Check, User, Building2, Trash2, Sparkles } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+
+interface ParsedSection {
+  title: string;
+  content: string;
+  isDraftMessage: boolean;
+}
 
 interface ResearchResponse {
   output: Array<{
@@ -95,6 +101,21 @@ export default function ProspectResearch() {
         .trim();
     }
     return "";
+  };
+
+  const parseResearchSections = (markdown: string): ParsedSection[] => {
+    const sections: ParsedSection[] = [];
+    const sectionRegex = /##\s*([^\n]+)\n([\s\S]*?)(?=##\s|$)/g;
+    let match;
+    
+    while ((match = sectionRegex.exec(markdown)) !== null) {
+      const title = match[1].trim();
+      const content = match[2].trim();
+      const isDraftMessage = title.toLowerCase().includes("draft message");
+      sections.push({ title, content, isDraftMessage });
+    }
+    
+    return sections;
   };
 
   const copyDraftMessage = async () => {
@@ -197,81 +218,104 @@ export default function ProspectResearch() {
       </Card>
 
       {researchMutation.isPending && (
-        <Card>
-          <CardContent className="py-12">
-            <div className="flex flex-col items-center justify-center gap-4">
-              <Loader2 className="w-12 h-12 animate-spin text-primary" />
-              <div className="text-center">
-                <p className="font-medium">Researching {personName} at {company}...</p>
-                <p className="text-sm text-muted-foreground">This typically takes 15-30 seconds</p>
+        <div className="flex items-center justify-center py-12 animate-in fade-in duration-500">
+          <Card className="w-full max-w-md border-muted/50">
+            <CardContent className="py-12 px-8">
+              <div className="flex flex-col items-center justify-center gap-6">
+                <div className="relative">
+                  <div className="absolute inset-0 rounded-full bg-primary/20 blur-xl animate-pulse" />
+                  <div className="relative w-16 h-16 rounded-full bg-muted flex items-center justify-center">
+                    <Sparkles className="w-8 h-8 text-primary animate-pulse" />
+                  </div>
+                </div>
+                <div className="text-center space-y-2">
+                  <p className="text-lg font-semibold">
+                    Researching {personName} at {company}...
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    This typically takes 15-30 seconds
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span className="text-xs">Gathering insights</span>
+                </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {researchResult && !researchMutation.isPending && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Research Results</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="prose prose-sm dark:prose-invert max-w-none">
-              <ReactMarkdown
-                components={{
-                  h2: ({ children }) => {
-                    const isDraftMessage = String(children).toLowerCase().includes("draft message");
-                    return (
-                      <div className="flex items-center justify-between gap-4 mt-6 mb-3 pb-2 border-b first:mt-0">
-                        <h2 className="text-lg font-semibold m-0">
-                          {children}
-                        </h2>
-                        {isDraftMessage && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            data-testid="button-copy-draft-inline"
-                            onClick={copyDraftMessage}
-                            className="h-8"
-                          >
-                            {copied ? (
-                              <>
-                                <Check className="w-3 h-3 mr-2" />
-                                Copied
-                              </>
-                            ) : (
-                              <>
-                                <Copy className="w-3 h-3 mr-2" />
-                                Copy
-                              </>
-                            )}
-                          </Button>
-                        )}
-                      </div>
-                    );
-                  },
-                  h3: ({ children }) => (
-                    <h3 className="text-base font-medium mt-4 mb-2">{children}</h3>
-                  ),
-                  p: ({ children }) => (
-                    <p className="text-sm text-foreground mb-3 leading-relaxed">{children}</p>
-                  ),
-                  ul: ({ children }) => (
-                    <ul className="list-disc pl-5 mb-3 space-y-1">{children}</ul>
-                  ),
-                  li: ({ children }) => (
-                    <li className="text-sm text-foreground">{children}</li>
-                  ),
-                  strong: ({ children }) => (
-                    <strong className="font-semibold text-foreground">{children}</strong>
-                  ),
-                }}
-              >
-                {researchResult}
-              </ReactMarkdown>
+        <div className="space-y-4 animate-in fade-in duration-500">
+          <h2 className="text-xl font-semibold">Research Results</h2>
+          
+          {parseResearchSections(researchResult).map((section, index) => (
+            <div
+              key={index}
+              data-testid={`section-${section.title.toLowerCase().replace(/\s+/g, "-")}`}
+              className={`rounded-lg p-5 ${
+                section.isDraftMessage
+                  ? "bg-primary/5 border border-primary/20"
+                  : "bg-muted/30"
+              }`}
+            >
+              <div className="flex items-start justify-between gap-4 mb-4">
+                <h3 className={`font-semibold ${section.isDraftMessage ? "text-lg" : "text-base"}`}>
+                  {section.title}
+                </h3>
+                {section.isDraftMessage && (
+                  <Button
+                    variant="default"
+                    size="sm"
+                    data-testid="button-copy-draft"
+                    onClick={copyDraftMessage}
+                  >
+                    {copied ? (
+                      <>
+                        <Check className="w-4 h-4 mr-2" />
+                        Copied
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-4 h-4 mr-2" />
+                        Copy Message
+                      </>
+                    )}
+                  </Button>
+                )}
+              </div>
+              
+              <div className={`prose prose-sm dark:prose-invert max-w-none ${
+                section.isDraftMessage ? "text-base leading-relaxed" : ""
+              }`}>
+                <ReactMarkdown
+                  components={{
+                    h3: ({ children }) => (
+                      <h4 className="text-sm font-medium mt-3 mb-2">{children}</h4>
+                    ),
+                    p: ({ children }) => (
+                      <p className={`text-foreground mb-3 leading-relaxed ${
+                        section.isDraftMessage ? "text-base" : "text-sm"
+                      }`}>{children}</p>
+                    ),
+                    ul: ({ children }) => (
+                      <ul className="list-disc pl-5 mb-3 space-y-1">{children}</ul>
+                    ),
+                    li: ({ children }) => (
+                      <li className="text-sm text-foreground">{children}</li>
+                    ),
+                    strong: ({ children }) => (
+                      <strong className="font-semibold text-foreground">{children}</strong>
+                    ),
+                  }}
+                >
+                  {section.content}
+                </ReactMarkdown>
+              </div>
             </div>
-          </CardContent>
-        </Card>
+          ))}
+        </div>
       )}
     </div>
   );
