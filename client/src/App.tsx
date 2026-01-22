@@ -10,6 +10,7 @@ import Dashboard from "@/pages/dashboard";
 import Contacts from "@/pages/contacts";
 import Composer from "@/pages/composer";
 import OutreachLog from "@/pages/outreach-log";
+import ProspectResearch from "@/pages/prospect-research";
 import Settings from "@/pages/settings";
 import NotFound from "@/pages/not-found";
 
@@ -20,6 +21,7 @@ function Router() {
       <Route path="/contacts" component={Contacts} />
       <Route path="/composer" component={Composer} />
       <Route path="/outreach-log" component={OutreachLog} />
+      <Route path="/prospect-research" component={ProspectResearch} />
       <Route path="/settings" component={Settings} />
       <Route component={NotFound} />
     </Switch>

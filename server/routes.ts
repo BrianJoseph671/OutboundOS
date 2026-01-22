@@ -912,6 +912,32 @@ export async function registerRoutes(
       res.status(500).json({ error: error.message || "Failed to generate outreach" });
     }
   });
+  // Proxy endpoint for n8n prospect research workflow
+  app.post("/api/prospect-research", async (req, res) => {
+    try {
+      const { personName, company } = req.body;
 
+      if (!personName || !company) {
+        return res.status(400).json({ error: "personName and company are required" });
+      }
+
+      const response = await fetch("https://n8n.srv1096794.hstgr.cloud/webhook/prospect-research", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ personName, company }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        return res.status(response.status).json({ error: errorText || `HTTP ${response.status}` });
+      }
+
+      const result = await response.json();
+      res.json(result);
+    } catch (error: any) {
+      console.error("Prospect research webhook error:", error);
+      res.status(500).json({ error: error.message || "Failed to research prospect" });
+    }
+  });
   return httpServer;
 }
