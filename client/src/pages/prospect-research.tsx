@@ -212,36 +212,44 @@ export default function ProspectResearch() {
 
       {researchResult && !researchMutation.isPending && (
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between gap-4">
+          <CardHeader>
             <CardTitle>Research Results</CardTitle>
-            <Button
-              variant="outline"
-              size="sm"
-              data-testid="button-copy-draft"
-              onClick={copyDraftMessage}
-            >
-              {copied ? (
-                <>
-                  <Check className="w-4 h-4 mr-2" />
-                  Copied
-                </>
-              ) : (
-                <>
-                  <Copy className="w-4 h-4 mr-2" />
-                  Copy Draft Message
-                </>
-              )}
-            </Button>
           </CardHeader>
           <CardContent>
             <div className="prose prose-sm dark:prose-invert max-w-none">
               <ReactMarkdown
                 components={{
-                  h2: ({ children }) => (
-                    <h2 className="text-lg font-semibold mt-6 mb-3 pb-2 border-b first:mt-0">
-                      {children}
-                    </h2>
-                  ),
+                  h2: ({ children }) => {
+                    const isDraftMessage = String(children).toLowerCase().includes("draft message");
+                    return (
+                      <div className="flex items-center justify-between gap-4 mt-6 mb-3 pb-2 border-b first:mt-0">
+                        <h2 className="text-lg font-semibold m-0">
+                          {children}
+                        </h2>
+                        {isDraftMessage && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            data-testid="button-copy-draft-inline"
+                            onClick={copyDraftMessage}
+                            className="h-8"
+                          >
+                            {copied ? (
+                              <>
+                                <Check className="w-3 h-3 mr-2" />
+                                Copied
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3 h-3 mr-2" />
+                                Copy
+                              </>
+                            )}
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  },
                   h3: ({ children }) => (
                     <h3 className="text-base font-medium mt-4 mb-2">{children}</h3>
                   ),
