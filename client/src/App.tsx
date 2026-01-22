@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -6,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { ProfileSetup, getStoredProfile, type UserProfile } from "@/components/profile-setup";
 import Dashboard from "@/pages/dashboard";
 import Contacts from "@/pages/contacts";
 import Composer from "@/pages/composer";
@@ -29,10 +31,27 @@ function Router() {
 }
 
 function App() {
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(() => getStoredProfile());
+
   const style = {
     "--sidebar-width": "15rem",
     "--sidebar-width-icon": "3rem",
   };
+
+  const handleProfileComplete = (profile: UserProfile) => {
+    setUserProfile(profile);
+  };
+
+  if (!userProfile) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <ProfileSetup onComplete={handleProfileComplete} />
+          <Toaster />
+        </TooltipProvider>
+      </QueryClientProvider>
+    );
+  }
 
   return (
     <QueryClientProvider client={queryClient}>

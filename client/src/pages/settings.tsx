@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -21,12 +22,18 @@ import {
   Save,
   RotateCcw,
   Download,
+  User,
+  Briefcase,
+  Trash2,
+  RefreshCw,
 } from "lucide-react";
 import type { Settings as SettingsType } from "@shared/schema";
 import { format } from "date-fns";
+import { getStoredProfile, clearStoredProfile, type UserProfile } from "@/components/profile-setup";
 
 export default function Settings() {
   const { toast } = useToast();
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(() => getStoredProfile());
 
   const { data: settings, isLoading } = useQuery<SettingsType>({
     queryKey: ["/api/settings"],
@@ -295,6 +302,87 @@ export default function Settings() {
               Export CSV
             </Button>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <User className="w-5 h-5" />
+            Your Profile
+          </CardTitle>
+          <CardDescription>
+            Your profile information used for personalizing outreach
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {userProfile ? (
+            <>
+              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <User className="w-4 h-4 text-muted-foreground" />
+                  <span className="font-medium">{userProfile.name}</span>
+                </div>
+                {userProfile.currentRole && (
+                  <div className="flex items-center gap-2">
+                    <Briefcase className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm">
+                      {userProfile.currentRole}
+                      {userProfile.company && ` at ${userProfile.company}`}
+                    </span>
+                  </div>
+                )}
+                {userProfile.skills && userProfile.skills.length > 0 && (
+                  <div className="flex flex-wrap gap-1 pt-1">
+                    {userProfile.skills.slice(0, 5).map((skill, i) => (
+                      <Badge key={i} variant="secondary" className="text-xs">{skill}</Badge>
+                    ))}
+                    {userProfile.skills.length > 5 && (
+                      <Badge variant="outline" className="text-xs">+{userProfile.skills.length - 5} more</Badge>
+                    )}
+                  </div>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    clearStoredProfile();
+                    setUserProfile(null);
+                    toast({ title: "Profile cleared - refresh to set up again" });
+                  }}
+                  className="text-destructive hover:text-destructive"
+                  data-testid="button-clear-profile"
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Clear Profile
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    clearStoredProfile();
+                    window.location.reload();
+                  }}
+                  data-testid="button-redo-profile"
+                >
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Redo Profile Setup
+                </Button>
+              </div>
+            </>
+          ) : (
+            <div className="text-center py-4">
+              <p className="text-muted-foreground mb-3">No profile set up yet</p>
+              <Button
+                onClick={() => window.location.reload()}
+                data-testid="button-setup-profile-settings"
+              >
+                Set Up Profile
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
