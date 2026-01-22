@@ -63,7 +63,7 @@ function MetricCard({
   return (
     <Card>
       <CardContent className="p-6">
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
             <p className="text-sm text-muted-foreground truncate">{title}</p>
             <p className="text-3xl font-bold mt-1" data-testid={`metric-${title.toLowerCase().replace(/\s/g, "-")}`}>
@@ -314,7 +314,7 @@ function FollowUpConversionCard({
   return (
     <Card data-testid="card-followup-conversion">
       <CardContent className="p-6">
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
             <p className="text-sm text-muted-foreground truncate">Follow-up Conversion Rate</p>
             <p className="text-3xl font-bold mt-1" data-testid="metric-follow-up-conversion-rate">
@@ -336,7 +336,7 @@ function TimeSavedCard({ researchCount }: { researchCount: number }) {
   return (
     <Card data-testid="card-time-saved">
       <CardContent className="p-6">
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
             <p className="text-sm text-muted-foreground truncate">Time Saved</p>
             <p className="text-3xl font-bold mt-1" data-testid="metric-time-saved">
