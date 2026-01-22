@@ -15,6 +15,7 @@ import {
   Filter,
   RotateCcw,
   RefreshCw,
+  Clock,
 } from "lucide-react";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -334,6 +335,31 @@ function FollowUpConversionCard({
   );
 }
 
+function TimeSavedCard({ researchCount }: { researchCount: number }) {
+  const hoursSaved = Math.round((researchCount * 45) / 60);
+
+  return (
+    <Card data-testid="card-time-saved">
+      <CardContent className="p-6">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm text-muted-foreground">Time Saved</p>
+            <p className="text-3xl font-bold mt-1" data-testid="metric-time-saved">
+              ~{hoursSaved} hours
+            </p>
+            <p className="text-xs text-muted-foreground mt-2">
+              vs manual research
+            </p>
+          </div>
+          <div className="w-12 h-12 rounded-md bg-muted flex items-center justify-center">
+            <Clock className="w-6 h-6 text-muted-foreground" />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function Dashboard() {
   const [dateRange, setDateRange] = useState("all");
   const [outreachType, setOutreachType] = useState("all");
@@ -451,6 +477,13 @@ export default function Dashboard() {
     (a) => a.followUpSent && a.responded
   ).length;
 
+  // Time Saved calculation based on successful researches
+  // Note: Since we don't have a direct 'researches' table yet, we can estimate based on outreach attempts
+  // that likely had research done, or we could track this specifically.
+  // For now, let's use the total number of unique contacts that have outreach sent as a proxy
+  // for "prospects researched".
+  const uniqueContactsResearched = new Set(filteredAttempts.map(a => a.contactId)).size;
+
   const resetFilters = () => {
     setDateRange("all");
     setOutreachType("all");
@@ -504,7 +537,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
         <MetricCard title="Total Sent" value={metrics.totalSent} icon={Send} />
         <MetricCard title="Meetings Booked" value={metrics.meetingsBooked} icon={Calendar} />
         <MetricCard title="Converted" value={metrics.converted} icon={TrendingUp} />
@@ -512,6 +545,7 @@ export default function Dashboard() {
           followUpSent={followUpSentCount}
           respondedAfterFollowup={respondedAfterFollowupCount}
         />
+        <TimeSavedCard researchCount={uniqueContactsResearched} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
