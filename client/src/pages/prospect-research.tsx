@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Search, Loader2, Copy, Check, User, Building2 } from "lucide-react";
+import { Search, Loader2, Copy, Check, User, Building2, Trash2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 
 interface ResearchResponse {
@@ -17,10 +17,35 @@ interface ResearchResponse {
 
 export default function ProspectResearch() {
   const { toast } = useToast();
-  const [personName, setPersonName] = useState("");
-  const [company, setCompany] = useState("");
-  const [researchResult, setResearchResult] = useState<string | null>(null);
+  
+  // Initialize from localStorage
+  const [personName, setPersonName] = useState(() => 
+    localStorage.getItem("prospect-research-name") || ""
+  );
+  const [company, setCompany] = useState(() => 
+    localStorage.getItem("prospect-research-company") || ""
+  );
+  const [researchResult, setResearchResult] = useState<string | null>(() => 
+    localStorage.getItem("prospect-research-result")
+  );
   const [copied, setCopied] = useState(false);
+
+  // Sync with localStorage
+  useEffect(() => {
+    localStorage.setItem("prospect-research-name", personName);
+  }, [personName]);
+
+  useEffect(() => {
+    localStorage.setItem("prospect-research-company", company);
+  }, [company]);
+
+  useEffect(() => {
+    if (researchResult) {
+      localStorage.setItem("prospect-research-result", researchResult);
+    } else {
+      localStorage.removeItem("prospect-research-result");
+    }
+  }, [researchResult]);
 
   const researchMutation = useMutation({
     mutationFn: async (data: { personName: string; company: string }) => {
@@ -48,6 +73,16 @@ export default function ProspectResearch() {
       return;
     }
     researchMutation.mutate({ personName: personName.trim(), company: company.trim() });
+  };
+
+  const handleClear = () => {
+    setPersonName("");
+    setCompany("");
+    setResearchResult(null);
+    localStorage.removeItem("prospect-research-name");
+    localStorage.removeItem("prospect-research-company");
+    localStorage.removeItem("prospect-research-result");
+    toast({ title: "Research data cleared" });
   };
 
   const extractDraftMessage = (markdown: string): string => {
@@ -81,9 +116,23 @@ export default function ProspectResearch() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Prospect Research</h1>
-        <p className="text-muted-foreground">Get AI-powered research briefs on prospects before reaching out</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Prospect Research</h1>
+          <p className="text-muted-foreground">Get AI-powered research briefs on prospects before reaching out</p>
+        </div>
+        {(personName || company || researchResult) && (
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleClear}
+            className="text-destructive hover:text-destructive"
+            data-testid="button-clear-research"
+          >
+            <Trash2 className="w-4 h-4 mr-2" />
+            Clear Data
+          </Button>
+        )}
       </div>
 
       <Card>
