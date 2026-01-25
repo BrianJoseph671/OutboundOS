@@ -76,8 +76,8 @@ function MetricCard({
               </div>
             )}
           </div>
-          <div className="w-12 h-12 rounded-md bg-muted flex items-center justify-center flex-shrink-0">
-            <Icon className="w-6 h-6 text-muted-foreground" />
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-md bg-muted flex items-center justify-center flex-shrink-0">
+            <Icon className="w-5 h-5 sm:w-6 sm:h-6 text-muted-foreground" />
           </div>
         </div>
       </CardContent>
@@ -321,8 +321,8 @@ function FollowUpConversionCard({
               {conversionRate}%
             </p>
           </div>
-          <div className="w-12 h-12 rounded-md bg-muted flex items-center justify-center flex-shrink-0">
-            <RefreshCw className="w-6 h-6 text-muted-foreground" />
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-md bg-muted flex items-center justify-center flex-shrink-0">
+            <RefreshCw className="w-5 h-5 sm:w-6 sm:h-6 text-muted-foreground" />
           </div>
         </div>
       </CardContent>
@@ -343,8 +343,8 @@ function TimeSavedCard({ researchCount }: { researchCount: number }) {
               ~{hoursSaved} hours
             </p>
           </div>
-          <div className="w-12 h-12 rounded-md bg-muted flex items-center justify-center flex-shrink-0">
-            <Clock className="w-6 h-6 text-muted-foreground" />
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-md bg-muted flex items-center justify-center flex-shrink-0">
+            <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-muted-foreground" />
           </div>
         </div>
       </CardContent>
