@@ -323,84 +323,92 @@ export default function ProspectResearch() {
         <div className="space-y-4 animate-in fade-in duration-500">
           <h2 className="text-xl font-semibold">Research Results</h2>
           
-          {parseResearchSections(researchResult).map((section, index) => (
-            <div
-              key={index}
-              data-testid={`section-${section.title.toLowerCase().replace(/\s+/g, "-")}`}
-              className={`rounded-lg p-5 ${
-                section.isDraftMessage
-                  ? "bg-primary/5 border border-primary/20"
-                  : "bg-muted/30"
-              }`}
-            >
-              <div className="flex items-start justify-between gap-4 mb-4">
-                <h3 className={`font-semibold ${section.isDraftMessage ? "text-lg" : "text-base"}`}>
-                  {section.title}
-                </h3>
-                {section.isDraftMessage && (
-                  <div className="flex flex-col gap-2">
-                    <Button
-                      variant="default"
-                      size="sm"
-                      data-testid="button-copy-draft"
-                      onClick={copyDraftMessage}
-                      className="w-full sm:w-auto"
-                    >
-                      {copied ? (
-                        <>
-                          <Check className="w-4 h-4 mr-2" />
-                          Copied
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-4 h-4 mr-2" />
-                          Copy Message
-                        </>
-                      )}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      data-testid="button-log-outreach"
-                      onClick={handleLogOutreach}
-                      className="w-full sm:w-auto border-primary/30 hover:bg-primary/5"
-                    >
-                      <LogIn className="w-4 h-4 mr-2" />
-                      Log Outreach
-                    </Button>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {parseResearchSections(researchResult).map((section, index) => (
+              <Card
+                key={index}
+                data-testid={`section-${section.title.toLowerCase().replace(/\s+/g, "-")}`}
+                className={`${
+                  section.isDraftMessage
+                    ? "md:col-span-2 bg-primary/5 border-primary/20 shadow-md ring-1 ring-primary/10"
+                    : "bg-muted/30 border-none shadow-none"
+                } transition-all duration-300 hover:shadow-lg hover:shadow-primary/5`}
+              >
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between gap-4">
+                    <CardTitle className={`font-semibold ${section.isDraftMessage ? "text-xl text-primary" : "text-base text-foreground/80"}`}>
+                      {section.title}
+                    </CardTitle>
+                    {section.isDraftMessage && (
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          data-testid="button-copy-draft"
+                          onClick={copyDraftMessage}
+                          className="h-8"
+                        >
+                          {copied ? (
+                            <>
+                              <Check className="w-3.5 h-3.5 mr-1.5" />
+                              Copied
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3.5 h-3.5 mr-1.5" />
+                              Copy
+                            </>
+                          )}
+                        </Button>
+                        <Button
+                          variant="default"
+                          size="sm"
+                          data-testid="button-log-outreach"
+                          onClick={handleLogOutreach}
+                          className="h-8"
+                        >
+                          <LogIn className="w-3.5 h-3.5 mr-1.5" />
+                          Log Outreach
+                        </Button>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-              
-              <div className={`prose prose-sm dark:prose-invert max-w-none ${
-                section.isDraftMessage ? "text-base leading-relaxed" : ""
-              }`}>
-                <ReactMarkdown
-                  components={{
-                    h3: ({ children }) => (
-                      <h4 className="text-sm font-medium mt-3 mb-2">{children}</h4>
-                    ),
-                    p: ({ children }) => (
-                      <p className={`text-foreground mb-3 leading-relaxed ${
-                        section.isDraftMessage ? "text-base" : "text-sm"
-                      }`}>{children}</p>
-                    ),
-                    ul: ({ children }) => (
-                      <ul className="list-disc pl-5 mb-3 space-y-1">{children}</ul>
-                    ),
-                    li: ({ children }) => (
-                      <li className="text-sm text-foreground">{children}</li>
-                    ),
-                    strong: ({ children }) => (
-                      <strong className="font-semibold text-foreground">{children}</strong>
-                    ),
-                  }}
-                >
-                  {section.content}
-                </ReactMarkdown>
-              </div>
-            </div>
-          ))}
+                </CardHeader>
+                <CardContent>
+                  <div className={`prose prose-sm dark:prose-invert max-w-none ${
+                    section.isDraftMessage ? "text-base leading-relaxed" : "text-muted-foreground"
+                  }`}>
+                    <ReactMarkdown
+                      components={{
+                        h3: ({ children }) => (
+                          <h4 className="text-sm font-semibold mt-4 mb-2 text-foreground">{children}</h4>
+                        ),
+                        p: ({ children }) => (
+                          <p className={`mb-3 leading-relaxed ${
+                            section.isDraftMessage ? "text-base text-foreground" : "text-sm"
+                          }`}>{children}</p>
+                        ),
+                        ul: ({ children }) => (
+                          <ul className="list-disc pl-5 mb-4 space-y-1.5 marker:text-primary/50">{children}</ul>
+                        ),
+                        li: ({ children }) => (
+                          <li className={`${section.isDraftMessage ? "text-base" : "text-sm"} text-foreground/90`}>{children}</li>
+                        ),
+                        strong: ({ children }) => (
+                          <strong className="font-bold text-foreground">{children}</strong>
+                        ),
+                        hr: () => (
+                          <hr className="my-4 border-t border-border/50" />
+                        ),
+                      }}
+                    >
+                      {section.content}
+                    </ReactMarkdown>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </div>
       )}
     </div>
