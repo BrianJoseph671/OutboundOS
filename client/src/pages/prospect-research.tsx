@@ -96,47 +96,71 @@ export default function ProspectResearch() {
   const parseResearchSections = (markdown: string): ParsedSection[] => {
     const sections: ParsedSection[] = [];
     
-    // First, try to handle the specific format seen in logs which might use bold headers instead of ##
-    if (!markdown.includes("##")) {
-      const boldHeaders = ["Prospect Snapshot", "Company Snapshot", "Connection Angles", "Conversation Hooks", "Hiring Status", "Draft Message"];
+    // Normalize markdown to help with parsing
+    const normalizedMarkdown = markdown.replace(/\r\n/g, "\n");
+
+    // Comprehensive list of headers to look for
+    const knownHeaders = [
+      "Prospect Snapshot", 
+      "Company Snapshot", 
+      "Connection Angles", 
+      "Conversation Hooks", 
+      "Hiring Status", 
+      "Draft Message"
+    ];
+
+    // Try to split by common markers if ## is missing
+    if (!normalizedMarkdown.includes("##") && !normalizedMarkdown.includes("###")) {
       let lastIndex = 0;
       
-      for (let i = 0; i < boldHeaders.length; i++) {
-        const header = boldHeaders[i];
-        const nextHeader = boldHeaders[i+1];
+      // Create a regex that matches any of the known headers either as "**Header**" or "Header\n"
+      const headerPatterns = knownHeaders.map(h => `(?:\\*\\*${h}\\*\\*|${h})`);
+      
+      for (let i = 0; i < knownHeaders.length; i++) {
+        const header = knownHeaders[i];
+        const nextHeader = knownHeaders[i+1];
         
-        const currentHeaderRegex = new RegExp(`\\*\\*${header}\\*\\*`, "i");
-        const nextHeaderRegex = nextHeader ? new RegExp(`\\*\\*${nextHeader}\\*\\*`, "i") : /$/;
+        // Match the header name specifically
+        const currentHeaderRegex = new RegExp(`(?:\\*\\*${header}\\*\\*|^${header}:?|\\n${header}:?)`, "im");
         
-        const startMatch = markdown.slice(lastIndex).match(currentHeaderRegex);
-        if (startMatch && startMatch.index !== undefined) {
-          const start = lastIndex + startMatch.index;
-          const searchAfterStart = markdown.slice(start + startMatch[0].length);
-          const endMatch = searchAfterStart.match(nextHeaderRegex);
+        const match = normalizedMarkdown.slice(lastIndex).match(currentHeaderRegex);
+        
+        if (match && match.index !== undefined) {
+          const start = lastIndex + match.index;
+          const searchAfterStart = normalizedMarkdown.slice(start + match[0].length);
           
-          const end = endMatch && endMatch.index !== undefined 
-            ? start + startMatch[0].length + endMatch.index
-            : markdown.length;
+          // Find the next header to determine the end of this section
+          let end = normalizedMarkdown.length;
+          if (nextHeader) {
+            const nextHeaderRegex = new RegExp(`(?:\\*\\*${nextHeader}\\*\\*|^${nextHeader}:?|\\n${nextHeader}:?)`, "im");
+            const nextMatch = searchAfterStart.match(nextHeaderRegex);
+            if (nextMatch && nextMatch.index !== undefined) {
+              end = start + match[0].length + nextMatch.index;
+            }
+          }
+          
+          const content = normalizedMarkdown.slice(start + match[0].length, end).trim()
+            .replace(/^[\s\n\-\u2014:]+|[\s\n\-\u2014]+$/g, "");
             
-          const content = markdown.slice(start + startMatch[0].length, end).trim().replace(/^[\s\n\-\u2014]+|[\s\n\-\u2014]+$/g, "");
-          if (content) {
+          if (content || header === "Draft Message") {
             sections.push({
               title: header,
               content: content,
               isDraftMessage: header.toLowerCase().includes("draft message")
             });
           }
-          lastIndex = start + startMatch[0].length;
+          lastIndex = start + match[0].length;
         }
       }
     }
 
-    // If no sections found with bold headers, or it has ## markers, use the standard regex
+    // If no sections found with text headers, or it has markdown markers, use the standard regex
     if (sections.length === 0) {
-      const sectionRegex = /##\s*([^\n]+)\n([\s\S]*?)(?=##\s|$)/g;
+      // Handle both ### and ##
+      const sectionRegex = /(?:###|##)\s*([^\n]+)\n([\s\S]*?)(?=(?:###|##)\s|$)/g;
       let match;
       
-      while ((match = sectionRegex.exec(markdown)) !== null) {
+      while ((match = sectionRegex.exec(normalizedMarkdown)) !== null) {
         const title = match[1].trim();
         const content = match[2].trim();
         const isDraftMessage = title.toLowerCase().includes("draft message");
@@ -144,11 +168,29 @@ export default function ProspectResearch() {
       }
     }
     
-    // Final fallback: if still nothing, just show the whole thing as "Research Result"
-    if (sections.length === 0 && markdown.trim()) {
+    // Final fallback: if still nothing, split by double newlines and try to find headers
+    if (sections.length === 0 && normalizedMarkdown.trim()) {
+      const parts = normalizedMarkdown.split(/\n\n+/);
+      parts.forEach(part => {
+        const lines = part.split("\n");
+        const firstLine = lines[0].replace(/\*\*/g, "").replace(/:$/, "").trim();
+        
+        if (knownHeaders.some(h => firstLine.toLowerCase().includes(h.toLowerCase()))) {
+          const title = knownHeaders.find(h => firstLine.toLowerCase().includes(h.toLowerCase())) || firstLine;
+          sections.push({
+            title: title,
+            content: lines.slice(1).join("\n").trim(),
+            isDraftMessage: title.toLowerCase().includes("draft message")
+          });
+        }
+      });
+    }
+
+    // Absolute fallback
+    if (sections.length === 0 && normalizedMarkdown.trim()) {
       sections.push({
         title: "Research Result",
-        content: markdown.trim(),
+        content: normalizedMarkdown.trim(),
         isDraftMessage: false
       });
     }
@@ -158,16 +200,16 @@ export default function ProspectResearch() {
 
   const extractDraftMessage = (markdown: string): string => {
     // Try bold header first
-    const boldMatch = markdown.match(/\*\*Draft Message\*\*([\s\S]*)$/i);
+    const boldMatch = markdown.match(/(?:\*\*Draft Message\*\*|Draft Message:?)([\s\S]*)$/i);
     if (boldMatch) {
       return boldMatch[1].replace(/\*\*/g, "").trim();
     }
 
-    const draftRegex = /##\s*Draft Message[\s\S]*?(?=##|$)/i;
+    const draftRegex = /(?:###|##)\s*Draft Message[\s\S]*?(?=(?:###|##)|$)/i;
     const match = markdown.match(draftRegex);
     if (match) {
       return match[0]
-        .replace(/##\s*Draft Message\s*/i, "")
+        .replace(/(?:###|##)\s*Draft Message\s*/i, "")
         .replace(/\*\*/g, "")
         .trim();
     }
