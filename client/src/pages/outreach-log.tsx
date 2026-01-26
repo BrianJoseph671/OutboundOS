@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent } from "@/components/ui/card";
@@ -37,6 +37,7 @@ import {
 } from "lucide-react";
 import type { OutreachAttempt, Contact, Experiment, InsertOutreachAttempt } from "@shared/schema";
 import { format } from "date-fns";
+import { useLocation } from "wouter";
 
 const outreachTypeLabels: Record<string, string> = {
   linkedin_connected: "LinkedIn",
@@ -188,6 +189,33 @@ function ManualEntryModal({
     respondedAfterFollowup: false,
   });
 
+  useEffect(() => {
+    if (open) {
+      const draftMessage = localStorage.getItem("composer-draft-message");
+      const contactName = localStorage.getItem("composer-draft-name");
+      const companyName = localStorage.getItem("composer-draft-company");
+
+      if (draftMessage || contactName || companyName) {
+        // Look for matching contact
+        const contact = contacts.find(c => 
+          c.name.toLowerCase() === contactName?.toLowerCase() || 
+          c.company?.toLowerCase() === companyName?.toLowerCase()
+        );
+
+        setFormData(prev => ({
+          ...prev,
+          messageBody: draftMessage || prev.messageBody,
+          contactId: contact?.id || prev.contactId,
+        }));
+
+        // Clear after consumption
+        localStorage.removeItem("composer-draft-message");
+        localStorage.removeItem("composer-draft-name");
+        localStorage.removeItem("composer-draft-company");
+      }
+    }
+  }, [open, contacts]);
+
   const createMutation = useMutation({
     mutationFn: (data: InsertOutreachAttempt) =>
       apiRequest("POST", "/api/outreach-attempts", data),
@@ -204,6 +232,7 @@ function ManualEntryModal({
         notes: "",
         dateSent: new Date().toISOString().split('T')[0],
         followUpSent: false,
+        respondedAfterFollowup: false,
       });
       onSuccess();
     },
@@ -648,6 +677,12 @@ export default function OutreachLog() {
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [showManualEntry, setShowManualEntry] = useState(false);
   const [editingAttempt, setEditingAttempt] = useState<OutreachAttempt | null>(null);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("action") === "new") {
+      setShowManualEntry(true);
+    }
+  }, [location]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
 

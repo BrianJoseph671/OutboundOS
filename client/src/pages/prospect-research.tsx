@@ -143,8 +143,8 @@ export default function ProspectResearch() {
     
     // Store data for the composer/logger
     localStorage.setItem("composer-draft-message", draftMessage);
-    localStorage.setItem("composer-contact-name", personName);
-    localStorage.setItem("composer-contact-company", company);
+    localStorage.setItem("composer-draft-name", personName);
+    localStorage.setItem("composer-draft-company", company);
     
     // Navigate to outreach log to record the attempt
     setLocation("/outreach-log?action=new");
