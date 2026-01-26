@@ -1,12 +1,12 @@
 import { useState, useEffect } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Search, Loader2, Copy, Check, User, Building2, Trash2, Sparkles, LogIn, ExternalLink } from "lucide-react";
+import { Search, Loader2, Copy, Check, User, Building2, Trash2, Sparkles, LogIn, ExternalLink, UserPlus } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { useLocation } from "wouter";
 
@@ -24,6 +24,7 @@ interface ResearchResponse {
 
 export default function ProspectResearch() {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   
   // Initialize from localStorage
   const [personName, setPersonName] = useState(() => 
@@ -72,6 +73,51 @@ export default function ProspectResearch() {
     onError: () => {
       toast({ title: "Research failed", description: "Please try again", variant: "destructive" });
     },
+  });
+
+  const addContactMutation = useMutation({
+    mutationFn: async () => {
+      if (!researchResult) throw new Error("No research data");
+      
+      const sections = parseResearchSections(researchResult);
+      const snapshot = sections.find(s => s.title.includes("Prospect Snapshot"))?.content || "";
+      
+      // Extract details using basic regex from the snapshot
+      const titleMatch = snapshot.match(/Title:\s*([^\n]+)/i);
+      const headlineMatch = snapshot.match(/Headline:\s*([^\n]+)/i);
+      const aboutMatch = snapshot.match(/About:\s*([^\n]+)/i);
+      const locationMatch = snapshot.match(/Location:\s*([^\n]+)/i);
+      const experienceMatch = sections.find(s => s.title.includes("Experience"))?.content || "";
+      const educationMatch = snapshot.match(/Background:\s*([^\n]+)/i);
+      
+      const contactData = {
+        name: personName,
+        company: company,
+        role: titleMatch?.[1]?.trim() || null,
+        headline: headlineMatch?.[1]?.trim() || titleMatch?.[1]?.trim() || null,
+        about: aboutMatch?.[1]?.trim() || null,
+        location: locationMatch?.[1]?.trim() || null,
+        experience: experienceMatch || null,
+        education: educationMatch?.[1]?.trim() || null,
+        tags: "research-import"
+      };
+
+      return apiRequest("POST", "/api/contacts", contactData);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
+      toast({ 
+        title: "Contact added", 
+        description: `${personName} from ${company} has been added to your contacts.` 
+      });
+    },
+    onError: (error) => {
+      toast({ 
+        title: "Failed to add contact", 
+        description: "There was an error adding this prospect to your contacts.",
+        variant: "destructive" 
+      });
+    }
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -310,24 +356,44 @@ export default function ProspectResearch() {
                 />
               </div>
             </div>
-            <Button
-              type="submit"
-              data-testid="button-research"
-              disabled={researchMutation.isPending || !personName.trim() || !company.trim()}
-              className="w-full md:w-auto"
-            >
-              {researchMutation.isPending ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Researching... (15-30 seconds)
-                </>
-              ) : (
-                <>
-                  <Search className="w-4 h-4 mr-2" />
-                  Research
-                </>
+            <div className="flex items-center gap-2">
+              <Button
+                type="submit"
+                data-testid="button-research"
+                disabled={researchMutation.isPending || !personName.trim() || !company.trim()}
+                className="w-full md:w-auto"
+              >
+                {researchMutation.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Researching... (15-30 seconds)
+                  </>
+                ) : (
+                  <>
+                    <Search className="w-4 h-4 mr-2" />
+                    Research
+                  </>
+                )}
+              </Button>
+              
+              {researchResult && !researchMutation.isPending && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  data-testid="button-add-contact-research"
+                  disabled={addContactMutation.isPending}
+                  onClick={() => addContactMutation.mutate()}
+                  className="w-full md:w-auto border-primary/20 hover:bg-primary/5 text-primary"
+                >
+                  {addContactMutation.isPending ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <UserPlus className="w-4 h-4 mr-2" />
+                  )}
+                  Add Contact
+                </Button>
               )}
-            </Button>
+            </div>
           </form>
         </CardContent>
       </Card>
