@@ -17,10 +17,12 @@ import {
   FileText,
   Settings,
   Zap,
+  Upload,
 } from "lucide-react";
 
 const menuItems = [
   { title: "Prospect Research", url: "/prospect-research", icon: FlaskConical },
+  { title: "Import Contacts", url: "/research-setup", icon: Upload },
   { title: "Contacts", url: "/contacts", icon: Users },
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Outreach Log", url: "/outreach-log", icon: FileText },

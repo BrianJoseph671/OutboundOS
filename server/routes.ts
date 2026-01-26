@@ -214,6 +214,136 @@ export async function registerRoutes(
     }
   });
 
+  // Excel/CSV Import - Parse spreadsheet file and return structured data
+  app.post("/api/contacts/import/excel", upload.single("file"), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "No file uploaded" });
+      }
+
+      if (req.file.size > 5 * 1024 * 1024) {
+        return res.status(400).json({ message: "File size must be less than 5MB" });
+      }
+
+      const xlsx = await import("xlsx");
+      const workbook = xlsx.read(req.file.buffer, { type: "buffer" });
+      const sheetName = workbook.SheetNames[0];
+      const sheet = workbook.Sheets[sheetName];
+      const jsonData = xlsx.utils.sheet_to_json(sheet, { header: 1 }) as string[][];
+
+      if (jsonData.length === 0) {
+        return res.status(400).json({ message: "Empty spreadsheet" });
+      }
+
+      const headers = jsonData[0].map(h => String(h || "").trim());
+      const rows = jsonData.slice(1).filter(row => row.some(cell => cell !== null && cell !== undefined && String(cell).trim() !== ""));
+
+      res.json({
+        headers,
+        rows: rows.map(row => headers.map((_, i) => String(row[i] || "").trim())),
+        totalRows: rows.length,
+      });
+    } catch (error) {
+      console.error("[Excel Import] Error:", error);
+      res.status(500).json({ message: "Failed to parse spreadsheet" });
+    }
+  });
+
+  // Airtable Import - Connect to Airtable and fetch records
+  app.post("/api/contacts/import/airtable", async (req, res) => {
+    try {
+      const { baseId, tableName, personalAccessToken, preview } = req.body;
+
+      if (!baseId || !tableName || !personalAccessToken) {
+        return res.status(400).json({ message: "Missing required fields" });
+      }
+
+      const response = await fetch(
+        `https://api.airtable.com/v0/${baseId}/${encodeURIComponent(tableName)}?maxRecords=${preview ? 100 : 1000}`,
+        {
+          headers: {
+            Authorization: `Bearer ${personalAccessToken}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        return res.status(response.status).json({ 
+          message: error.error?.message || "Failed to connect to Airtable" 
+        });
+      }
+
+      const data = await response.json();
+      const records = data.records || [];
+
+      if (records.length === 0) {
+        return res.status(400).json({ message: "No records found in table" });
+      }
+
+      // Extract headers from first record's fields
+      const allFieldNames = new Set<string>();
+      records.forEach((record: any) => {
+        Object.keys(record.fields || {}).forEach(key => allFieldNames.add(key));
+      });
+      const headers = Array.from(allFieldNames);
+
+      // Convert records to rows
+      const rows = records.map((record: any) => 
+        headers.map(header => String(record.fields?.[header] || "").trim())
+      );
+
+      res.json({
+        headers,
+        rows,
+        totalRows: rows.length,
+      });
+    } catch (error) {
+      console.error("[Airtable Import] Error:", error);
+      res.status(500).json({ message: "Failed to connect to Airtable" });
+    }
+  });
+
+  // Bulk Create Contacts - Create multiple contacts at once
+  app.post("/api/contacts/bulk-create", async (req, res) => {
+    try {
+      const { contacts } = req.body;
+
+      if (!Array.isArray(contacts)) {
+        return res.status(400).json({ message: "Expected array of contacts" });
+      }
+
+      let created = 0;
+      const errors: string[] = [];
+
+      for (const contactData of contacts) {
+        try {
+          if (!contactData.name) {
+            errors.push("Missing name for a contact");
+            continue;
+          }
+
+          // Add import tag
+          const dataWithTag = {
+            ...contactData,
+            tags: contactData.tags ? `${contactData.tags},spreadsheet-import` : "spreadsheet-import",
+          };
+
+          const validatedData = insertContactSchema.parse(dataWithTag);
+          await storage.createContact(validatedData);
+          created++;
+        } catch (err) {
+          errors.push(`Failed to create: ${contactData.name || "unknown"}`);
+        }
+      }
+
+      res.json({ created, errors });
+    } catch (error) {
+      console.error("[Bulk Create] Error:", error);
+      res.status(500).json({ message: "Failed to create contacts" });
+    }
+  });
+
   // PDF Parsing - uses Claude API for intelligent extraction
   app.post("/api/parse-pdf", upload.single("file"), async (req, res) => {
     try {

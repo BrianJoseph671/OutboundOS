@@ -12,6 +12,7 @@ import Dashboard from "@/pages/dashboard";
 import Contacts from "@/pages/contacts";
 import OutreachLog from "@/pages/outreach-log";
 import ProspectResearch from "@/pages/prospect-research";
+import ResearchSetup from "@/pages/research-setup";
 import Settings from "@/pages/settings";
 import NotFound from "@/pages/not-found";
 
@@ -22,6 +23,7 @@ function Router() {
       <Route path="/contacts" component={Contacts} />
       <Route path="/outreach-log" component={OutreachLog} />
       <Route path="/prospect-research" component={ProspectResearch} />
+      <Route path="/research-setup" component={ResearchSetup} />
       <Route path="/settings" component={Settings} />
       <Route component={NotFound} />
     </Switch>
@@ -39,8 +41,8 @@ function App() {
 
   const handleProfileComplete = (profile: UserProfile) => {
     setUserProfile(profile);
-    // After onboarding, navigate to prospect research page first
-    setLocation("/prospect-research");
+    // After onboarding, navigate to research setup page
+    setLocation("/research-setup");
   };
 
   if (!userProfile) {

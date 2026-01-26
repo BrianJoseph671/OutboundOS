@@ -1,0 +1,164 @@
+# Replit Prompt: Post-Onboarding Research Setup Page
+
+## Context
+We have an existing Outbound OS app (React/TypeScript frontend, Express backend, PostgreSQL) with user profile onboarding that researches the user via n8n workflow and stores their profile in localStorage.
+
+## Task
+After onboarding completes, redirect users to a new "Research Setup" page where they can choose how to import prospects to research.
+
+## Page Requirements
+
+### Route & Navigation
+- Create new route: `/research-setup`
+- After onboarding completes (user profile stored in localStorage), redirect to this page
+- Add this page to the main app routing
+
+### UI Design
+**Header:**
+- Title: "Who do you want to research?"
+- Subtitle: "Import your prospect list or start adding contacts manually"
+
+**Two Card Options (side-by-side on desktop, stacked on mobile):**
+
+**Option 1: "Start with existing sheet"**
+- Icon: 📊 (spreadsheet icon)
+- Heading: "Import from spreadsheet"
+- Description: "Upload an Excel file or connect your Airtable base"
+- Button: "Import contacts"
+
+**Option 2: "Start from scratch"**
+- Icon: ➕ (plus icon)
+- Heading: "Add contacts manually"
+- Description: "Build your prospect list one contact at a time"
+- Button: "Add first contact"
+
+### Import Modal (triggered by Option 1 button)
+
+**Tabs:**
+1. Excel Upload
+2. Airtable Connection
+
+**Excel Upload Tab:**
+- File upload dropzone (drag & drop or click to browse)
+- Accepted formats: .xlsx, .xls, .csv
+- Shows file preview after upload (first 5 rows in table format)
+- "Expected columns" helper text: Name, Company, Email (optional), LinkedIn URL (optional), Role (optional), Notes (optional)
+- Map columns UI: dropdown to map uploaded columns to expected fields
+- "Import X contacts" button (shows count from file)
+
+**Airtable Connection Tab:**
+- Input field: "Airtable Base ID" (with helper text: "Found in your base URL")
+- Input field: "Airtable Table Name" (with helper text: "e.g., 'Prospects' or 'Contacts'")
+- Input field: "Personal Access Token" (password input with helper text: "Create at airtable.com/create/tokens")
+- "Test connection" button (validates credentials)
+- On success: Shows table preview (first 5 rows)
+- Field mapping UI: map Airtable columns to app fields (Name, Company, Email, LinkedIn URL, Role, Notes)
+- "Import X contacts" button
+- Checkbox: "Keep synced with Airtable" (future feature - just UI for now)
+
+### Backend Requirements
+
+**New API endpoints:**
+
+`POST /api/contacts/import/excel`
+- Accepts: multipart/form-data with Excel file
+- Parses Excel/CSV using a library (suggest: xlsx or papaparse)
+- Returns: array of contacts with mapped fields
+
+`POST /api/contacts/import/airtable`
+- Body: { baseId, tableName, personalAccessToken, fieldMapping }
+- Connects to Airtable API
+- Fetches records from specified table
+- Returns: array of contacts with mapped fields
+
+`POST /api/contacts/bulk-create`
+- Body: array of contacts (from either import method)
+- Creates all contacts in PostgreSQL database
+- Returns: count of created contacts + any errors
+
+### Database Schema (if not already existing)
+
+**contacts table:**
+```sql
+CREATE TABLE contacts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL, -- foreign key to users table
+  name VARCHAR(255) NOT NULL,
+  company VARCHAR(255) NOT NULL,
+  email VARCHAR(255),
+  linkedin_url TEXT,
+  role VARCHAR(255),
+  notes TEXT,
+  status VARCHAR(50) DEFAULT 'not_contacted', -- not_contacted, contacted, replied, booked, dead
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+### Navigation After Import
+- After successful import (either method), redirect to `/contacts` page
+- Show success toast: "X contacts imported successfully"
+- If user selects Option 2 (start from scratch), redirect to `/contacts/new` (add contact form)
+
+### Error Handling
+- Excel upload: validate file format, handle parsing errors, show user-friendly error messages
+- Airtable: handle auth errors, base not found, table not found, rate limits
+- Show validation errors if required fields are missing (Name, Company)
+- Allow partial imports (skip invalid rows, import valid ones, show summary)
+
+### UI Libraries/Components to Use
+- Use existing Shadcn/ui components: Card, Button, Input, Tabs, Dialog/Modal
+- File upload: use Shadcn DropZone or build with react-dropzone
+- Table preview: use Shadcn Table component
+- Use Tailwind for styling (match existing app design)
+
+### Technical Implementation Notes
+
+**Frontend:**
+- Use TanStack Query for API calls (consistent with existing app)
+- Store import state in React state (don't persist until user confirms import)
+- Show loading states during file parsing and API calls
+- Preview data before final import (user can review and cancel)
+
+**Backend:**
+- For Excel parsing: use `xlsx` npm package
+- For Airtable: use official `airtable` npm package or direct API calls with fetch
+- Validate and sanitize all imported data
+- Use database transactions for bulk inserts (all or nothing)
+
+**Security:**
+- Don't store Airtable PAT in database (only use it for the import request)
+- Validate file sizes (max 5MB for Excel uploads)
+- Rate limit import endpoints
+- Sanitize all user input from uploaded files
+
+### Example Column Mapping Flow
+
+User uploads Excel with columns: "Full Name", "Company Name", "Job Title", "Email Address"
+
+App shows mapping UI:
+```
+Full Name → [Name ▼]
+Company Name → [Company ▼]
+Job Title → [Role ▼]
+Email Address → [Email ▼]
+```
+
+User confirms mapping → clicks "Import 47 contacts" → shows progress → redirects to /contacts with success message
+
+## Deliverables
+1. New `/research-setup` page component
+2. Import modal component with Excel and Airtable tabs
+3. Backend API endpoints for both import methods
+4. Database migration for contacts table (if needed)
+5. Updated navigation flow from onboarding → research setup → contacts
+6. Error handling and validation throughout
+
+## Testing
+- Test Excel upload with various formats (.xlsx, .csv)
+- Test Airtable connection with valid and invalid credentials
+- Test column mapping with mismatched columns
+- Test bulk import with 100+ contacts
+- Test error cases (invalid file, auth failure, missing required fields)
+
+Build this iteratively - start with the page layout and Excel upload, then add Airtable integration.
