@@ -6,8 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Search, Loader2, Copy, Check, User, Building2, Trash2, Sparkles } from "lucide-react";
+import { Search, Loader2, Copy, Check, User, Building2, Trash2, Sparkles, LogIn, ExternalLink } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import { useLocation } from "wouter";
 
 interface ParsedSection {
   title: string;
@@ -35,6 +36,7 @@ export default function ProspectResearch() {
     localStorage.getItem("prospect-research-result")
   );
   const [copied, setCopied] = useState(false);
+  const [, setLocation] = useLocation();
 
   // Sync with localStorage
   useEffect(() => {
@@ -133,6 +135,23 @@ export default function ProspectResearch() {
     } catch {
       toast({ title: "Failed to copy", variant: "destructive" });
     }
+  };
+
+  const handleLogOutreach = () => {
+    if (!researchResult) return;
+    const draftMessage = extractDraftMessage(researchResult);
+    
+    // Store data for the composer/logger
+    localStorage.setItem("composer-draft-message", draftMessage);
+    localStorage.setItem("composer-contact-name", personName);
+    localStorage.setItem("composer-contact-company", company);
+    
+    // Navigate to outreach log to record the attempt
+    setLocation("/outreach-log?action=new");
+    toast({ 
+      title: "Opening Outreach Log", 
+      description: "Record your outreach attempt for " + personName 
+    });
   };
 
   return (
@@ -265,24 +284,37 @@ export default function ProspectResearch() {
                   {section.title}
                 </h3>
                 {section.isDraftMessage && (
-                  <Button
-                    variant="default"
-                    size="sm"
-                    data-testid="button-copy-draft"
-                    onClick={copyDraftMessage}
-                  >
-                    {copied ? (
-                      <>
-                        <Check className="w-4 h-4 mr-2" />
-                        Copied
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-4 h-4 mr-2" />
-                        Copy Message
-                      </>
-                    )}
-                  </Button>
+                  <div className="flex flex-col gap-2">
+                    <Button
+                      variant="default"
+                      size="sm"
+                      data-testid="button-copy-draft"
+                      onClick={copyDraftMessage}
+                      className="w-full sm:w-auto"
+                    >
+                      {copied ? (
+                        <>
+                          <Check className="w-4 h-4 mr-2" />
+                          Copied
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-4 h-4 mr-2" />
+                          Copy Message
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      data-testid="button-log-outreach"
+                      onClick={handleLogOutreach}
+                      className="w-full sm:w-auto border-primary/30 hover:bg-primary/5"
+                    >
+                      <LogIn className="w-4 h-4 mr-2" />
+                      Log Outreach
+                    </Button>
+                  </div>
                 )}
               </div>
               
