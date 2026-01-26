@@ -1087,14 +1087,45 @@ export async function registerRoutes(
 
       if (!response.ok) {
         const errorText = await response.text();
-        return res.status(response.status).json({ error: errorText || `HTTP ${response.status}` });
+        console.log("User profile research webhook failed:", response.status, errorText);
+        // Return default profile if webhook fails
+        return res.json({ 
+          profileInsight: `${personName} works at ${company}. Complete your profile to unlock personalized outreach recommendations.`,
+          success: true,
+          fallback: true
+        });
       }
 
-      const result = await response.json();
-      res.json(result);
+      const text = await response.text();
+      if (!text || text.trim() === "") {
+        // Return default profile if empty response
+        return res.json({ 
+          profileInsight: `${personName} works at ${company}. Complete your profile to unlock personalized outreach recommendations.`,
+          success: true,
+          fallback: true
+        });
+      }
+
+      try {
+        const result = JSON.parse(text);
+        res.json(result);
+      } catch (parseError) {
+        console.log("User profile research JSON parse error:", parseError, "Response was:", text.substring(0, 200));
+        // Return default profile if JSON parse fails
+        return res.json({ 
+          profileInsight: `${personName} works at ${company}. Complete your profile to unlock personalized outreach recommendations.`,
+          success: true,
+          fallback: true
+        });
+      }
     } catch (error: any) {
       console.error("User profile research webhook error:", error);
-      res.status(500).json({ error: error.message || "Failed to research user profile" });
+      // Return default profile on error
+      res.json({ 
+        profileInsight: "Complete your profile to unlock personalized outreach recommendations.",
+        success: true,
+        fallback: true
+      });
     }
   });
   return httpServer;
