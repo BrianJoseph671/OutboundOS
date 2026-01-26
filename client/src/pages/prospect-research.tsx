@@ -93,7 +93,76 @@ export default function ProspectResearch() {
     toast({ title: "Research data cleared" });
   };
 
+  const parseResearchSections = (markdown: string): ParsedSection[] => {
+    const sections: ParsedSection[] = [];
+    
+    // First, try to handle the specific format seen in logs which might use bold headers instead of ##
+    if (!markdown.includes("##")) {
+      const boldHeaders = ["Prospect Snapshot", "Company Snapshot", "Connection Angles", "Conversation Hooks", "Hiring Status", "Draft Message"];
+      let lastIndex = 0;
+      
+      for (let i = 0; i < boldHeaders.length; i++) {
+        const header = boldHeaders[i];
+        const nextHeader = boldHeaders[i+1];
+        
+        const currentHeaderRegex = new RegExp(`\\*\\*${header}\\*\\*`, "i");
+        const nextHeaderRegex = nextHeader ? new RegExp(`\\*\\*${nextHeader}\\*\\*`, "i") : /$/;
+        
+        const startMatch = markdown.slice(lastIndex).match(currentHeaderRegex);
+        if (startMatch && startMatch.index !== undefined) {
+          const start = lastIndex + startMatch.index;
+          const searchAfterStart = markdown.slice(start + startMatch[0].length);
+          const endMatch = searchAfterStart.match(nextHeaderRegex);
+          
+          const end = endMatch && endMatch.index !== undefined 
+            ? start + startMatch[0].length + endMatch.index
+            : markdown.length;
+            
+          const content = markdown.slice(start + startMatch[0].length, end).trim().replace(/^[\s\n\-\u2014]+|[\s\n\-\u2014]+$/g, "");
+          if (content) {
+            sections.push({
+              title: header,
+              content: content,
+              isDraftMessage: header.toLowerCase().includes("draft message")
+            });
+          }
+          lastIndex = start + startMatch[0].length;
+        }
+      }
+    }
+
+    // If no sections found with bold headers, or it has ## markers, use the standard regex
+    if (sections.length === 0) {
+      const sectionRegex = /##\s*([^\n]+)\n([\s\S]*?)(?=##\s|$)/g;
+      let match;
+      
+      while ((match = sectionRegex.exec(markdown)) !== null) {
+        const title = match[1].trim();
+        const content = match[2].trim();
+        const isDraftMessage = title.toLowerCase().includes("draft message");
+        sections.push({ title, content, isDraftMessage });
+      }
+    }
+    
+    // Final fallback: if still nothing, just show the whole thing as "Research Result"
+    if (sections.length === 0 && markdown.trim()) {
+      sections.push({
+        title: "Research Result",
+        content: markdown.trim(),
+        isDraftMessage: false
+      });
+    }
+    
+    return sections;
+  };
+
   const extractDraftMessage = (markdown: string): string => {
+    // Try bold header first
+    const boldMatch = markdown.match(/\*\*Draft Message\*\*([\s\S]*)$/i);
+    if (boldMatch) {
+      return boldMatch[1].replace(/\*\*/g, "").trim();
+    }
+
     const draftRegex = /##\s*Draft Message[\s\S]*?(?=##|$)/i;
     const match = markdown.match(draftRegex);
     if (match) {
@@ -103,21 +172,6 @@ export default function ProspectResearch() {
         .trim();
     }
     return "";
-  };
-
-  const parseResearchSections = (markdown: string): ParsedSection[] => {
-    const sections: ParsedSection[] = [];
-    const sectionRegex = /##\s*([^\n]+)\n([\s\S]*?)(?=##\s|$)/g;
-    let match;
-    
-    while ((match = sectionRegex.exec(markdown)) !== null) {
-      const title = match[1].trim();
-      const content = match[2].trim();
-      const isDraftMessage = title.toLowerCase().includes("draft message");
-      sections.push({ title, content, isDraftMessage });
-    }
-    
-    return sections;
   };
 
   const copyDraftMessage = async () => {
