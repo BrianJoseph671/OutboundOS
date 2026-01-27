@@ -96,7 +96,7 @@ async function handleRequest<T, D extends object>(
 export const n8nClient = {
   research: async (data: ResearchRequest): Promise<ResearchResponse> => {
     return handleRequest<ResearchResponse, ResearchRequest>(
-      "/webhook/028dc28a-4779-4a35-80cf-87dfbde544f8",
+      "https://n8n.srv1096794.hstgr.cloud/webhook/028dc28a-4779-4a35-80cf-87dfbde544f8",
       data
     );
   },
