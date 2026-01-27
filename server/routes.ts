@@ -477,21 +477,32 @@ export async function registerRoutes(
   // n8n Webhook - Import batch outreach logs
   app.post("/api/webhooks/outreach-logs", express.json(), async (req, res) => {
     try {
-      // Handle n8n batch structure which might be [{data: {...}}] or just [{...}]
-      let logs = Array.isArray(req.body) ? req.body : [req.body];
+      console.log("[Outreach Webhook] Received payload:", JSON.stringify(req.body, null, 2));
       
-      // Flatten n8n "data" property if it exists
-      logs = logs.map(item => item.data || item);
+      // Handle n8n structure: { "attempts": [...] } or just an array or single object
+      let logs: any[];
+      if (req.body.attempts && Array.isArray(req.body.attempts)) {
+        logs = req.body.attempts;
+        console.log(`[Outreach Webhook] Found ${logs.length} attempts in 'attempts' array`);
+      } else if (Array.isArray(req.body)) {
+        logs = req.body;
+        console.log(`[Outreach Webhook] Found ${logs.length} items in root array`);
+      } else {
+        logs = [req.body];
+        console.log("[Outreach Webhook] Single object received");
+      }
       
       const results = {
         success: 0,
         failed: 0,
         errors: [] as string[],
+        created: [] as string[],
       };
 
       const outreachTypeMapping: Record<string, string> = {
         "LinkedIn Message": "linkedin_connected",
         "LinkedIn Connection": "linkedin_connected",
+        "LinkedIn Connection Request": "linkedin_connect_request",
         "LinkedIn Request": "linkedin_connect_request",
         "LinkedIn Connect": "linkedin_connect_request",
         "LinkedIn InMail": "linkedin_inmail",
@@ -501,68 +512,94 @@ export async function registerRoutes(
         "WhatsApp": "whatsapp",
       };
 
-      for (const logData of logs) {
+      for (let i = 0; i < logs.length; i++) {
+        const logData = logs[i];
+        console.log(`[Outreach Webhook] Processing item ${i + 1}:`, JSON.stringify(logData));
+        
         try {
-          const personName = logData.contactName || logData.personId || logData.name || logData.Name || logData.Contact;
+          // Get contact name - exact field names from n8n
+          const personName = logData.contactName;
           if (!personName) {
-            console.error("[Outreach Webhook] Log missing name in data:", JSON.stringify(logData));
+            console.error(`[Outreach Webhook] Item ${i + 1} missing contactName`);
             results.failed++;
-            results.errors.push("Missing contactName, personId, or name in log");
+            results.errors.push(`Item ${i + 1}: Missing contactName`);
             continue;
           }
 
+          // Find or create contact
           const contacts = await storage.getContacts();
           let contact = contacts.find(c => c.name.toLowerCase() === personName.toLowerCase());
 
-          // Auto-create contact if not found
           if (!contact) {
             console.log(`[Outreach Webhook] Auto-creating contact: ${personName}`);
             contact = await storage.createContact({
               name: personName,
-              company: logData.company || logData.Company || "Unknown",
+              company: logData.company || "Unknown",
               tags: "auto-created-from-webhook",
             } as any);
+            console.log(`[Outreach Webhook] Created contact with ID: ${contact.id}`);
+          } else {
+            console.log(`[Outreach Webhook] Found existing contact: ${contact.name} (ID: ${contact.id})`);
           }
 
-          const rawOutreachType = logData.outreachType || logData.OutreachType || "Email";
-          const mappedType = outreachTypeMapping[rawOutreachType] || (rawOutreachType.toLowerCase().includes("linkedin") ? "linkedin_connected" : "email");
+          // Map outreach type
+          const rawOutreachType = logData.outreachType || "Email";
+          const mappedType = outreachTypeMapping[rawOutreachType] || 
+            (rawOutreachType.toLowerCase().includes("linkedin") ? "linkedin_connected" : "email");
+          console.log(`[Outreach Webhook] Outreach type: ${rawOutreachType} -> ${mappedType}`);
+
+          // Parse date sent (handle both "datesent" and "dateSent")
+          const dateSentStr = logData.datesent || logData.dateSent;
+          const dateSent = dateSentStr ? new Date(dateSentStr) : new Date();
+          console.log(`[Outreach Webhook] Date sent: ${dateSentStr} -> ${dateSent.toISOString()}`);
+
+          // Parse response date (handle both "dateresponse" and "responseDate")
+          const dateResponseStr = logData.dateresponse || logData.responseDate;
+          let responseDate: Date | null = null;
+          if (dateResponseStr && dateResponseStr !== "") {
+            responseDate = new Date(dateResponseStr);
+            console.log(`[Outreach Webhook] Response date: ${dateResponseStr} -> ${responseDate.toISOString()}`);
+          }
+
+          // Convert string booleans to actual booleans
+          const toBool = (val: any): boolean => val === true || val === "true";
 
           const outreachData: any = {
             contactId: contact.id,
             outreachType: mappedType,
-            subject: logData.subjectLine || logData.subject || logData.Subject || "",
-            messageBody: logData.messageBody || logData.body || logData.Message || logData.MessageBody || "",
-            dateSent: logData.datesent || logData.dateSent || logData.DateSent ? new Date(logData.datesent || logData.dateSent || logData.DateSent) : new Date(),
-            campaign: logData.campaign || logData.Campaign || "n8n-import",
-            responded: logData.responded === true || logData.responded === "true" || logData.Responded === true,
-            positiveResponse: logData.positiveResponse === true || logData.positiveResponse === "true" || logData.PositiveResponse === true,
-            meetingBooked: logData.meetingBooked === true || logData.meetingBooked === "true" || logData.MeetingBooked === true,
-            converted: logData.converted === true || logData.converted === "true" || logData.Converted === true,
-            notes: logData.notes || logData.Notes || "",
-            relationshipType: logData.relationshipType || logData.RelationshipType || "cold",
+            subject: logData.subjectLine || "",
+            messageBody: logData.messageBody || "",
+            dateSent: dateSent,
+            campaign: logData.campaign || "n8n-import",
+            responded: toBool(logData.responded),
+            positiveResponse: toBool(logData.positiveResponse),
+            meetingBooked: toBool(logData.meetingBooked),
+            converted: toBool(logData.converted),
+            notes: logData.notes || "",
+            relationshipType: "cold",
+            responseDate: responseDate,
           };
 
-          if (logData.dateresponse || logData.responseDate || logData.ResponseDate) {
-            outreachData.responseDate = new Date(logData.dateresponse || logData.responseDate || logData.ResponseDate);
-          } else {
-            outreachData.responseDate = null;
-          }
+          console.log(`[Outreach Webhook] Creating outreach attempt:`, JSON.stringify(outreachData));
 
           const validatedData = insertOutreachAttemptSchema.parse(outreachData);
-          await storage.createOutreachAttempt(validatedData);
+          const created = await storage.createOutreachAttempt(validatedData);
+          console.log(`[Outreach Webhook] Created outreach attempt with ID: ${created.id}`);
+          
           results.success++;
+          results.created.push(`${personName}: ${mappedType}`);
         } catch (error: any) {
-          console.error("[Outreach Webhook] Log processing error:", error);
+          console.error(`[Outreach Webhook] Error processing item ${i + 1}:`, error.message);
           results.failed++;
-          results.errors.push(`Failed to process log: ${error.message}`);
+          results.errors.push(`Item ${i + 1}: ${error.message}`);
         }
       }
 
       console.log(`[Outreach Webhook] Import complete. Success: ${results.success}, Failed: ${results.failed}`);
       res.json(results);
-    } catch (error) {
+    } catch (error: any) {
       console.error("[Outreach Webhook] Fatal error:", error);
-      res.status(500).json({ error: "Failed to process outreach logs" });
+      res.status(500).json({ error: error.message || "Failed to process outreach logs" });
     }
   });
 
