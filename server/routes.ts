@@ -474,6 +474,68 @@ export async function registerRoutes(
     }
   });
 
+  // n8n Webhook - Import batch outreach logs
+  app.post("/api/webhooks/outreach-logs", async (req, res) => {
+    try {
+      const logs = Array.isArray(req.body) ? req.body : [req.body];
+      
+      const results = {
+        success: 0,
+        failed: 0,
+        errors: [] as string[],
+      };
+
+      for (const logData of logs) {
+        try {
+          // Find contact by name/company to match log to personId
+          const personName = logData.personId || logData.name;
+          if (!personName) {
+            results.failed++;
+            results.errors.push("Missing personId or name in log");
+            continue;
+          }
+
+          const contacts = await storage.getContacts();
+          let contact = contacts.find(c => c.name.toLowerCase() === personName.toLowerCase());
+
+          // Auto-create contact if not found
+          if (!contact) {
+            contact = await storage.createContact({
+              name: personName,
+              company: logData.company || "Unknown",
+              tags: "auto-created-from-webhook",
+            } as any);
+          }
+
+          const outreachData = {
+            contactId: contact.id,
+            outreachType: logData.outreachType || "email",
+            subject: logData.subject || "",
+            messageBody: logData.messageBody || logData.body || "",
+            dateSent: logData.dateSent ? new Date(logData.dateSent) : new Date(),
+            campaign: logData.campaign || "n8n-import",
+            responded: !!logData.responded,
+            positiveResponse: !!logData.positiveResponse,
+            meetingBooked: !!logData.meetingBooked,
+            converted: !!logData.converted,
+          };
+
+          const validatedData = insertOutreachAttemptSchema.parse(outreachData);
+          await storage.createOutreachAttempt(validatedData);
+          results.success++;
+        } catch (error: any) {
+          results.failed++;
+          results.errors.push(`Failed to process log: ${error.message}`);
+        }
+      }
+
+      res.json(results);
+    } catch (error) {
+      console.error("[Outreach Webhook] Error:", error);
+      res.status(500).json({ error: "Failed to process outreach logs" });
+    }
+  });
+
   // Bulk Create Contacts - Create multiple contacts at once
   app.post("/api/contacts/bulk-create", async (req, res) => {
     try {
