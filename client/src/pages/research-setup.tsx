@@ -54,7 +54,7 @@ export default function ResearchSetup() {
             <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-accent/10 flex items-center justify-center">
               <Plus className="w-8 h-8 text-accent-foreground" />
             </div>
-            <CardTitle data-testid="text-add-manually-heading">Add contacts manually</CardTitle>
+            <CardTitle data-testid="text-add-manually-heading">Research individual manually</CardTitle>
             <CardDescription>
               Build your prospect list one contact at a time
             </CardDescription>
@@ -68,7 +68,7 @@ export default function ResearchSetup() {
                 setLocation("/prospect-research");
               }}
             >
-              Add first contact
+              Research individual
             </Button>
           </CardContent>
         </Card>
