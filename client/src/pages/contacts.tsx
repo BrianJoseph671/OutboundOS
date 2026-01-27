@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -1096,14 +1097,26 @@ function AddContactModal({
 function BatchProgressBar({
   progress,
   isComplete,
+  currentContact,
+  completedContacts,
+  onViewResults,
 }: {
   progress: { completed: number; failed: number; total: number; percentComplete: number } | null;
   isComplete: boolean;
+  currentContact?: string;
+  completedContacts?: Array<{ contactName: string }>;
+  onViewResults?: () => void;
 }) {
   if (!progress) return null;
 
+  const recentlyCompleted = completedContacts?.slice(-3).reverse() || [];
+
   return (
-    <Card className="border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/20">
+    <Card className={`transition-all duration-300 ${
+      isComplete 
+        ? "border-green-200 dark:border-green-800 bg-green-50/50 dark:bg-green-950/20" 
+        : "border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/20"
+    }`}>
       <CardContent className="py-4">
         <div className="space-y-3">
           <div className="flex items-center justify-between">
@@ -1111,24 +1124,57 @@ function BatchProgressBar({
               {!isComplete && <Loader2 className="w-4 h-4 animate-spin text-blue-600" />}
               {isComplete && <Check className="w-4 h-4 text-green-600" />}
               <span className="font-medium">
-                {isComplete ? "Research Complete" : "Processing contacts..."}
+                {isComplete ? "Research Complete!" : "Researching contacts..."}
               </span>
             </div>
             <span className="text-sm text-muted-foreground">
               {progress.completed + progress.failed} / {progress.total}
             </span>
           </div>
+          
           <Progress value={progress.percentComplete} className="h-2" />
-          <div className="flex items-center gap-4 text-sm">
-            <span className="flex items-center gap-1 text-green-600">
-              <Check className="w-3 h-3" />
-              {progress.completed} completed
-            </span>
-            {progress.failed > 0 && (
-              <span className="flex items-center gap-1 text-red-600">
-                <X className="w-3 h-3" />
-                {progress.failed} failed
+          
+          {!isComplete && currentContact && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground animate-pulse">
+              <Sparkles className="w-3 h-3 text-blue-500" />
+              <span>Currently researching: <span className="font-medium text-foreground">{currentContact}</span></span>
+            </div>
+          )}
+          
+          {recentlyCompleted.length > 0 && !isComplete && (
+            <div className="space-y-1">
+              {recentlyCompleted.map((c, i) => (
+                <div key={i} className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Check className="w-3 h-3 text-green-500" />
+                  <span>{c.contactName} researched</span>
+                </div>
+              ))}
+            </div>
+          )}
+          
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4 text-sm">
+              <span className="flex items-center gap-1 text-green-600">
+                <Check className="w-3 h-3" />
+                {progress.completed} completed
               </span>
+              {progress.failed > 0 && (
+                <span className="flex items-center gap-1 text-red-600">
+                  <X className="w-3 h-3" />
+                  {progress.failed} failed
+                </span>
+              )}
+            </div>
+            
+            {isComplete && onViewResults && (
+              <Button
+                size="sm"
+                onClick={onViewResults}
+                data-testid="button-view-research-results"
+              >
+                View Results
+                <ChevronRight className="w-4 h-4 ml-1" />
+              </Button>
             )}
           </div>
         </div>
@@ -1219,6 +1265,7 @@ function AirtableCard({
 
 export default function Contacts() {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [search, setSearch] = useState("");
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [addModalOpen, setAddModalOpen] = useState(false);
@@ -1264,7 +1311,7 @@ export default function Contacts() {
     },
   });
 
-  const { progress, completedContacts, failedContacts, isComplete, isConnected } = useBatchProgress(activeJobId);
+  const { progress, completedContacts, failedContacts, currentContact, isComplete, isConnected } = useBatchProgress(activeJobId);
 
   useEffect(() => {
     if (!activeJobId) return;
@@ -1459,7 +1506,13 @@ export default function Contacts() {
         </div>
 
         {activeJobId && progress && (
-          <BatchProgressBar progress={progress} isComplete={isComplete} />
+          <BatchProgressBar 
+            progress={progress} 
+            isComplete={isComplete}
+            currentContact={currentContact?.contactName}
+            completedContacts={completedContacts.map(c => ({ contactName: c.contactName }))}
+            onViewResults={() => setLocation("/research")}
+          />
         )}
 
         <AirtableCard

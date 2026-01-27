@@ -56,6 +56,15 @@ export function setupWebSocket(server: Server): WebSocketServer {
     });
   });
 
+  batchProcessor.on("contact:start", (data) => {
+    broadcastToJob(data.jobId, {
+      type: "CONTACT_START",
+      jobId: data.jobId,
+      contactId: data.contactId,
+      contactName: data.contactName,
+    });
+  });
+
   batchProcessor.on("contact:complete", (data) => {
     broadcastToJob(data.jobId, {
       type: "CONTACT_COMPLETE",

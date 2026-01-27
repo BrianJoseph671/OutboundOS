@@ -19,10 +19,22 @@ export interface FailedContact {
   error: string;
 }
 
+export interface ProcessingContact {
+  contactId: string;
+  contactName: string;
+}
+
 interface ProgressMessage {
   type: "PROGRESS";
   jobId: string;
   progress: BatchProgress;
+}
+
+interface ContactStartMessage {
+  type: "CONTACT_START";
+  jobId: string;
+  contactId: string;
+  contactName: string;
 }
 
 interface ContactCompleteMessage {
@@ -57,6 +69,7 @@ interface SubscribedMessage {
 
 type WebSocketMessage =
   | ProgressMessage
+  | ContactStartMessage
   | ContactCompleteMessage
   | ContactFailedMessage
   | JobCompleteMessage
@@ -66,6 +79,7 @@ interface UseBatchProgressResult {
   progress: BatchProgress | null;
   completedContacts: CompletedContact[];
   failedContacts: FailedContact[];
+  currentContact: ProcessingContact | null;
   isComplete: boolean;
   isConnected: boolean;
 }
@@ -74,6 +88,7 @@ export function useBatchProgress(jobId: string | null): UseBatchProgressResult {
   const [progress, setProgress] = useState<BatchProgress | null>(null);
   const [completedContacts, setCompletedContacts] = useState<CompletedContact[]>([]);
   const [failedContacts, setFailedContacts] = useState<FailedContact[]>([]);
+  const [currentContact, setCurrentContact] = useState<ProcessingContact | null>(null);
   const [isComplete, setIsComplete] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
@@ -82,6 +97,7 @@ export function useBatchProgress(jobId: string | null): UseBatchProgressResult {
     setProgress(null);
     setCompletedContacts([]);
     setFailedContacts([]);
+    setCurrentContact(null);
     setIsComplete(false);
   }, []);
 
@@ -111,7 +127,15 @@ export function useBatchProgress(jobId: string | null): UseBatchProgressResult {
             setProgress(message.progress);
             break;
 
+          case "CONTACT_START":
+            setCurrentContact({
+              contactId: message.contactId,
+              contactName: message.contactName,
+            });
+            break;
+
           case "CONTACT_COMPLETE":
+            setCurrentContact(null);
             setCompletedContacts((prev) => [
               ...prev,
               {
@@ -174,6 +198,7 @@ export function useBatchProgress(jobId: string | null): UseBatchProgressResult {
     progress,
     completedContacts,
     failedContacts,
+    currentContact,
     isComplete,
     isConnected,
   };
