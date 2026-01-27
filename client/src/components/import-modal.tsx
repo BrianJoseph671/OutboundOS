@@ -245,21 +245,23 @@ export function ImportModal({ open, onOpenChange, onSuccess }: ImportModalProps)
       return;
     }
 
-    bulkCreateMutation.mutate(contacts, {
+    // Capture values before they get reset by bulkCreateMutation.onSuccess
+    const configToSave = {
+      baseId: airtableBaseId,
+      tableName: airtableTableName,
+      personalAccessToken: airtableToken,
+      fieldMapping: airtableFieldMapping,
+    };
+
+    // First save the config, then import contacts
+    saveAirtableConfigMutation.mutate(configToSave, {
       onSuccess: () => {
-        saveAirtableConfigMutation.mutate({
-          baseId: airtableBaseId,
-          tableName: airtableTableName,
-          personalAccessToken: airtableToken,
-          fieldMapping: airtableFieldMapping,
-        }, {
-          onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["/api/airtable/config"] });
-          },
-          onError: () => {
-            toast({ title: "Warning", description: "Contacts imported but credentials not saved for sync", variant: "destructive" });
-          }
-        });
+        queryClient.invalidateQueries({ queryKey: ["/api/airtable/config"] });
+        bulkCreateMutation.mutate(contacts);
+      },
+      onError: () => {
+        toast({ title: "Warning", description: "Could not save Airtable connection, importing contacts anyway", variant: "destructive" });
+        bulkCreateMutation.mutate(contacts);
       }
     });
   };
