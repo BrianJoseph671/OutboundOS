@@ -13,7 +13,7 @@ import Contacts from "@/pages/contacts";
 import OutreachLog from "@/pages/outreach-log";
 import ProspectResearch from "@/pages/prospect-research";
 import ResearchSetup from "@/pages/research-setup";
-import Results from "@/pages/results";
+import Decisions from "@/pages/decisions";
 import Settings from "@/pages/settings";
 import NotFound from "@/pages/not-found";
 
@@ -25,7 +25,7 @@ function Router() {
       <Route path="/outreach-log" component={OutreachLog} />
       <Route path="/prospect-research" component={ProspectResearch} />
       <Route path="/research-setup" component={ResearchSetup} />
-      <Route path="/results" component={Results} />
+      <Route path="/decisions" component={Decisions} />
       <Route path="/settings" component={Settings} />
       <Route component={NotFound} />
     </Switch>

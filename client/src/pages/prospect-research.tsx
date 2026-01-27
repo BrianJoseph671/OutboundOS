@@ -388,8 +388,12 @@ export default function ProspectResearch() {
       console.error("Webhook notification failed:", webhookError);
     }
     
-    // Navigate to outreach log to record the attempt
-    setLocation("/outreach-log?action=new");
+    // Navigate to decisions page to see results
+    setLocation("/decisions");
+    toast({ 
+      title: "Opening Decisions", 
+      description: "Review and act on research results" 
+    });
   };
 
   return (

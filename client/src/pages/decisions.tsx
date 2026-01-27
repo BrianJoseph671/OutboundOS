@@ -425,7 +425,7 @@ function EditDraftModal({
   );
 }
 
-export default function Results() {
+export default function Decisions() {
   const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -559,7 +559,7 @@ export default function Results() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4">
-        <h1 className="text-2xl font-semibold">Research Results</h1>
+        <h1 className="text-2xl font-semibold">Decisions</h1>
         <Badge variant="secondary" className="text-sm">
           {researchedContacts.length} researched
         </Badge>
