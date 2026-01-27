@@ -1,0 +1,835 @@
+# Replit Prompt: Complete Batch Research Queue System
+
+## Context
+We have Outbound OS (React/TypeScript frontend, Express backend, PostgreSQL) with:
+- User onboarding that stores profile in localStorage
+- Contact import from Excel/Airtable
+- Single prospect research via n8n webhook (researches one person, returns research brief + draft message)
+
+## Goal
+Build a batch research queue system that processes multiple contacts without overwhelming the UI or n8n.
+
+## User Flow
+
+### 1. After Import (Contacts List Page)
+User imports 16 contacts → lands on `/contacts` page showing:
+```
+📥 Import Complete: 16 contacts added
+
+┌──────────────────────────────────────────────────┐
+│ What would you like to do?                       │
+│                                                  │
+│  [🔬 Research All]    [✏️ Research & Draft All]  │
+│                                                  │
+│  or select individual contacts below             │
+└──────────────────────────────────────────────────┘
+
+───────────────────────────────────────────────────
+
+👥 Contacts (16)                        Status
+┌──────────────────────────────────────────────────┐
+│ ☐ Jessica Lee    Marketing Mgr @ Acme   ⏳ Pending│
+│ ☐ Michael Chen   Engineer @ BlueSky     ⏳ Pending│
+│ ☐ Priya Singh    HR Director @ Green    ⏳ Pending│
+│ ... 13 more                                       │
+└──────────────────────────────────────────────────┘
+
+[Select All] [Research Selected (0)]
+```
+
+### 2. During Batch Processing
+When user clicks "Research All" or "Research Selected":
+```
+🔬 Researching Contacts
+
+Progress: ████████░░░░░░░░░░░░ 6/16 (38%)
+Estimated time: ~8 minutes remaining
+
+Currently processing: Michael Chen, Priya Singh
+
+─────────────────────────────────────────────────
+
+✅ Completed (4)              ⏳ In Queue (10)
+┌────────────────────┐       ┌──────────────┐
+│ Jessica Lee [View] │       │ David Brown  │
+│ Emily Clark [View] │       │ Carlos M.    │
+│ Sophie T.   [View] │       │ James Wilson │
+│ Linda Zhao  [View] │       │ ... 7 more   │
+└────────────────────┘       └──────────────┘
+
+❌ Failed (2)
+┌────────────────────────────────────────┐
+│ Bob Smith - API error (429)   [Retry]  │
+│ Jane Doe - Invalid LinkedIn   [Skip]   │
+└────────────────────────────────────────┘
+
+[Pause Queue]  [Cancel Remaining]  [View All Results]
+```
+
+### 3. After Completion
+Redirect to `/research-results` page showing all completed research briefs with next actions.
+
+## Technical Implementation
+
+### Backend: Job Queue System
+
+**Database Schema:**
+
+Add new tables:
+```sql
+-- Job queue table
+CREATE TABLE research_jobs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL,
+  batch_id UUID NOT NULL,
+  contact_id UUID NOT NULL,
+  status VARCHAR(50) DEFAULT 'pending', -- pending, processing, completed, failed
+  priority INTEGER DEFAULT 0,
+  started_at TIMESTAMP,
+  completed_at TIMESTAMP,
+  error_message TEXT,
+  created_at TIMESTAMP DEFAULT NOW(),
+  FOREIGN KEY (contact_id) REFERENCES contacts(id)
+);
+
+-- Research results table
+CREATE TABLE research_results (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  contact_id UUID NOT NULL UNIQUE,
+  research_data JSONB NOT NULL, -- full research brief from n8n
+  draft_messages JSONB, -- array of 3 draft options
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW(),
+  FOREIGN KEY (contact_id) REFERENCES contacts(id)
+);
+
+-- Update contacts table
+ALTER TABLE contacts ADD COLUMN research_status VARCHAR(50) DEFAULT 'not_researched';
+-- Values: not_researched, queued, researching, researched, failed
+```
+
+**New API Endpoints:**
+```typescript
+// POST /api/research/batch
+// Start batch research for selected contacts
+interface BatchRequest {
+  contactIds: string[]; // UUIDs of contacts to research
+  options?: {
+    includeDrafts?: boolean; // also generate draft messages
+    priority?: number; // higher = process first
+  };
+}
+
+interface BatchResponse {
+  batchId: string;
+  totalContacts: number;
+  estimatedTime: number; // in seconds
+  message: string;
+}
+
+// GET /api/research/batch/:batchId/status
+// Poll for batch progress
+interface BatchStatus {
+  batchId: string;
+  total: number;
+  pending: number;
+  processing: number;
+  completed: number;
+  failed: number;
+  estimatedTimeRemaining: number; // seconds
+  completedContacts: Array<{
+    id: string;
+    name: string;
+    status: 'completed' | 'failed';
+    error?: string;
+  }>;
+}
+
+// POST /api/research/batch/:batchId/pause
+// Pause the queue (stop processing new items)
+
+// POST /api/research/batch/:batchId/resume
+// Resume processing
+
+// POST /api/research/batch/:batchId/cancel
+// Cancel all pending jobs in batch
+
+// POST /api/research/job/:jobId/retry
+// Retry a single failed job
+
+// GET /api/research/results/:contactId
+// Get research results for a contact
+interface ResearchResult {
+  contactId: string;
+  contact: Contact;
+  researchData: {
+    prospectSnapshot: string;
+    companySnapshot: string;
+    connectionAngles: string[];
+    conversationHooks: string[];
+    hiringStatus: string;
+  };
+  draftMessages?: string[]; // 3 options if requested
+  createdAt: string;
+}
+```
+
+**Queue Processing Logic:**
+```typescript
+// src/services/researchQueue.ts
+
+const CONCURRENT_LIMIT = 2; // Process 2 contacts at a time
+const RATE_LIMIT_DELAY = 1000; // 1 second between batches
+const N8N_RESEARCH_WEBHOOK = process.env.N8N_RESEARCH_WEBHOOK;
+
+class ResearchQueue {
+  private isProcessing = false;
+  
+  async startBatch(contactIds: string[], userId: string, options?: BatchOptions) {
+    const batchId = uuidv4();
+    
+    // Create jobs in database
+    await db.transaction(async (trx) => {
+      for (const contactId of contactIds) {
+        await trx('research_jobs').insert({
+          batch_id: batchId,
+          user_id: userId,
+          contact_id: contactId,
+          status: 'pending',
+          priority: options?.priority || 0
+        });
+        
+        // Update contact status
+        await trx('contacts')
+          .where({ id: contactId })
+          .update({ research_status: 'queued' });
+      }
+    });
+    
+    // Start processing if not already running
+    if (!this.isProcessing) {
+      this.processQueue();
+    }
+    
+    return batchId;
+  }
+  
+  private async processQueue() {
+    this.isProcessing = true;
+    
+    while (true) {
+      // Get next batch of pending jobs (ordered by priority desc, created_at asc)
+      const jobs = await db('research_jobs')
+        .where({ status: 'pending' })
+        .orderBy('priority', 'desc')
+        .orderBy('created_at', 'asc')
+        .limit(CONCURRENT_LIMIT);
+      
+      if (jobs.length === 0) {
+        this.isProcessing = false;
+        break;
+      }
+      
+      // Mark as processing
+      await db('research_jobs')
+        .whereIn('id', jobs.map(j => j.id))
+        .update({ 
+          status: 'processing',
+          started_at: new Date()
+        });
+      
+      // Update contacts
+      await db('contacts')
+        .whereIn('id', jobs.map(j => j.contact_id))
+        .update({ research_status: 'researching' });
+      
+      // Process in parallel (limited concurrency)
+      await Promise.all(jobs.map(job => this.processJob(job)));
+      
+      // Rate limit between batches
+      await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
+    }
+  }
+  
+  private async processJob(job: ResearchJob) {
+    try {
+      // Get contact details
+      const contact = await db('contacts')
+        .where({ id: job.contact_id })
+        .first();
+      
+      // Get user profile for personalization
+      const userProfile = await db('user_profiles')
+        .where({ user_id: job.user_id })
+        .first();
+      
+      // Call n8n research webhook
+      const response = await fetch(N8N_RESEARCH_WEBHOOK, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          personName: contact.name,
+          company: contact.company,
+          linkedinUrl: contact.linkedin_url,
+          userProfile: userProfile.profile_data
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`n8n webhook failed: ${response.status}`);
+      }
+      
+      const researchData = await response.json();
+      
+      // Save research results
+      await db('research_results').insert({
+        contact_id: job.contact_id,
+        research_data: researchData
+      });
+      
+      // Mark job as completed
+      await db('research_jobs')
+        .where({ id: job.id })
+        .update({ 
+          status: 'completed',
+          completed_at: new Date()
+        });
+      
+      // Update contact
+      await db('contacts')
+        .where({ id: job.contact_id })
+        .update({ research_status: 'researched' });
+        
+    } catch (error) {
+      // Mark job as failed
+      await db('research_jobs')
+        .where({ id: job.id })
+        .update({ 
+          status: 'failed',
+          error_message: error.message,
+          completed_at: new Date()
+        });
+      
+      // Update contact
+      await db('contacts')
+        .where({ id: job.contact_id })
+        .update({ research_status: 'failed' });
+        
+      console.error(`Job ${job.id} failed:`, error);
+    }
+  }
+  
+  async getBatchStatus(batchId: string): Promise<BatchStatus> {
+    const jobs = await db('research_jobs')
+      .where({ batch_id: batchId })
+      .leftJoin('contacts', 'research_jobs.contact_id', 'contacts.id')
+      .select('research_jobs.*', 'contacts.name as contact_name');
+    
+    const total = jobs.length;
+    const pending = jobs.filter(j => j.status === 'pending').length;
+    const processing = jobs.filter(j => j.status === 'processing').length;
+    const completed = jobs.filter(j => j.status === 'completed').length;
+    const failed = jobs.filter(j => j.status === 'failed').length;
+    
+    // Estimate time: assume 30 seconds per contact
+    const remaining = pending + processing;
+    const estimatedTimeRemaining = remaining * 30;
+    
+    return {
+      batchId,
+      total,
+      pending,
+      processing,
+      completed,
+      failed,
+      estimatedTimeRemaining,
+      completedContacts: jobs
+        .filter(j => j.status === 'completed' || j.status === 'failed')
+        .map(j => ({
+          id: j.contact_id,
+          name: j.contact_name,
+          status: j.status,
+          error: j.error_message
+        }))
+    };
+  }
+  
+  async pauseBatch(batchId: string) {
+    // Mark all pending jobs in batch as paused
+    await db('research_jobs')
+      .where({ batch_id: batchId, status: 'pending' })
+      .update({ status: 'paused' });
+  }
+  
+  async resumeBatch(batchId: string) {
+    await db('research_jobs')
+      .where({ batch_id: batchId, status: 'paused' })
+      .update({ status: 'pending' });
+    
+    if (!this.isProcessing) {
+      this.processQueue();
+    }
+  }
+  
+  async cancelBatch(batchId: string) {
+    await db('research_jobs')
+      .where({ batch_id: batchId, status: 'pending' })
+      .delete();
+    
+    // Update contacts
+    const jobs = await db('research_jobs')
+      .where({ batch_id: batchId, status: 'pending' });
+    
+    await db('contacts')
+      .whereIn('id', jobs.map(j => j.contact_id))
+      .update({ research_status: 'not_researched' });
+  }
+  
+  async retryJob(jobId: string) {
+    await db('research_jobs')
+      .where({ id: jobId })
+      .update({ 
+        status: 'pending',
+        started_at: null,
+        completed_at: null,
+        error_message: null
+      });
+    
+    if (!this.isProcessing) {
+      this.processQueue();
+    }
+  }
+}
+
+export const researchQueue = new ResearchQueue();
+```
+
+**API Route Handlers:**
+```typescript
+// src/routes/research.ts
+
+router.post('/batch', async (req, res) => {
+  const { contactIds, options } = req.body;
+  const userId = req.user.id; // from auth middleware
+  
+  const batchId = await researchQueue.startBatch(contactIds, userId, options);
+  
+  res.json({
+    batchId,
+    totalContacts: contactIds.length,
+    estimatedTime: contactIds.length * 30, // 30 sec per contact
+    message: 'Batch research started'
+  });
+});
+
+router.get('/batch/:batchId/status', async (req, res) => {
+  const status = await researchQueue.getBatchStatus(req.params.batchId);
+  res.json(status);
+});
+
+router.post('/batch/:batchId/pause', async (req, res) => {
+  await researchQueue.pauseBatch(req.params.batchId);
+  res.json({ message: 'Batch paused' });
+});
+
+router.post('/batch/:batchId/resume', async (req, res) => {
+  await researchQueue.resumeBatch(req.params.batchId);
+  res.json({ message: 'Batch resumed' });
+});
+
+router.post('/batch/:batchId/cancel', async (req, res) => {
+  await researchQueue.cancelBatch(req.params.batchId);
+  res.json({ message: 'Batch cancelled' });
+});
+
+router.post('/job/:jobId/retry', async (req, res) => {
+  await researchQueue.retryJob(req.params.jobId);
+  res.json({ message: 'Job queued for retry' });
+});
+
+router.get('/results/:contactId', async (req, res) => {
+  const result = await db('research_results')
+    .where({ contact_id: req.params.contactId })
+    .leftJoin('contacts', 'research_results.contact_id', 'contacts.id')
+    .select('research_results.*', 'contacts.*')
+    .first();
+  
+  if (!result) {
+    return res.status(404).json({ error: 'Research not found' });
+  }
+  
+  res.json(result);
+});
+```
+
+### Frontend: Batch Progress UI
+
+**Components:**
+
+**1. ContactsList.tsx** - Shows contacts with batch action buttons
+```typescript
+function ContactsList() {
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [batchId, setBatchId] = useState<string | null>(null);
+  const { data: contacts } = useQuery(['contacts'], fetchContacts);
+  
+  const startBatchResearch = async () => {
+    const res = await fetch('/api/research/batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contactIds: selectedIds })
+    });
+    const data = await res.json();
+    setBatchId(data.batchId);
+  };
+  
+  if (batchId) {
+    return <BatchProgress batchId={batchId} onComplete={() => setBatchId(null)} />;
+  }
+  
+  return (
+    <div>
+      <Card>
+        <CardHeader>
+          <CardTitle>What would you like to do?</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex gap-4">
+            <Button onClick={() => {
+              setSelectedIds(contacts.map(c => c.id));
+              startBatchResearch();
+            }}>
+              🔬 Research All
+            </Button>
+            <Button variant="outline">
+              ✏️ Research & Draft All
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+      
+      <div className="mt-8">
+        <div className="flex justify-between items-center mb-4">
+          <h2>👥 Contacts ({contacts.length})</h2>
+          <div className="flex gap-2">
+            <Button 
+              size="sm" 
+              variant="outline"
+              onClick={() => setSelectedIds(contacts.map(c => c.id))}
+            >
+              Select All
+            </Button>
+            <Button 
+              size="sm"
+              disabled={selectedIds.length === 0}
+              onClick={startBatchResearch}
+            >
+              Research Selected ({selectedIds.length})
+            </Button>
+          </div>
+        </div>
+        
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-12"></TableHead>
+              <TableHead>Name</TableHead>
+              <TableHead>Title</TableHead>
+              <TableHead>Company</TableHead>
+              <TableHead>Status</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {contacts.map(contact => (
+              <TableRow key={contact.id}>
+                <TableCell>
+                  <Checkbox 
+                    checked={selectedIds.includes(contact.id)}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        setSelectedIds([...selectedIds, contact.id]);
+                      } else {
+                        setSelectedIds(selectedIds.filter(id => id !== contact.id));
+                      }
+                    }}
+                  />
+                </TableCell>
+                <TableCell>{contact.name}</TableCell>
+                <TableCell>{contact.role}</TableCell>
+                <TableCell>{contact.company}</TableCell>
+                <TableCell>
+                  <ResearchStatusBadge status={contact.research_status} />
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  );
+}
+```
+
+**2. BatchProgress.tsx** - Real-time progress UI
+```typescript
+function BatchProgress({ batchId, onComplete }: { batchId: string; onComplete: () => void }) {
+  const [status, setStatus] = useState<BatchStatus | null>(null);
+  
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      const res = await fetch(`/api/research/batch/${batchId}/status`);
+      const data = await res.json();
+      setStatus(data);
+      
+      // Check if complete
+      if (data.pending === 0 && data.processing === 0) {
+        clearInterval(interval);
+        setTimeout(() => {
+          // Redirect to results after 2 seconds
+          window.location.href = `/research-results?batchId=${batchId}`;
+        }, 2000);
+      }
+    }, 2000); // Poll every 2 seconds
+    
+    return () => clearInterval(interval);
+  }, [batchId]);
+  
+  if (!status) {
+    return <div className="flex items-center justify-center h-64">
+      <Spinner />
+    </div>;
+  }
+  
+  const percentComplete = Math.round((status.completed / status.total) * 100);
+  const minutesRemaining = Math.ceil(status.estimatedTimeRemaining / 60);
+  
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>🔬 Researching Contacts</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-6">
+          {/* Progress bar */}
+          <div>
+            <div className="flex justify-between text-sm mb-2">
+              <span>Progress: {status.completed}/{status.total} ({percentComplete}%)</span>
+              <span>~{minutesRemaining} minutes remaining</span>
+            </div>
+            <Progress value={percentComplete} />
+          </div>
+          
+          {/* Currently processing */}
+          {status.processing > 0 && (
+            <div className="text-sm text-muted-foreground">
+              Currently processing: {status.completedContacts
+                .filter(c => c.status === 'processing')
+                .map(c => c.name)
+                .join(', ')}
+            </div>
+          )}
+          
+          <Separator />
+          
+          {/* Results grid */}
+          <div className="grid grid-cols-2 gap-6">
+            {/* Completed */}
+            <div>
+              <h3 className="font-semibold mb-2">✅ Completed ({status.completed})</h3>
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {status.completedContacts
+                  .filter(c => c.status === 'completed')
+                  .map(contact => (
+                    <div key={contact.id} className="flex justify-between items-center p-2 bg-muted rounded">
+                      <span className="text-sm">{contact.name}</span>
+                      <Button size="sm" variant="ghost" asChild>
+                        <a href={`/research-results/${contact.id}`} target="_blank">
+                          View
+                        </a>
+                      </Button>
+                    </div>
+                  ))}
+              </div>
+            </div>
+            
+            {/* In queue */}
+            <div>
+              <h3 className="font-semibold mb-2">⏳ In Queue ({status.pending})</h3>
+              <div className="space-y-1 max-h-64 overflow-y-auto">
+                {status.completedContacts
+                  .filter(c => c.status === 'pending')
+                  .slice(0, 10)
+                  .map(contact => (
+                    <div key={contact.id} className="text-sm p-2 bg-muted/50 rounded">
+                      {contact.name}
+                    </div>
+                  ))}
+                {status.pending > 10 && (
+                  <div className="text-sm text-muted-foreground p-2">
+                    ... {status.pending - 10} more
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+          
+          {/* Failed (if any) */}
+          {status.failed > 0 && (
+            <div>
+              <h3 className="font-semibold mb-2 text-destructive">❌ Failed ({status.failed})</h3>
+              <div className="space-y-2">
+                {status.completedContacts
+                  .filter(c => c.status === 'failed')
+                  .map(contact => (
+                    <div key={contact.id} className="flex justify-between items-center p-2 bg-destructive/10 rounded">
+                      <div>
+                        <div className="text-sm font-medium">{contact.name}</div>
+                        <div className="text-xs text-muted-foreground">{contact.error}</div>
+                      </div>
+                      <Button size="sm" variant="outline" onClick={() => retryJob(contact.id)}>
+                        Retry
+                      </Button>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+          
+          {/* Actions */}
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => pauseBatch(batchId)}>
+              Pause Queue
+            </Button>
+            <Button variant="destructive" onClick={() => cancelBatch(batchId)}>
+              Cancel Remaining
+            </Button>
+            {status.completed > 0 && (
+              <Button asChild className="ml-auto">
+                <a href={`/research-results?batchId=${batchId}`}>
+                  View All Results →
+                </a>
+              </Button>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+```
+
+**3. ResearchResults.tsx** - View all completed research
+```typescript
+function ResearchResults() {
+  const searchParams = useSearchParams();
+  const batchId = searchParams.get('batchId');
+  
+  const { data: results } = useQuery(
+    ['research-results', batchId],
+    () => fetch(`/api/research/batch/${batchId}/results`).then(r => r.json())
+  );
+  
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h1>Research Results ({results?.length || 0})</h1>
+        <Button>Export All</Button>
+      </div>
+      
+      {results?.map(result => (
+        <Card key={result.id}>
+          <CardHeader>
+            <CardTitle>{result.contact.name} @ {result.contact.company}</CardTitle>
+            <CardDescription>{result.contact.role}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Tabs defaultValue="research">
+              <TabsList>
+                <TabsTrigger value="research">Research Brief</TabsTrigger>
+                <TabsTrigger value="drafts">Draft Messages</TabsTrigger>
+              </TabsList>
+              <TabsContent value="research">
+                {/* Display research data */}
+                <div className="space-y-4">
+                  <Section title="Prospect Snapshot">
+                    {result.researchData.prospectSnapshot}
+                  </Section>
+                  <Section title="Company Snapshot">
+                    {result.researchData.companySnapshot}
+                  </Section>
+                  <Section title="Connection Angles">
+                    <ul>
+                      {result.researchData.connectionAngles.map((angle, i) => (
+                        <li key={i}>• {angle}</li>
+                      ))}
+                    </ul>
+                  </Section>
+                </div>
+              </TabsContent>
+              <TabsContent value="drafts">
+                {/* Show draft messages if available */}
+              </TabsContent>
+            </Tabs>
+          </CardContent>
+          <CardFooter>
+            <Button>Use This Research</Button>
+          </CardFooter>
+        </Card>
+      ))}
+    </div>
+  );
+}
+```
+
+## Error Handling
+
+**Rate limiting:**
+- If n8n returns 429 (too many requests), automatically retry with exponential backoff
+- Max 3 retries per job
+
+**Timeout handling:**
+- If job takes >60 seconds, mark as failed with timeout error
+- Allow manual retry
+
+**API errors:**
+- Catch all errors, log them, mark job as failed
+- Show user-friendly error messages
+
+## Testing Checklist
+
+- [ ] Test batch with 1 contact (happy path)
+- [ ] Test batch with 16 contacts (full flow)
+- [ ] Test pause/resume functionality
+- [ ] Test cancel functionality
+- [ ] Test retry on failed job
+- [ ] Test concurrent limit (verify only 2 process at once)
+- [ ] Test rate limiting (verify 1 sec delay between batches)
+- [ ] Test n8n webhook failure handling
+- [ ] Test progress polling (verify real-time updates)
+- [ ] Test results page after completion
+
+## Deployment Notes
+
+**Environment variables:**
+```
+N8N_RESEARCH_WEBHOOK=https://your-n8n-instance.com/webhook/research
+CONCURRENT_RESEARCH_LIMIT=2
+RATE_LIMIT_DELAY_MS=1000
+```
+
+**Database migrations:**
+- Run migrations for new tables (research_jobs, research_results)
+- Add research_status column to contacts table
+
+**Monitoring:**
+- Log all job failures with contact info
+- Track average job completion time
+- Alert if queue gets stuck (no progress for >5 minutes)
+
+Build this incrementally:
+1. Database schema + migrations
+2. Backend queue service
+3. API endpoints
+4. Frontend progress UI
+5. Results page
+6. Error handling & retries
