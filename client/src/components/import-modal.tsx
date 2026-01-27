@@ -47,7 +47,7 @@ interface FieldMapping {
 
 const EXPECTED_FIELDS = [
   { key: "name", label: "Name", required: true },
-  { key: "company", label: "Company", required: false },
+  { key: "company", label: "Company Name", required: false },
   { key: "email", label: "Email", required: false },
   { key: "linkedinUrl", label: "LinkedIn URL", required: false },
   { key: "role", label: "Role", required: false },
