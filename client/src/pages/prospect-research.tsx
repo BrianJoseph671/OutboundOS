@@ -413,7 +413,7 @@ export default function ProspectResearch() {
     }
 
     try {
-      await fetch("https://n8n.srv1096794.hstgr.cloud/webhook/create-variants", {
+      await fetch("https://n8n.srv1096794.hstgr.cloud/webhook/createvariants", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
