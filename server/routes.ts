@@ -477,7 +477,13 @@ export async function registerRoutes(
   // n8n Webhook - Import batch outreach logs
   app.post("/api/webhooks/outreach-logs", async (req, res) => {
     try {
-      const logs = Array.isArray(req.body) ? req.body : [req.body];
+      console.log("[Outreach Webhook] Received payload:", JSON.stringify(req.body).slice(0, 1000));
+      
+      // Handle n8n batch structure which might be [{data: {...}}] or just [{...}]
+      let logs = Array.isArray(req.body) ? req.body : [req.body];
+      
+      // Flatten n8n "data" property if it exists
+      logs = logs.map(item => item.data || item);
       
       const results = {
         success: 0,
@@ -498,6 +504,7 @@ export async function registerRoutes(
           // Fields from image: contactName, outreachType, datesent, dateresponse, campaign, subjectLine, messageBody, responded, positiveResponse, meetingBooked, converted, notes
           const personName = logData.contactName || logData.personId || logData.name;
           if (!personName) {
+            console.error("[Outreach Webhook] Log missing name:", logData);
             results.failed++;
             results.errors.push("Missing contactName, personId, or name in log");
             continue;
@@ -508,6 +515,7 @@ export async function registerRoutes(
 
           // Auto-create contact if not found
           if (!contact) {
+            console.log(`[Outreach Webhook] Auto-creating contact: ${personName}`);
             contact = await storage.createContact({
               name: personName,
               company: logData.company || "Unknown",
@@ -544,14 +552,16 @@ export async function registerRoutes(
           await storage.createOutreachAttempt(validatedData);
           results.success++;
         } catch (error: any) {
+          console.error("[Outreach Webhook] Log processing error:", error);
           results.failed++;
           results.errors.push(`Failed to process log: ${error.message}`);
         }
       }
 
+      console.log("[Outreach Webhook] Result:", results);
       res.json(results);
     } catch (error) {
-      console.error("[Outreach Webhook] Error:", error);
+      console.error("[Outreach Webhook] Fatal error:", error);
       res.status(500).json({ error: "Failed to process outreach logs" });
     }
   });
