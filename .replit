@@ -40,3 +40,8 @@ waitForPort = 5000
 
 [agent]
 integrations = ["javascript_database:1.0.0"]
+
+[userenv]
+
+[userenv.shared]
+N8N_WEBHOOK_URL = "https://n8n.srv1096794.hstgr.cloud"
