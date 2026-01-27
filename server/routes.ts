@@ -423,6 +423,7 @@ export async function registerRoutes(
       let created = 0;
       let updated = 0;
 
+      // Process records in sequential order to preserve Airtable's sequence
       for (const record of records) {
         const fields = record.fields || {};
         
@@ -449,6 +450,7 @@ export async function registerRoutes(
           });
           updated++;
         } else {
+          // Important: createContact is awaited to ensure sequential database insertion
           await storage.createContact({
             ...contact,
             tags: "airtable-sync",
@@ -485,6 +487,7 @@ export async function registerRoutes(
       let created = 0;
       const errors: string[] = [];
 
+      // Process in sequential order to preserve input sequence in database
       for (const contactData of contacts) {
         try {
           if (!contactData.name) {
@@ -499,6 +502,7 @@ export async function registerRoutes(
           };
 
           const validatedData = insertContactSchema.parse(dataWithTag);
+          // Await ensure sequential insertion order for ID/CreatedAt consistency
           await storage.createContact(validatedData);
           created++;
         } catch (err) {
