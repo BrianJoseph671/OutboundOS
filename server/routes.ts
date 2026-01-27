@@ -507,7 +507,7 @@ export async function registerRoutes(
             } as any);
           }
 
-          const outreachData = {
+          const outreachData: any = {
             contactId: contact.id,
             outreachType: logData.outreachType || "email",
             subject: logData.subject || "",
@@ -519,6 +519,12 @@ export async function registerRoutes(
             meetingBooked: !!logData.meetingBooked,
             converted: !!logData.converted,
           };
+
+          if (logData.responseDate) {
+            outreachData.responseDate = new Date(logData.responseDate);
+          } else {
+            outreachData.responseDate = null;
+          }
 
           const validatedData = insertOutreachAttemptSchema.parse(outreachData);
           await storage.createOutreachAttempt(validatedData);
