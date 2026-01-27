@@ -9,6 +9,7 @@ import {
   insertExperimentSchema,
   insertSettingsSchema,
 } from "@shared/schema";
+import batchRouter from "./routes/batch";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -96,6 +97,9 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express,
 ): Promise<Server> {
+  // Batch processing routes
+  app.use("/api/batch", batchRouter);
+
   // Contacts
   app.get("/api/contacts", async (req, res) => {
     try {
