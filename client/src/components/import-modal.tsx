@@ -251,6 +251,7 @@ export function ImportModal({ open, onOpenChange, onSuccess }: ImportModalProps)
       tableName: airtableTableName,
       personalAccessToken: airtableToken,
       fieldMapping: airtableFieldMapping,
+      viewName: "Grid view",
     };
 
     // First save the config, then import contacts

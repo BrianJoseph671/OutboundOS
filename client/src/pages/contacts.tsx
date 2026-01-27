@@ -1411,9 +1411,7 @@ export default function Contacts() {
     retryResearchMutation.mutate({ jobId: activeJobId, contactId });
   };
 
-  const sortedContacts = [...contacts].sort((a, b) => {
-    return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
-  });
+  const sortedContacts = [...contacts];
 
   const filteredContacts = sortedContacts.filter((contact) => {
     const searchLower = search.toLowerCase();

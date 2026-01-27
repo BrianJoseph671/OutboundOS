@@ -256,14 +256,23 @@ export async function registerRoutes(
   // Airtable Import - Connect to Airtable and fetch records
   app.post("/api/contacts/import/airtable", async (req, res) => {
     try {
-      const { baseId, tableName, personalAccessToken, preview } = req.body;
+      const { baseId, tableName, personalAccessToken, preview, viewName } = req.body;
 
       if (!baseId || !tableName || !personalAccessToken) {
         return res.status(400).json({ message: "Missing required fields" });
       }
 
+      // Build URL with view parameter to preserve Airtable grid order
+      const params = new URLSearchParams({
+        maxRecords: preview ? "100" : "1000",
+      });
+      
+      // Use specified view or default to "Grid view" for consistent ordering
+      const view = viewName || "Grid view";
+      params.set("view", view);
+
       const response = await fetch(
-        `https://api.airtable.com/v0/${baseId}/${encodeURIComponent(tableName)}?maxRecords=${preview ? 100 : 1000}`,
+        `https://api.airtable.com/v0/${baseId}/${encodeURIComponent(tableName)}?${params.toString()}`,
         {
           headers: {
             Authorization: `Bearer ${personalAccessToken}`,
@@ -319,6 +328,7 @@ export async function registerRoutes(
         connected: true,
         baseId: config.baseId,
         tableName: config.tableName,
+        viewName: config.viewName || "Grid view",
         lastSyncAt: config.lastSyncAt,
         fieldMapping: config.fieldMapping ? JSON.parse(config.fieldMapping) : null,
       });
@@ -331,7 +341,7 @@ export async function registerRoutes(
   // Save Airtable connection config
   app.post("/api/airtable/config", async (req, res) => {
     try {
-      const { baseId, tableName, personalAccessToken, fieldMapping } = req.body;
+      const { baseId, tableName, personalAccessToken, fieldMapping, viewName } = req.body;
       
       if (!baseId || !tableName || !personalAccessToken) {
         return res.status(400).json({ message: "Missing required fields" });
@@ -342,6 +352,7 @@ export async function registerRoutes(
         tableName,
         personalAccessToken,
         fieldMapping: fieldMapping ? JSON.stringify(fieldMapping) : null,
+        viewName: viewName || "Grid view",
         lastSyncAt: new Date(),
         isConnected: true,
       });
@@ -350,6 +361,7 @@ export async function registerRoutes(
         connected: true,
         baseId: config.baseId,
         tableName: config.tableName,
+        viewName: config.viewName,
         lastSyncAt: config.lastSyncAt,
       });
     } catch (error) {
@@ -378,8 +390,14 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Airtable not connected" });
       }
 
+      // Build URL with view parameter to preserve Airtable grid order
+      const params = new URLSearchParams({
+        maxRecords: "1000",
+        view: config.viewName || "Grid view", // Use stored view to preserve user's ordering
+      });
+
       const response = await fetch(
-        `https://api.airtable.com/v0/${config.baseId}/${encodeURIComponent(config.tableName)}?maxRecords=1000`,
+        `https://api.airtable.com/v0/${config.baseId}/${encodeURIComponent(config.tableName)}?${params.toString()}`,
         {
           headers: {
             Authorization: `Bearer ${config.personalAccessToken}`,

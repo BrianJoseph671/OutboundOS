@@ -48,7 +48,7 @@ export interface IStorage {
 export class DatabaseStorage implements IStorage {
   // Contacts
   async getContacts(): Promise<Contact[]> {
-    return await db.select().from(contacts).orderBy(desc(contacts.id));
+    return await db.select().from(contacts).orderBy(contacts.createdAt);
   }
 
   async getContact(id: string): Promise<Contact | undefined> {

@@ -125,6 +125,7 @@ export const airtableConfig = pgTable("airtable_config", {
   tableName: text("table_name").notNull(),
   personalAccessToken: text("personal_access_token").notNull(),
   fieldMapping: text("field_mapping"),
+  viewName: text("view_name").default("Grid view"),
   lastSyncAt: timestamp("last_sync_at"),
   isConnected: boolean("is_connected").default(true),
 });
