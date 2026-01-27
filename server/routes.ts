@@ -477,7 +477,19 @@ export async function registerRoutes(
   // n8n Webhook - Import batch outreach logs
   app.post("/api/webhooks/outreach-logs", async (req, res) => {
     try {
-      console.log("[Outreach Webhook] Received payload:", JSON.stringify(req.body).slice(0, 1000));
+      const fullPayload = JSON.stringify(req.body, null, 2);
+      console.log("[Outreach Webhook] Received payload:", fullPayload);
+      
+      // Debug mode - add ?debug=1 to URL to just echo the payload
+      if (req.query.debug) {
+        return res.json({ 
+          ok: true, 
+          debug: true,
+          received: req.body,
+          isArray: Array.isArray(req.body),
+          length: Array.isArray(req.body) ? req.body.length : 1
+        });
+      }
       
       // Handle n8n batch structure which might be [{data: {...}}] or just [{...}]
       let logs = Array.isArray(req.body) ? req.body : [req.body];
