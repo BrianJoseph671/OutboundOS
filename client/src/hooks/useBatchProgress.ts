@@ -92,6 +92,8 @@ export function useBatchProgress(jobId: string | null): UseBatchProgressResult {
   const [isComplete, setIsComplete] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
+  const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  const wsFailedRef = useRef(false);
 
   const resetState = useCallback(() => {
     setProgress(null);
@@ -99,13 +101,58 @@ export function useBatchProgress(jobId: string | null): UseBatchProgressResult {
     setFailedContacts([]);
     setCurrentContact(null);
     setIsComplete(false);
+    wsFailedRef.current = false;
+  }, []);
+
+  // Fallback polling when WebSocket fails
+  const startPolling = useCallback((jobIdToPolL: string) => {
+    if (pollingRef.current) return;
+    
+    console.log("[useBatchProgress] Starting fallback polling");
+    
+    pollingRef.current = setInterval(async () => {
+      try {
+        const response = await fetch(`/api/batch/${jobIdToPolL}/status`);
+        if (!response.ok) return;
+        
+        const data = await response.json();
+        console.log("[useBatchProgress] Poll response:", data);
+        
+        if (data.status === "completed" || data.status === "failed") {
+          setIsComplete(true);
+          if (pollingRef.current) {
+            clearInterval(pollingRef.current);
+            pollingRef.current = null;
+          }
+        }
+        
+        setProgress({
+          completed: data.successCount || 0,
+          failed: data.failureCount || 0,
+          total: data.totalContacts || 0,
+          percentComplete: data.totalContacts ? Math.round((data.processedContacts / data.totalContacts) * 100) : 0,
+        });
+      } catch (error) {
+        console.error("[useBatchProgress] Polling error:", error);
+      }
+    }, 2000);
+  }, []);
+
+  const stopPolling = useCallback(() => {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
   }, []);
 
   useEffect(() => {
     if (!jobId) {
       resetState();
+      stopPolling();
       return;
     }
+
+    console.log(`[useBatchProgress] Connecting to WebSocket for job ${jobId}`);
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const wsUrl = `${protocol}//${window.location.host}/ws`;
@@ -113,14 +160,27 @@ export function useBatchProgress(jobId: string | null): UseBatchProgressResult {
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
+    // Set a timeout to start polling if WebSocket doesn't connect
+    const connectionTimeout = setTimeout(() => {
+      if (!isConnected && !wsFailedRef.current) {
+        console.log("[useBatchProgress] WebSocket connection timeout, starting fallback polling");
+        wsFailedRef.current = true;
+        startPolling(jobId);
+      }
+    }, 5000);
+
     ws.onopen = () => {
+      console.log("[useBatchProgress] WebSocket connected");
+      clearTimeout(connectionTimeout);
       setIsConnected(true);
       ws.send(JSON.stringify({ type: "subscribe", jobId }));
+      stopPolling(); // Stop polling if we get WebSocket working
     };
 
     ws.onmessage = (event) => {
       try {
         const message: WebSocketMessage = JSON.parse(event.data);
+        console.log("[useBatchProgress] Received message:", message.type, message);
 
         switch (message.type) {
           case "PROGRESS":
@@ -147,6 +207,7 @@ export function useBatchProgress(jobId: string | null): UseBatchProgressResult {
             break;
 
           case "CONTACT_FAILED":
+            setCurrentContact(null);
             setFailedContacts((prev) => [
               ...prev,
               {
@@ -159,6 +220,7 @@ export function useBatchProgress(jobId: string | null): UseBatchProgressResult {
 
           case "JOB_COMPLETE":
             setIsComplete(true);
+            setCurrentContact(null);
             setProgress({
               completed: message.successCount,
               failed: message.failureCount,
@@ -168,31 +230,45 @@ export function useBatchProgress(jobId: string | null): UseBatchProgressResult {
             break;
 
           case "SUBSCRIBED":
-            console.log(`[WebSocket] Subscribed to job ${message.jobId}`);
+            console.log(`[useBatchProgress] Subscribed to job ${message.jobId}`);
             break;
         }
       } catch (error) {
-        console.error("[WebSocket] Failed to parse message:", error);
+        console.error("[useBatchProgress] Failed to parse message:", error);
       }
     };
 
     ws.onclose = () => {
+      console.log("[useBatchProgress] WebSocket closed");
       setIsConnected(false);
+      // Start polling as fallback if WebSocket closes unexpectedly
+      if (!isComplete && !wsFailedRef.current) {
+        wsFailedRef.current = true;
+        startPolling(jobId);
+      }
     };
 
     ws.onerror = (error) => {
-      console.error("[WebSocket] Error:", error);
+      console.error("[useBatchProgress] WebSocket error:", error);
       setIsConnected(false);
+      // Start polling as fallback
+      if (!wsFailedRef.current) {
+        wsFailedRef.current = true;
+        startPolling(jobId);
+      }
     };
 
     return () => {
+      clearTimeout(connectionTimeout);
+      stopPolling();
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: "unsubscribe", jobId }));
       }
       ws.close();
       wsRef.current = null;
     };
-  }, [jobId, resetState]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jobId]);
 
   return {
     progress,

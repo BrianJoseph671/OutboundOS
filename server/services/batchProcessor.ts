@@ -120,12 +120,11 @@ class BatchProcessor extends EventEmitter {
 
     for (let i = 0; i < contacts.length; i += CONCURRENCY_LIMIT) {
       const batch = contacts.slice(i, i + CONCURRENCY_LIMIT);
+      console.log(`[BatchProcessor] Processing batch ${i / CONCURRENCY_LIMIT + 1}, contacts: ${batch.map(c => c.name).join(", ")}`);
 
       await Promise.all(
         batch.map((contact) => this.processContact(jobId, contact))
       );
-
-      this.emitProgress(jobId);
 
       if (i + CONCURRENCY_LIMIT < contacts.length) {
         await this.delay(BATCH_DELAY_MS);
@@ -154,11 +153,16 @@ class BatchProcessor extends EventEmitter {
     contactResult.status = "processing";
     contactResult.startedAt = new Date();
 
+    console.log(`[BatchProcessor] Starting research for ${contact.name} (job: ${jobId})`);
+
     this.emit("contact:start", {
       jobId,
       contactId: contact.id,
       contactName: contact.name,
     });
+
+    // Emit immediate progress update when starting a contact
+    this.emitProgress(jobId);
 
     try {
       const researchResult: ResearchResponse = await n8nClient.research({
@@ -181,6 +185,9 @@ class BatchProcessor extends EventEmitter {
       contactResult.research = research;
       contactResult.completedAt = new Date();
       job.successCount++;
+      job.processedContacts++;
+
+      console.log(`[BatchProcessor] Completed research for ${contact.name} (success)`);
 
       this.emit("contact:complete", {
         jobId,
@@ -188,6 +195,9 @@ class BatchProcessor extends EventEmitter {
         contactName: contact.name,
         research,
       });
+
+      // Emit progress after each contact completes
+      this.emitProgress(jobId);
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
 
@@ -195,6 +205,9 @@ class BatchProcessor extends EventEmitter {
       contactResult.error = errorMessage;
       contactResult.completedAt = new Date();
       job.failureCount++;
+      job.processedContacts++;
+
+      console.log(`[BatchProcessor] Failed research for ${contact.name}: ${errorMessage}`);
 
       this.emit("contact:failed", {
         jobId,
@@ -202,9 +215,10 @@ class BatchProcessor extends EventEmitter {
         contactName: contact.name,
         error: errorMessage,
       });
-    }
 
-    job.processedContacts++;
+      // Emit progress after each contact fails
+      this.emitProgress(jobId);
+    }
   }
 
   private async updateAirtable(contact: ContactInput, research: string): Promise<void> {
@@ -256,14 +270,18 @@ class BatchProcessor extends EventEmitter {
     const job = this.jobs.get(jobId);
     if (!job) return;
 
-    this.emit("progress", {
+    const progressData = {
       jobId,
       processedContacts: job.processedContacts,
       totalContacts: job.totalContacts,
       successCount: job.successCount,
       failureCount: job.failureCount,
       percentComplete: Math.round((job.processedContacts / job.totalContacts) * 100),
-    });
+    };
+
+    console.log(`[BatchProcessor] Emitting progress:`, JSON.stringify(progressData));
+
+    this.emit("progress", progressData);
   }
 
   private delay(ms: number): Promise<void> {

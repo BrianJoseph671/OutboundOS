@@ -156,13 +156,22 @@ function cleanupClient(ws: WebSocket): void {
 
 function broadcastToJob(jobId: string, message: object): void {
   const subscribers = jobSubscribers.get(jobId);
-  if (!subscribers || subscribers.size === 0) return;
+  
+  console.log(`[WebSocket] Broadcasting to job ${jobId}, subscribers: ${subscribers?.size || 0}`);
+  
+  if (!subscribers || subscribers.size === 0) {
+    console.log(`[WebSocket] No subscribers for job ${jobId}`);
+    return;
+  }
 
   const payload = JSON.stringify(message);
 
   Array.from(subscribers).forEach((ws) => {
     if (ws.readyState === WebSocket.OPEN) {
       ws.send(payload);
+      console.log(`[WebSocket] Sent message to client for job ${jobId}`);
+    } else {
+      console.log(`[WebSocket] Client not ready (state: ${ws.readyState})`);
     }
   });
 }
