@@ -499,9 +499,9 @@ export function ImportModal({ open, onOpenChange, onSuccess }: ImportModalProps)
                 {renderFieldMappingUI(airtableData.headers, airtableFieldMapping, setAirtableFieldMapping)}
                 
                 <div className="flex items-center gap-2 p-3 rounded-md bg-muted/50">
-                  <input type="checkbox" id="keep-synced" disabled className="rounded" />
-                  <Label htmlFor="keep-synced" className="text-sm text-muted-foreground cursor-not-allowed">
-                    Keep synced with Airtable (coming soon)
+                  <input type="checkbox" id="keep-synced" defaultChecked className="rounded" />
+                  <Label htmlFor="keep-synced" className="text-sm">
+                    Save connection and keep synced with Airtable
                   </Label>
                 </div>
 
