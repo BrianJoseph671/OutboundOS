@@ -258,7 +258,7 @@ function SidebarTrigger({
   onClick,
   ...props
 }: React.ComponentProps<typeof Button>) {
-  const { toggleSidebar } = useSidebar()
+  const { toggleSidebar, state } = useSidebar()
 
   return (
     <Button
@@ -273,7 +273,7 @@ function SidebarTrigger({
       }}
       {...props}
     >
-      <PanelLeftIcon />
+      <PanelLeftIcon className={cn("transition-transform duration-200", state === "collapsed" && "rotate-180")} />
       <span className="sr-only">Toggle Sidebar</span>
     </Button>
   )
@@ -282,7 +282,6 @@ function SidebarTrigger({
 function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
   const { toggleSidebar } = useSidebar()
 
-  // Note: Tailwind v3.4 doesn't support "in-" selectors. So the rail won't work perfectly.
   return (
     <button
       data-sidebar="rail"

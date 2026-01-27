@@ -62,14 +62,14 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <SidebarProvider style={style as React.CSSProperties}>
-          <div className="flex h-screen w-full">
+          <div className="flex h-screen w-full overflow-hidden">
             <AppSidebar />
-            <div className="flex flex-col flex-1 min-w-0">
-              <header className="flex items-center justify-between gap-4 px-4 py-3 border-b bg-background sticky top-0 z-50">
+            <div className="flex flex-col flex-1 min-w-0 h-full overflow-hidden">
+              <header className="flex items-center justify-between gap-4 px-4 py-3 border-b bg-background sticky top-0 z-50 shrink-0">
                 <SidebarTrigger data-testid="button-sidebar-toggle" />
                 <ThemeToggle />
               </header>
-              <main className="flex-1 overflow-auto px-6 py-6">
+              <main className="flex-1 overflow-auto px-6 py-6 min-h-0">
                 <Router />
               </main>
             </div>
