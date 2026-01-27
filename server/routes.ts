@@ -295,12 +295,8 @@ export async function registerRoutes(
       }
 
       // Extract headers from first record's fields
-      const allFieldNames = new Set<string>();
-      records.forEach((record: any) => {
-        Object.keys(record.fields || {}).forEach(key => allFieldNames.add(key));
-      });
-      const headers = Array.from(allFieldNames);
-
+      const headers = Object.keys(records[0]?.fields || {});
+      
       // Convert records to rows
       const rows = records.map((record: any) => 
         headers.map(header => String(record.fields?.[header] || "").trim())
