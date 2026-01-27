@@ -265,6 +265,9 @@ export async function registerRoutes(
       // Build URL with view parameter to preserve Airtable grid order
       const params = new URLSearchParams({
         maxRecords: preview ? "100" : "1000",
+        cellFormat: "string",
+        timeZone: "America/New_York",
+        userLocale: "en-us",
       });
       
       // Use specified view or default to "Grid view" for consistent ordering
