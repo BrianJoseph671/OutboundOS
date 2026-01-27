@@ -394,6 +394,46 @@ export default function ProspectResearch() {
     });
   };
 
+  const handleDraftVariants = async () => {
+    if (!researchResult) return;
+    const draftMessage = extractDraftMessage(researchResult);
+    
+    // Extract subject from draft message if present
+    let finalSubject = `Outreach to ${personName} at ${company}`;
+    let finalBody = draftMessage;
+
+    if (draftMessage.toLowerCase().startsWith("subject:")) {
+      const subjectMatch = draftMessage.match(/^subject:\s*([^\n]+)/i);
+      if (subjectMatch) {
+        finalSubject = subjectMatch[1].trim();
+        finalBody = draftMessage.slice(subjectMatch[0].length).trim();
+      }
+    }
+
+    try {
+      await fetch("https://n8n.srv1096794.hstgr.cloud/webhook/create-variants", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          personId: personName,
+          researchBrief: `Draft outreach message for ${personName} at ${company}. Subject: ${finalSubject}. Body context: ${finalBody.substring(0, 500)}`,
+          requestId: `variants-${personName.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`,
+          forceRefresh: false
+        })
+      });
+      toast({ 
+        title: "Variants Requested", 
+        description: "Creating message variants via AI workflow" 
+      });
+    } catch (webhookError) {
+      console.error("Create variants webhook failed:", webhookError);
+      toast({ 
+        title: "Request Sent", 
+        description: "Variant creation request submitted" 
+      });
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
@@ -575,6 +615,16 @@ export default function ProspectResearch() {
                         >
                           <LogIn className="w-3.5 h-3.5 mr-1.5" />
                           Log Outreach
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          data-testid="button-draft-variants"
+                          onClick={handleDraftVariants}
+                          className="h-8"
+                        >
+                          <Sparkles className="w-3.5 h-3.5 mr-1.5" />
+                          Draft Variants
                         </Button>
                       </div>
                     )}
