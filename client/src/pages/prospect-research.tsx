@@ -357,6 +357,23 @@ export default function ProspectResearch() {
       });
     }
     
+    // Send message data to n8n webhook
+    try {
+      await fetch("https://n8n.srv1096794.hstgr.cloud/webhook/7a250306-9cf7-4393-b46e-fd2f05e35f98", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          subject: `Outreach to ${personName} at ${company}`,
+          body: draftMessage,
+          contactName: personName,
+          company: company,
+          timestamp: new Date().toISOString()
+        })
+      });
+    } catch (webhookError) {
+      console.error("Webhook notification failed:", webhookError);
+    }
+    
     // Navigate to outreach log to record the attempt
     setLocation("/outreach-log?action=new");
   };
