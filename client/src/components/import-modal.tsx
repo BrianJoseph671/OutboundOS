@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import {
@@ -27,7 +27,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, Loader2, CheckCircle2, AlertCircle, FileSpreadsheet, Database } from "lucide-react";
+import { Upload, Loader2, CheckCircle2, AlertCircle, FileSpreadsheet, Database, GripVertical } from "lucide-react";
 
 interface ImportModalProps {
   open: boolean;
@@ -57,6 +57,10 @@ const EXPECTED_FIELDS = [
 export function ImportModal({ open, onOpenChange, onSuccess }: ImportModalProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const [modalSize, setModalSize] = useState({ width: 0, height: 0 });
+  const [isResizing, setIsResizing] = useState(false);
+  const resizeRef = useRef<{ startX: number; startY: number; startWidth: number; startHeight: number } | null>(null);
 
   const [activeTab, setActiveTab] = useState("excel");
   const [file, setFile] = useState<File | null>(null);
@@ -70,6 +74,60 @@ export function ImportModal({ open, onOpenChange, onSuccess }: ImportModalProps)
   const [airtableData, setAirtableData] = useState<ParsedData | null>(null);
   const [airtableFieldMapping, setAirtableFieldMapping] = useState<FieldMapping>({});
   const [airtableConnected, setAirtableConnected] = useState(false);
+
+  useEffect(() => {
+    if (open && modalSize.width === 0) {
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      setModalSize({
+        width: Math.min(Math.max(vw * 0.85, 600), 1400),
+        height: Math.min(Math.max(vh * 0.85, 400), 900),
+      });
+    }
+  }, [open, modalSize.width]);
+
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    if (!dialogRef.current) return;
+    
+    const rect = dialogRef.current.getBoundingClientRect();
+    resizeRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      startWidth: rect.width,
+      startHeight: rect.height,
+    };
+    setIsResizing(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!resizeRef.current) return;
+      
+      const deltaX = e.clientX - resizeRef.current.startX;
+      const deltaY = e.clientY - resizeRef.current.startY;
+      
+      const newWidth = Math.max(600, Math.min(resizeRef.current.startWidth + deltaX, window.innerWidth * 0.95));
+      const newHeight = Math.max(400, Math.min(resizeRef.current.startHeight + deltaY, window.innerHeight * 0.95));
+      
+      setModalSize({ width: newWidth, height: newHeight });
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      resizeRef.current = null;
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isResizing]);
 
   const parseExcelMutation = useMutation({
     mutationFn: async (formData: FormData) => {
@@ -245,7 +303,6 @@ export function ImportModal({ open, onOpenChange, onSuccess }: ImportModalProps)
       return;
     }
 
-    // Capture values before they get reset by bulkCreateMutation.onSuccess
     const configToSave = {
       baseId: airtableBaseId,
       tableName: airtableTableName,
@@ -254,7 +311,6 @@ export function ImportModal({ open, onOpenChange, onSuccess }: ImportModalProps)
       viewName: "Grid view",
     };
 
-    // First save the config, then import contacts
     saveAirtableConfigMutation.mutate(configToSave, {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ["/api/airtable/config"] });
@@ -287,29 +343,38 @@ export function ImportModal({ open, onOpenChange, onSuccess }: ImportModalProps)
   ) => (
     <div className="space-y-3 mt-4">
       <Label className="text-sm font-medium">Map columns to fields</Label>
-      <div className="grid gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
         {headers.map(header => (
-          <div key={header} className="flex items-center gap-3">
-            <span className="text-sm w-40 truncate" title={header}>{header}</span>
-            <span className="text-muted-foreground">→</span>
-            <Select
-              value={mapping[header] || "skip"}
-              onValueChange={(value) => {
-                setMapping({ ...mapping, [header]: value === "skip" ? "" : value });
-              }}
-            >
-              <SelectTrigger className="w-40" data-testid={`select-mapping-${header}`}>
-                <SelectValue placeholder="Skip" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="skip">Skip</SelectItem>
-                {EXPECTED_FIELDS.map(field => (
-                  <SelectItem key={field.key} value={field.key}>
-                    {field.label} {field.required && "*"}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div 
+            key={header} 
+            className="flex flex-col sm:flex-row items-start sm:items-center gap-2 p-3 rounded-md border bg-muted/30"
+          >
+            <div className="flex-1 min-w-0">
+              <span className="text-sm font-medium truncate block" title={header}>
+                {header}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <span className="text-muted-foreground hidden sm:inline">→</span>
+              <Select
+                value={mapping[header] || "skip"}
+                onValueChange={(value) => {
+                  setMapping({ ...mapping, [header]: value === "skip" ? "" : value });
+                }}
+              >
+                <SelectTrigger className="w-full sm:w-36" data-testid={`select-mapping-${header}`}>
+                  <SelectValue placeholder="Skip" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="skip">Skip</SelectItem>
+                  {EXPECTED_FIELDS.map(field => (
+                    <SelectItem key={field.key} value={field.key}>
+                      {field.label} {field.required && "*"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         ))}
       </div>
@@ -317,16 +382,19 @@ export function ImportModal({ open, onOpenChange, onSuccess }: ImportModalProps)
   );
 
   const renderPreviewTable = (data: ParsedData) => (
-    <div className="mt-4 border rounded-md overflow-hidden">
-      <div className="text-sm text-muted-foreground p-2 bg-muted/50">
-        Preview (first 5 rows of {data.totalRows})
+    <div className="border rounded-md overflow-hidden">
+      <div className="text-sm text-muted-foreground p-2 bg-muted/50 flex items-center justify-between">
+        <span>Preview (first 5 rows of {data.totalRows})</span>
+        <span className="text-xs">{data.headers.length} columns</span>
       </div>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto max-h-[300px] overflow-y-auto">
         <Table>
-          <TableHeader>
+          <TableHeader className="sticky top-0 bg-background z-10">
             <TableRow>
               {data.headers.map((header, i) => (
-                <TableHead key={i} className="whitespace-nowrap">{header}</TableHead>
+                <TableHead key={i} className="whitespace-nowrap font-medium">
+                  {header}
+                </TableHead>
               ))}
             </TableRow>
           </TableHeader>
@@ -334,7 +402,7 @@ export function ImportModal({ open, onOpenChange, onSuccess }: ImportModalProps)
             {data.rows.slice(0, 5).map((row, i) => (
               <TableRow key={i}>
                 {row.map((cell, j) => (
-                  <TableCell key={j} className="whitespace-nowrap max-w-[200px] truncate">
+                  <TableCell key={j} className="whitespace-nowrap max-w-[250px] truncate">
                     {cell}
                   </TableCell>
                 ))}
@@ -351,179 +419,212 @@ export function ImportModal({ open, onOpenChange, onSuccess }: ImportModalProps)
       if (!isOpen) resetState();
       onOpenChange(isOpen);
     }}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent 
+        ref={dialogRef}
+        className="flex flex-col p-0 gap-0"
+        style={{
+          width: modalSize.width > 0 ? `${modalSize.width}px` : "85vw",
+          maxWidth: "1400px",
+          height: modalSize.height > 0 ? `${modalSize.height}px` : "85vh",
+          maxHeight: "90vh",
+          minWidth: "600px",
+          minHeight: "400px",
+        }}
+      >
+        <DialogHeader className="p-6 pb-4 border-b shrink-0">
           <DialogTitle>Import Contacts</DialogTitle>
         </DialogHeader>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="excel" data-testid="tab-excel-upload">
-              <FileSpreadsheet className="w-4 h-4 mr-2" />
-              Excel Upload
-            </TabsTrigger>
-            <TabsTrigger value="airtable" data-testid="tab-airtable">
-              <Database className="w-4 h-4 mr-2" />
-              Airtable Connection
-            </TabsTrigger>
-          </TabsList>
+        <div className="flex-1 overflow-hidden flex flex-col min-h-0">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col flex-1 min-h-0">
+            <div className="px-6 pt-4 shrink-0">
+              <TabsList className="grid w-full grid-cols-2 max-w-md">
+                <TabsTrigger value="excel" data-testid="tab-excel-upload">
+                  <FileSpreadsheet className="w-4 h-4 mr-2" />
+                  Excel Upload
+                </TabsTrigger>
+                <TabsTrigger value="airtable" data-testid="tab-airtable">
+                  <Database className="w-4 h-4 mr-2" />
+                  Airtable Connection
+                </TabsTrigger>
+              </TabsList>
+            </div>
 
-          <TabsContent value="excel" className="space-y-4 pt-4">
-            <div
-              className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-                parseExcelMutation.isPending ? "border-primary/50 bg-primary/5" : "border-border hover:border-primary/50"
-              }`}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={handleFileDrop}
-            >
-              {parseExcelMutation.isPending ? (
-                <div className="flex flex-col items-center gap-2">
-                  <Loader2 className="w-8 h-8 animate-spin text-primary" />
-                  <p className="text-sm text-muted-foreground">Parsing file...</p>
+            <TabsContent value="excel" className="flex-1 overflow-auto px-6 py-4 space-y-4 m-0 min-h-0">
+              <div
+                className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+                  parseExcelMutation.isPending ? "border-primary/50 bg-primary/5" : "border-border hover:border-primary/50"
+                }`}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={handleFileDrop}
+              >
+                {parseExcelMutation.isPending ? (
+                  <div className="flex flex-col items-center gap-2">
+                    <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                    <p className="text-sm text-muted-foreground">Parsing file...</p>
+                  </div>
+                ) : file ? (
+                  <div className="flex flex-col items-center gap-2">
+                    <CheckCircle2 className="w-8 h-8 text-green-500" />
+                    <p className="font-medium">{file.name}</p>
+                    <Button variant="ghost" size="sm" onClick={() => { setFile(null); setParsedData(null); }}>
+                      Choose different file
+                    </Button>
+                  </div>
+                ) : (
+                  <label className="cursor-pointer flex flex-col items-center gap-2">
+                    <Upload className="w-8 h-8 text-muted-foreground" />
+                    <p className="font-medium">Drop file here or click to upload</p>
+                    <p className="text-sm text-muted-foreground">Accepts .xlsx, .xls, .csv (max 5MB)</p>
+                    <input
+                      type="file"
+                      accept=".xlsx,.xls,.csv"
+                      className="hidden"
+                      onChange={handleFileChange}
+                      data-testid="input-file-upload"
+                    />
+                  </label>
+                )}
+              </div>
+
+              {parseError && (
+                <div className="flex items-center gap-2 text-destructive text-sm">
+                  <AlertCircle className="w-4 h-4" />
+                  {parseError}
                 </div>
-              ) : file ? (
-                <div className="flex flex-col items-center gap-2">
-                  <CheckCircle2 className="w-8 h-8 text-green-500" />
-                  <p className="font-medium">{file.name}</p>
-                  <Button variant="ghost" size="sm" onClick={() => { setFile(null); setParsedData(null); }}>
-                    Choose different file
+              )}
+
+              {!parsedData && (
+                <div className="text-sm text-muted-foreground">
+                  <strong>Expected columns:</strong> Name, Company, Email (optional), LinkedIn URL (optional), Role (optional), Notes (optional)
+                </div>
+              )}
+
+              {parsedData && (
+                <>
+                  {renderPreviewTable(parsedData)}
+                  {renderFieldMappingUI(parsedData.headers, fieldMapping, setFieldMapping)}
+                </>
+              )}
+            </TabsContent>
+
+            <TabsContent value="airtable" className="flex-1 overflow-auto px-6 py-4 space-y-4 m-0 min-h-0">
+              {!airtableData ? (
+                <div className="space-y-4 max-w-lg">
+                  <div className="space-y-2">
+                    <Label htmlFor="airtable-base-id">Airtable Base ID</Label>
+                    <Input
+                      id="airtable-base-id"
+                      placeholder="appXXXXXXXXXXXXXX"
+                      value={airtableBaseId}
+                      onChange={(e) => setAirtableBaseId(e.target.value)}
+                      data-testid="input-airtable-base-id"
+                    />
+                    <p className="text-xs text-muted-foreground">Found in your base URL after airtable.com/</p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="airtable-table-name">Table Name</Label>
+                    <Input
+                      id="airtable-table-name"
+                      placeholder="e.g., Prospects or Contacts"
+                      value={airtableTableName}
+                      onChange={(e) => setAirtableTableName(e.target.value)}
+                      data-testid="input-airtable-table-name"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="airtable-token">Personal Access Token</Label>
+                    <Input
+                      id="airtable-token"
+                      type="password"
+                      placeholder="pat.XXXXXX.XXXXXX"
+                      value={airtableToken}
+                      onChange={(e) => setAirtableToken(e.target.value)}
+                      data-testid="input-airtable-token"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Create at{" "}
+                      <a href="https://airtable.com/create/tokens" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                        airtable.com/create/tokens
+                      </a>
+                    </p>
+                  </div>
+
+                  <Button
+                    variant="outline"
+                    onClick={() => testAirtableMutation.mutate()}
+                    disabled={!airtableBaseId || !airtableTableName || !airtableToken || testAirtableMutation.isPending}
+                    data-testid="button-test-airtable"
+                  >
+                    {testAirtableMutation.isPending ? (
+                      <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Testing...</>
+                    ) : airtableConnected ? (
+                      <><CheckCircle2 className="w-4 h-4 mr-2 text-green-500" /> Connected</>
+                    ) : (
+                      "Test connection"
+                    )}
                   </Button>
                 </div>
               ) : (
-                <label className="cursor-pointer flex flex-col items-center gap-2">
-                  <Upload className="w-8 h-8 text-muted-foreground" />
-                  <p className="font-medium">Drop file here or click to upload</p>
-                  <p className="text-sm text-muted-foreground">Accepts .xlsx, .xls, .csv (max 5MB)</p>
-                  <input
-                    type="file"
-                    accept=".xlsx,.xls,.csv"
-                    className="hidden"
-                    onChange={handleFileChange}
-                    data-testid="input-file-upload"
-                  />
-                </label>
+                <>
+                  <div className="flex items-center gap-2 p-3 rounded-md bg-green-500/10 border border-green-500/20">
+                    <CheckCircle2 className="w-5 h-5 text-green-500" />
+                    <span className="text-sm font-medium">Connected to Airtable</span>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="ml-auto"
+                      onClick={() => {
+                        setAirtableData(null);
+                        setAirtableConnected(false);
+                      }}
+                    >
+                      Disconnect
+                    </Button>
+                  </div>
+                  
+                  {renderPreviewTable(airtableData)}
+                  {renderFieldMappingUI(airtableData.headers, airtableFieldMapping, setAirtableFieldMapping)}
+                  
+                  <div className="flex items-center gap-2 p-3 rounded-md bg-muted/50">
+                    <input type="checkbox" id="keep-synced" defaultChecked className="rounded" />
+                    <Label htmlFor="keep-synced" className="text-sm">
+                      Save connection and keep synced with Airtable
+                    </Label>
+                  </div>
+                </>
               )}
-            </div>
+            </TabsContent>
+          </Tabs>
+        </div>
 
-            {parseError && (
-              <div className="flex items-center gap-2 text-destructive text-sm">
-                <AlertCircle className="w-4 h-4" />
-                {parseError}
-              </div>
-            )}
+        {((activeTab === "excel" && parsedData) || (activeTab === "airtable" && airtableData)) && (
+          <div className="p-6 pt-4 border-t shrink-0 bg-background">
+            <Button
+              className="w-full"
+              size="lg"
+              onClick={activeTab === "excel" ? handleImportExcel : handleImportAirtable}
+              disabled={bulkCreateMutation.isPending}
+              data-testid={activeTab === "excel" ? "button-confirm-import-excel" : "button-confirm-import-airtable"}
+            >
+              {bulkCreateMutation.isPending ? (
+                <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Importing...</>
+              ) : (
+                `Import ${(activeTab === "excel" ? parsedData?.totalRows : airtableData?.totalRows) || 0} contacts`
+              )}
+            </Button>
+          </div>
+        )}
 
-            <div className="text-sm text-muted-foreground">
-              <strong>Expected columns:</strong> Name, Company, Email (optional), LinkedIn URL (optional), Role (optional), Notes (optional)
-            </div>
-
-            {parsedData && (
-              <>
-                {renderPreviewTable(parsedData)}
-                {renderFieldMappingUI(parsedData.headers, fieldMapping, setFieldMapping)}
-                
-                <Button
-                  className="w-full"
-                  onClick={handleImportExcel}
-                  disabled={bulkCreateMutation.isPending || !fieldMapping[Object.keys(fieldMapping).find(k => fieldMapping[k] === "name") || ""]}
-                  data-testid="button-confirm-import-excel"
-                >
-                  {bulkCreateMutation.isPending ? (
-                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Importing...</>
-                  ) : (
-                    `Import ${parsedData.totalRows} contacts`
-                  )}
-                </Button>
-              </>
-            )}
-          </TabsContent>
-
-          <TabsContent value="airtable" className="space-y-4 pt-4">
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="airtable-base-id">Airtable Base ID</Label>
-                <Input
-                  id="airtable-base-id"
-                  placeholder="appXXXXXXXXXXXXXX"
-                  value={airtableBaseId}
-                  onChange={(e) => setAirtableBaseId(e.target.value)}
-                  data-testid="input-airtable-base-id"
-                />
-                <p className="text-xs text-muted-foreground">Found in your base URL after airtable.com/</p>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="airtable-table-name">Table Name</Label>
-                <Input
-                  id="airtable-table-name"
-                  placeholder="e.g., Prospects or Contacts"
-                  value={airtableTableName}
-                  onChange={(e) => setAirtableTableName(e.target.value)}
-                  data-testid="input-airtable-table-name"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="airtable-token">Personal Access Token</Label>
-                <Input
-                  id="airtable-token"
-                  type="password"
-                  placeholder="pat.XXXXXX.XXXXXX"
-                  value={airtableToken}
-                  onChange={(e) => setAirtableToken(e.target.value)}
-                  data-testid="input-airtable-token"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Create at{" "}
-                  <a href="https://airtable.com/create/tokens" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
-                    airtable.com/create/tokens
-                  </a>
-                </p>
-              </div>
-
-              <Button
-                variant="outline"
-                onClick={() => testAirtableMutation.mutate()}
-                disabled={!airtableBaseId || !airtableTableName || !airtableToken || testAirtableMutation.isPending}
-                data-testid="button-test-airtable"
-              >
-                {testAirtableMutation.isPending ? (
-                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Testing...</>
-                ) : airtableConnected ? (
-                  <><CheckCircle2 className="w-4 h-4 mr-2 text-green-500" /> Connected</>
-                ) : (
-                  "Test connection"
-                )}
-              </Button>
-            </div>
-
-            {airtableData && (
-              <>
-                {renderPreviewTable(airtableData)}
-                {renderFieldMappingUI(airtableData.headers, airtableFieldMapping, setAirtableFieldMapping)}
-                
-                <div className="flex items-center gap-2 p-3 rounded-md bg-muted/50">
-                  <input type="checkbox" id="keep-synced" defaultChecked className="rounded" />
-                  <Label htmlFor="keep-synced" className="text-sm">
-                    Save connection and keep synced with Airtable
-                  </Label>
-                </div>
-
-                <Button
-                  className="w-full"
-                  onClick={handleImportAirtable}
-                  disabled={bulkCreateMutation.isPending}
-                  data-testid="button-confirm-import-airtable"
-                >
-                  {bulkCreateMutation.isPending ? (
-                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Importing...</>
-                  ) : (
-                    `Import ${airtableData.totalRows} contacts`
-                  )}
-                </Button>
-              </>
-            )}
-          </TabsContent>
-        </Tabs>
+        <div
+          className="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize z-50 flex items-center justify-center opacity-50 hover:opacity-100 transition-opacity"
+          onMouseDown={handleResizeStart}
+          data-testid="modal-resize-handle"
+        >
+          <GripVertical className="w-3 h-3 rotate-[-45deg] text-muted-foreground" />
+        </div>
       </DialogContent>
     </Dialog>
   );
