@@ -377,6 +377,7 @@ export default function ProspectResearch() {
         body: JSON.stringify({
           subject: finalSubject,
           body: finalBody,
+          name: personName,
           contactName: personName,
           company: company,
           timestamp: new Date().toISOString()
