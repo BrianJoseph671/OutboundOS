@@ -336,6 +336,14 @@ export function ImportModal({ open, onOpenChange, onSuccess }: ImportModalProps)
     setAirtableConnected(false);
   };
 
+  const getDisplayHeader = (header: string) => {
+    const headerMap: Record<string, string> = {
+      "Account": "Company Name",
+      "Accounts": "Company Name",
+    };
+    return headerMap[header] || header;
+  };
+
   const renderFieldMappingUI = (
     headers: string[], 
     mapping: FieldMapping, 
@@ -350,8 +358,8 @@ export function ImportModal({ open, onOpenChange, onSuccess }: ImportModalProps)
             className="flex flex-col sm:flex-row items-start sm:items-center gap-2 p-3 rounded-md border bg-muted/30"
           >
             <div className="flex-1 min-w-0">
-              <span className="text-sm font-medium truncate block" title={header}>
-                {header}
+              <span className="text-sm font-medium truncate block" title={getDisplayHeader(header)}>
+                {getDisplayHeader(header)}
               </span>
             </div>
             <div className="flex items-center gap-2 w-full sm:w-auto">
@@ -393,7 +401,7 @@ export function ImportModal({ open, onOpenChange, onSuccess }: ImportModalProps)
             <TableRow>
               {data.headers.map((header, i) => (
                 <TableHead key={i} className="whitespace-nowrap font-medium">
-                  {header}
+                  {getDisplayHeader(header)}
                 </TableHead>
               ))}
             </TableRow>
