@@ -370,18 +370,6 @@ export default function ProspectResearch() {
       });
     }
     
-    // Extract subject from draft message if present
-    let finalSubject = `Outreach to ${personName} at ${company}`;
-    let finalBody = draftMessage;
-
-    if (draftMessage.toLowerCase().startsWith("subject:")) {
-      const subjectMatch = draftMessage.match(/^subject:\s*([^\n]+)/i);
-      if (subjectMatch) {
-        finalSubject = subjectMatch[1].trim();
-        finalBody = draftMessage.slice(subjectMatch[0].length).trim();
-      }
-    }
-
     // Send message data to n8n webhook
     try {
       await fetch("https://n8n.srv1096794.hstgr.cloud/webhook/7a250306-9cf7-4393-b46e-fd2f05e35f98", {
