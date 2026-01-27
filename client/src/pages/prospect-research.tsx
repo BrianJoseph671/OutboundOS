@@ -370,29 +370,28 @@ export default function ProspectResearch() {
       });
     }
     
-    // Send message data to n8n webhook
+    // Send message data to n8n drafting webhook
     try {
-      await fetch("https://n8n.srv1096794.hstgr.cloud/webhook/7a250306-9cf7-4393-b46e-fd2f05e35f98", {
+      const personId = `pers_${personName.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')}`;
+      await fetch("https://n8n.srv1096794.hstgr.cloud/webhook/drafting-agent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          subject: finalSubject,
-          body: finalBody,
-          name: personName,
-          contactName: personName,
-          company: company,
-          timestamp: new Date().toISOString()
+          personId,
+          researchBrief: `Draft outreach message for ${personName} at ${company}. Subject: ${finalSubject}. Body context: ${finalBody.substring(0, 500)}`,
+          requestId: `draft-${personId}-${Date.now()}`,
+          forceRefresh: false
         })
       });
     } catch (webhookError) {
-      console.error("Webhook notification failed:", webhookError);
+      console.error("Drafting webhook notification failed:", webhookError);
     }
     
-    // Navigate to decisions page to see results
-    setLocation("/decisions");
+    // Navigate to outreach log page with pre-filled form
+    setLocation("/outreach-log?action=new");
     toast({ 
-      title: "Opening Decisions", 
-      description: "Review and act on research results" 
+      title: "Opening Outreach Log", 
+      description: "Review and edit your outreach message" 
     });
   };
 
