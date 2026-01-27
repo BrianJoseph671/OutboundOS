@@ -1137,6 +1137,86 @@ function BatchProgressBar({
   );
 }
 
+interface AirtableConfig {
+  connected: boolean;
+  baseId?: string;
+  tableName?: string;
+  lastSyncAt?: string;
+  fieldMapping?: Record<string, string>;
+}
+
+function AirtableCard({
+  config,
+  onSync,
+  onDisconnect,
+  isSyncing,
+}: {
+  config: AirtableConfig | null;
+  onSync: () => void;
+  onDisconnect: () => void;
+  isSyncing: boolean;
+}) {
+  if (!config?.connected) return null;
+
+  const formatLastSync = (dateStr?: string) => {
+    if (!dateStr) return "Never";
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMins < 1) return "Just now";
+    if (diffMins < 60) return `${diffMins} min ago`;
+    if (diffHours < 24) return `${diffHours} hours ago`;
+    return `${diffDays} days ago`;
+  };
+
+  return (
+    <Card className="border-green-200 dark:border-green-800 bg-green-50/50 dark:bg-green-950/20">
+      <CardContent className="py-3 px-4">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center flex-shrink-0">
+              <Check className="w-4 h-4 text-green-600 dark:text-green-400" />
+            </div>
+            <div className="min-w-0">
+              <p className="font-medium text-sm truncate">
+                Airtable Connected
+              </p>
+              <p className="text-xs text-muted-foreground truncate">
+                {config.tableName} • Last synced: {formatLastSync(config.lastSyncAt)}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onSync}
+              disabled={isSyncing}
+              data-testid="button-sync-airtable"
+            >
+              <RefreshCw className={`w-4 h-4 mr-2 ${isSyncing ? "animate-spin" : ""}`} />
+              {isSyncing ? "Syncing..." : "Sync"}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onDisconnect}
+              className="text-muted-foreground hover:text-destructive"
+              data-testid="button-disconnect-airtable"
+            >
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function Contacts() {
   const { toast } = useToast();
   const [search, setSearch] = useState("");
@@ -1149,6 +1229,39 @@ export default function Contacts() {
 
   const { data: contacts = [], isLoading } = useQuery<Contact[]>({
     queryKey: ["/api/contacts"],
+  });
+
+  const { data: airtableConfig, refetch: refetchAirtableConfig } = useQuery<AirtableConfig>({
+    queryKey: ["/api/airtable/config"],
+  });
+
+  const syncAirtableMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/airtable/sync");
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
+      refetchAirtableConfig();
+      toast({
+        title: "Airtable synced",
+        description: `${data.created} new, ${data.updated} updated`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Sync failed", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const disconnectAirtableMutation = useMutation({
+    mutationFn: () => apiRequest("DELETE", "/api/airtable/config"),
+    onSuccess: () => {
+      refetchAirtableConfig();
+      toast({ title: "Airtable disconnected" });
+    },
+    onError: () => {
+      toast({ title: "Failed to disconnect", variant: "destructive" });
+    },
   });
 
   const { progress, completedContacts, failedContacts, isComplete, isConnected } = useBatchProgress(activeJobId);
@@ -1348,6 +1461,17 @@ export default function Contacts() {
         {activeJobId && progress && (
           <BatchProgressBar progress={progress} isComplete={isComplete} />
         )}
+
+        <AirtableCard
+          config={airtableConfig ?? null}
+          onSync={() => syncAirtableMutation.mutate()}
+          onDisconnect={() => {
+            if (confirm("Disconnect from Airtable? Your imported contacts will remain.")) {
+              disconnectAirtableMutation.mutate();
+            }
+          }}
+          isSyncing={syncAirtableMutation.isPending}
+        />
 
         <div className="flex items-center gap-2">
           <div className="relative flex-1">

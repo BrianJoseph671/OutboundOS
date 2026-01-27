@@ -113,6 +113,7 @@ export function ImportModal({ open, onOpenChange, onSuccess }: ImportModalProps)
     onError: (error: Error) => {
       toast({ title: "Connection failed", description: error.message, variant: "destructive" });
       setAirtableConnected(false);
+      setAirtableData(null);
     },
   });
 
@@ -218,8 +219,15 @@ export function ImportModal({ open, onOpenChange, onSuccess }: ImportModalProps)
     bulkCreateMutation.mutate(contacts);
   };
 
+  const saveAirtableConfigMutation = useMutation({
+    mutationFn: async (config: { baseId: string; tableName: string; personalAccessToken: string; fieldMapping: FieldMapping }) => {
+      const response = await apiRequest("POST", "/api/airtable/config", config);
+      return response.json();
+    },
+  });
+
   const handleImportAirtable = () => {
-    if (!airtableData) return;
+    if (!airtableData || !airtableConnected) return;
     
     const contacts = airtableData.rows.map(row => {
       const contact: Record<string, string> = {};
@@ -237,7 +245,23 @@ export function ImportModal({ open, onOpenChange, onSuccess }: ImportModalProps)
       return;
     }
 
-    bulkCreateMutation.mutate(contacts);
+    bulkCreateMutation.mutate(contacts, {
+      onSuccess: () => {
+        saveAirtableConfigMutation.mutate({
+          baseId: airtableBaseId,
+          tableName: airtableTableName,
+          personalAccessToken: airtableToken,
+          fieldMapping: airtableFieldMapping,
+        }, {
+          onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["/api/airtable/config"] });
+          },
+          onError: () => {
+            toast({ title: "Warning", description: "Contacts imported but credentials not saved for sync", variant: "destructive" });
+          }
+        });
+      }
+    });
   };
 
   const resetState = () => {
