@@ -372,14 +372,13 @@ export default function ProspectResearch() {
     
     // Send message data to n8n drafting webhook
     try {
-      const personId = `pers_${personName.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')}`;
       await fetch("https://n8n.srv1096794.hstgr.cloud/webhook/drafting-agent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          personId,
+          personId: personName,
           researchBrief: `Draft outreach message for ${personName} at ${company}. Subject: ${finalSubject}. Body context: ${finalBody.substring(0, 500)}`,
-          requestId: `draft-${personId}-${Date.now()}`,
+          requestId: `draft-${personName.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`,
           forceRefresh: false
         })
       });
