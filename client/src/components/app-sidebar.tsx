@@ -18,12 +18,14 @@ import {
   Settings,
   Zap,
   Upload,
+  Sparkles,
 } from "lucide-react";
 
 const menuItems = [
   { title: "Prospect Research", url: "/prospect-research", icon: FlaskConical },
   { title: "Import Contacts", url: "/research-setup", icon: Upload },
   { title: "Contacts", url: "/contacts", icon: Users },
+  { title: "Results", url: "/results", icon: Sparkles },
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Outreach Log", url: "/outreach-log", icon: FileText },
   { title: "Settings", url: "/settings", icon: Settings },
