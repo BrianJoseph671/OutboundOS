@@ -34,6 +34,7 @@ import {
   Plus,
   Pencil,
   Trash2,
+  Webhook,
 } from "lucide-react";
 import type { OutreachAttempt, Contact, Experiment, InsertOutreachAttempt } from "@shared/schema";
 import { format } from "date-fns";
@@ -853,6 +854,21 @@ export default function OutreachLog() {
               Delete Selected ({selectedIds.size})
             </Button>
           )}
+          <Button 
+            variant="outline" 
+            onClick={() => {
+              const url = `${window.location.origin}/api/webhooks/outreach-logs`;
+              navigator.clipboard.writeText(url);
+              toast({
+                title: "Webhook URL Copied",
+                description: "Use this URL in n8n to import outreach logs.",
+              });
+            }}
+            data-testid="button-copy-webhook"
+          >
+            <Webhook className="w-4 h-4 mr-2" />
+            Copy Webhook URL
+          </Button>
           <Button onClick={() => setShowManualEntry(true)} data-testid="button-add-manual-entry">
             <Plus className="w-4 h-4 mr-2" />
             Add Entry
