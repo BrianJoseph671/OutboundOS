@@ -49,7 +49,7 @@ export default function ResearchSetup() {
           </CardContent>
         </Card>
 
-        <Card className="hover-elevate cursor-pointer" onClick={() => setLocation("/contacts")}>
+        <Card className="hover-elevate cursor-pointer" onClick={() => setLocation("/prospect-research")}>
           <CardHeader className="text-center pb-2">
             <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-accent/10 flex items-center justify-center">
               <Plus className="w-8 h-8 text-accent-foreground" />
@@ -65,7 +65,7 @@ export default function ResearchSetup() {
               data-testid="button-add-first-contact"
               onClick={(e) => {
                 e.stopPropagation();
-                setLocation("/contacts");
+                setLocation("/prospect-research");
               }}
             >
               Add first contact
