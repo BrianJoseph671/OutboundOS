@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,17 +36,92 @@ import {
   Check,
   AlertCircle,
   Upload,
+  RefreshCw,
+  Play,
+  Sparkles,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
+import { useBatchProgress } from "@/hooks/useBatchProgress";
 import type { Contact, InsertContact, OutreachAttempt } from "@shared/schema";
+
+type ContactResearchStatus = "pending" | "processing" | "completed" | "failed";
+
+interface ContactStatusMap {
+  [contactId: string]: {
+    status: ContactResearchStatus;
+    error?: string;
+  };
+}
+
+function ResearchStatusBadge({
+  status,
+  error,
+  onRetry,
+}: {
+  status: ContactResearchStatus;
+  error?: string;
+  onRetry?: () => void;
+}) {
+  switch (status) {
+    case "pending":
+      return (
+        <Badge variant="secondary" className="text-xs">
+          Pending
+        </Badge>
+      );
+    case "processing":
+      return (
+        <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+          <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+          Processing
+        </Badge>
+      );
+    case "completed":
+      return (
+        <Badge variant="secondary" className="text-xs bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">
+          <Check className="w-3 h-3 mr-1" />
+          Researched
+        </Badge>
+      );
+    case "failed":
+      return (
+        <div className="flex items-center gap-1">
+          <Badge variant="destructive" className="text-xs">
+            <X className="w-3 h-3 mr-1" />
+            Failed
+          </Badge>
+          {onRetry && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
+              onClick={(e) => {
+                e.stopPropagation();
+                onRetry();
+              }}
+              data-testid="button-retry-research"
+            >
+              <RefreshCw className="w-3 h-3" />
+            </Button>
+          )}
+        </div>
+      );
+    default:
+      return null;
+  }
+}
 
 function ContactCard({
   contact,
   onClick,
+  researchStatus,
+  onRetry,
 }: {
   contact: Contact;
   onClick: () => void;
+  researchStatus?: ContactResearchStatus;
+  onRetry?: () => void;
 }) {
   const initials = contact.name
     .split(" ")
@@ -75,7 +150,15 @@ function ContactCard({
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between gap-2">
               <h3 className="font-medium truncate">{contact.name}</h3>
-              <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {researchStatus && (
+                  <ResearchStatusBadge
+                    status={researchStatus}
+                    onRetry={onRetry}
+                  />
+                )}
+                <ChevronRight className="w-4 h-4 text-muted-foreground" />
+              </div>
             </div>
             {contact.role && (
               <p className="text-sm text-muted-foreground truncate">
@@ -1010,6 +1093,50 @@ function AddContactModal({
   );
 }
 
+function BatchProgressBar({
+  progress,
+  isComplete,
+}: {
+  progress: { completed: number; failed: number; total: number; percentComplete: number } | null;
+  isComplete: boolean;
+}) {
+  if (!progress) return null;
+
+  return (
+    <Card className="border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/20">
+      <CardContent className="py-4">
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {!isComplete && <Loader2 className="w-4 h-4 animate-spin text-blue-600" />}
+              {isComplete && <Check className="w-4 h-4 text-green-600" />}
+              <span className="font-medium">
+                {isComplete ? "Research Complete" : "Processing contacts..."}
+              </span>
+            </div>
+            <span className="text-sm text-muted-foreground">
+              {progress.completed + progress.failed} / {progress.total}
+            </span>
+          </div>
+          <Progress value={progress.percentComplete} className="h-2" />
+          <div className="flex items-center gap-4 text-sm">
+            <span className="flex items-center gap-1 text-green-600">
+              <Check className="w-3 h-3" />
+              {progress.completed} completed
+            </span>
+            {progress.failed > 0 && (
+              <span className="flex items-center gap-1 text-red-600">
+                <X className="w-3 h-3" />
+                {progress.failed} failed
+              </span>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function Contacts() {
   const { toast } = useToast();
   const [search, setSearch] = useState("");
@@ -1017,10 +1144,42 @@ export default function Contacts() {
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [contactStatuses, setContactStatuses] = useState<ContactStatusMap>({});
 
   const { data: contacts = [], isLoading } = useQuery<Contact[]>({
     queryKey: ["/api/contacts"],
   });
+
+  const { progress, completedContacts, failedContacts, isComplete, isConnected } = useBatchProgress(activeJobId);
+
+  useEffect(() => {
+    if (!activeJobId) return;
+
+    completedContacts.forEach((c) => {
+      setContactStatuses((prev) => ({
+        ...prev,
+        [c.contactId]: { status: "completed" },
+      }));
+    });
+
+    failedContacts.forEach((c) => {
+      setContactStatuses((prev) => ({
+        ...prev,
+        [c.contactId]: { status: "failed", error: c.error },
+      }));
+    });
+  }, [completedContacts, failedContacts, activeJobId]);
+
+  useEffect(() => {
+    if (isComplete && activeJobId) {
+      queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
+      toast({
+        title: "Research complete",
+        description: `${progress?.completed || 0} contacts researched successfully`,
+      });
+    }
+  }, [isComplete, activeJobId, progress?.completed, toast]);
 
   const bulkDeleteMutation = useMutation({
     mutationFn: (ids: string[]) =>
@@ -1034,6 +1193,63 @@ export default function Contacts() {
       toast({ title: "Failed to delete contacts", variant: "destructive" });
     },
   });
+
+  const batchResearchMutation = useMutation({
+    mutationFn: async (contactIds: string[]) => {
+      const response = await apiRequest("POST", "/api/batch/research", { contactIds });
+      return (await response.json()) as { jobId: string };
+    },
+    onSuccess: (data) => {
+      setActiveJobId(data.jobId);
+      const initialStatuses: ContactStatusMap = {};
+      Array.from(selectedIds).forEach((id) => {
+        initialStatuses[id] = { status: "processing" };
+      });
+      setContactStatuses(initialStatuses);
+      toast({ title: "Research started", description: `Processing ${selectedIds.size} contacts` });
+    },
+    onError: () => {
+      toast({ title: "Failed to start research", variant: "destructive" });
+    },
+  });
+
+  const retryResearchMutation = useMutation({
+    mutationFn: ({ jobId, contactId }: { jobId: string; contactId: string }) =>
+      apiRequest("POST", `/api/batch/${jobId}/retry/${contactId}`),
+    onSuccess: (_, { contactId }) => {
+      setContactStatuses((prev) => ({
+        ...prev,
+        [contactId]: { status: "processing" },
+      }));
+      toast({ title: "Retrying research" });
+    },
+    onError: () => {
+      toast({ title: "Failed to retry", variant: "destructive" });
+    },
+  });
+
+  const handleResearchSelected = () => {
+    if (selectedIds.size === 0) {
+      toast({ title: "No contacts selected", variant: "destructive" });
+      return;
+    }
+    batchResearchMutation.mutate(Array.from(selectedIds));
+  };
+
+  const handleResearchAll = () => {
+    if (contacts.length === 0) {
+      toast({ title: "No contacts to research", variant: "destructive" });
+      return;
+    }
+    const allIds = contacts.map((c) => c.id);
+    setSelectedIds(new Set(allIds));
+    batchResearchMutation.mutate(allIds);
+  };
+
+  const handleRetryContact = (contactId: string) => {
+    if (!activeJobId) return;
+    retryResearchMutation.mutate({ jobId: activeJobId, contactId });
+  };
 
   const sortedContacts = [...contacts].sort((a, b) => {
     return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
@@ -1078,21 +1294,45 @@ export default function Contacts() {
       >
         <div className="flex items-center justify-between gap-4">
           <h1 className="text-2xl font-semibold">Contacts</h1>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {selectedIds.size > 0 && (
-              <Button 
-                variant="destructive" 
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleResearchSelected}
+                  disabled={batchResearchMutation.isPending || (activeJobId !== null && !isComplete)}
+                  data-testid="button-research-selected"
+                >
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  Research Selected ({selectedIds.size})
+                </Button>
+                <Button 
+                  variant="destructive" 
+                  size="sm"
+                  onClick={() => {
+                    if (confirm(`Are you sure you want to delete ${selectedIds.size} contacts?`)) {
+                      bulkDeleteMutation.mutate(Array.from(selectedIds));
+                    }
+                  }}
+                  disabled={bulkDeleteMutation.isPending}
+                  data-testid="button-bulk-delete-contacts"
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Delete ({selectedIds.size})
+                </Button>
+              </>
+            )}
+            {contacts.length > 0 && selectedIds.size === 0 && (
+              <Button
+                variant="outline"
                 size="sm"
-                onClick={() => {
-                  if (confirm(`Are you sure you want to delete ${selectedIds.size} contacts?`)) {
-                    bulkDeleteMutation.mutate(Array.from(selectedIds));
-                  }
-                }}
-                disabled={bulkDeleteMutation.isPending}
-                data-testid="button-bulk-delete-contacts"
+                onClick={handleResearchAll}
+                disabled={batchResearchMutation.isPending || (activeJobId !== null && !isComplete)}
+                data-testid="button-research-all"
               >
-                <Trash2 className="w-4 h-4 mr-2" />
-                Delete ({selectedIds.size})
+                <Play className="w-4 h-4 mr-2" />
+                Research All
               </Button>
             )}
             <Button
@@ -1104,6 +1344,10 @@ export default function Contacts() {
             </Button>
           </div>
         </div>
+
+        {activeJobId && progress && (
+          <BatchProgressBar progress={progress} isComplete={isComplete} />
+        )}
 
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
@@ -1203,6 +1447,8 @@ export default function Contacts() {
                   <ContactCard
                     contact={contact}
                     onClick={() => setSelectedContact(contact)}
+                    researchStatus={contactStatuses[contact.id]?.status}
+                    onRetry={() => handleRetryContact(contact.id)}
                   />
                 </div>
               </div>
