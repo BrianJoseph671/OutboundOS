@@ -485,13 +485,21 @@ export async function registerRoutes(
         errors: [] as string[],
       };
 
+      const outreachTypeMapping: Record<string, string> = {
+        "LinkedIn Message": "linkedin_connected",
+        "LinkedIn Request": "linkedin_connect_request",
+        "LinkedIn InMail": "linkedin_inmail",
+        "Email": "email",
+        "WhatsApp": "whatsapp",
+      };
+
       for (const logData of logs) {
         try {
-          // Find contact by name/company to match log to personId
-          const personName = logData.personId || logData.name;
+          // Fields from image: contactName, outreachType, datesent, dateresponse, campaign, subjectLine, messageBody, responded, positiveResponse, meetingBooked, converted, notes
+          const personName = logData.contactName || logData.personId || logData.name;
           if (!personName) {
             results.failed++;
-            results.errors.push("Missing personId or name in log");
+            results.errors.push("Missing contactName, personId, or name in log");
             continue;
           }
 
@@ -507,20 +515,26 @@ export async function registerRoutes(
             } as any);
           }
 
+          const rawOutreachType = logData.outreachType || "Email";
+          const mappedType = outreachTypeMapping[rawOutreachType] || (rawOutreachType.toLowerCase().includes("linkedin") ? "linkedin_connected" : "email");
+
           const outreachData: any = {
             contactId: contact.id,
-            outreachType: logData.outreachType || "email",
-            subject: logData.subject || "",
+            outreachType: mappedType,
+            subject: logData.subjectLine || logData.subject || "",
             messageBody: logData.messageBody || logData.body || "",
-            dateSent: logData.dateSent ? new Date(logData.dateSent) : new Date(),
+            dateSent: logData.datesent ? new Date(logData.datesent) : new Date(),
             campaign: logData.campaign || "n8n-import",
-            responded: !!logData.responded,
-            positiveResponse: !!logData.positiveResponse,
-            meetingBooked: !!logData.meetingBooked,
-            converted: !!logData.converted,
+            responded: logData.responded === true || logData.responded === "true",
+            positiveResponse: logData.positiveResponse === true || logData.positiveResponse === "true",
+            meetingBooked: logData.meetingBooked === true || logData.meetingBooked === "true",
+            converted: logData.converted === true || logData.converted === "true",
+            notes: logData.notes || "",
           };
 
-          if (logData.responseDate) {
+          if (logData.dateresponse) {
+            outreachData.responseDate = new Date(logData.dateresponse);
+          } else if (logData.responseDate) {
             outreachData.responseDate = new Date(logData.responseDate);
           } else {
             outreachData.responseDate = null;
