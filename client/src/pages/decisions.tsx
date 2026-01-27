@@ -1,19 +1,14 @@
 import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import {
   Dialog,
   DialogContent,
@@ -25,634 +20,548 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { useToast } from "@/hooks/use-toast";
 import {
-  Search,
-  Building2,
-  User,
-  Sparkles,
-  Copy,
+  Linkedin,
+  Mail,
+  Pause,
+  Phone,
   Check,
   ChevronDown,
   ChevronRight,
-  Mail,
-  Linkedin,
   MessageSquare,
-  FileCheck,
-  Edit,
-  Send,
-  Loader2,
-  Filter,
+  AlertCircle,
   Calendar,
-  Briefcase,
-  Target,
-  Lightbulb,
-  ArrowUpDown,
+  Eye,
+  Snowflake,
+  RotateCcw,
+  Edit,
 } from "lucide-react";
-import type { Contact } from "@shared/schema";
+import {
+  initialDecisions,
+  initialActivityFeed,
+  initialParkedLeads,
+  type DecisionItem,
+  type ActivityEvent,
+  type ParkedLead,
+} from "@/mockData";
 
-interface ResearchData {
-  prospectSnapshot?: {
-    background?: string;
-    experience?: string;
-    interests?: string[];
-  };
-  companySnapshot?: {
-    description?: string;
-    funding?: string;
-    recentNews?: string[];
-    industry?: string;
-  };
-  connectionAngles?: string[];
-  conversationHooks?: string[];
-  draftMessage?: string;
-  qaStatus?: "pending" | "approved" | "rejected";
-  qaFeedback?: string;
-}
-
-function ContactResultCard({
-  contact,
-  onRunQA,
-  onEditDraft,
-  onSend,
-  isQALoading,
+// Decision Card Component
+function DecisionCard({
+  decision,
+  onAction,
+  isApproved,
 }: {
-  contact: Contact;
-  onRunQA: (contact: Contact) => void;
-  onEditDraft: (contact: Contact) => void;
-  onSend: (contact: Contact, type: "email" | "linkedin") => void;
-  isQALoading: boolean;
+  decision: DecisionItem;
+  onAction: () => void;
+  isApproved: boolean;
 }) {
-  const { toast } = useToast();
-  const [isExpanded, setIsExpanded] = useState(false);
-  const [copied, setCopied] = useState(false);
-
-  const initials = contact.name
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
-
-  const research: ResearchData = contact.notes
-    ? (() => {
-        try {
-          return JSON.parse(contact.notes);
-        } catch {
-          return {};
-        }
-      })()
-    : {};
-
-  const handleCopyDraft = async () => {
-    if (research.draftMessage) {
-      await navigator.clipboard.writeText(research.draftMessage);
-      setCopied(true);
-      toast({ title: "Message copied to clipboard" });
-      setTimeout(() => setCopied(false), 2000);
+  const getActionText = () => {
+    switch (decision.actionType) {
+      case "switch_to_linkedin":
+        return "Switch channel to LinkedIn";
+      case "follow_up_email":
+        return "Send email follow up";
+      case "pause":
+        return "Pause lead";
+      case "call":
+        return "Schedule a call";
+      default:
+        return "Take action";
     }
   };
 
-  const getQAStatusBadge = () => {
-    switch (research.qaStatus) {
-      case "approved":
-        return (
-          <Badge className="bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">
-            <Check className="w-3 h-3 mr-1" />
-            QA Approved
-          </Badge>
-        );
-      case "rejected":
-        return (
-          <Badge variant="destructive">
-            Needs Revision
-          </Badge>
-        );
+  const getButtonText = () => {
+    switch (decision.actionType) {
+      case "switch_to_linkedin":
+        return "Draft LinkedIn message";
+      case "follow_up_email":
+        return "Prepare email";
+      case "pause":
+        return "Mark paused";
+      case "call":
+        return "Schedule call";
       default:
-        return (
-          <Badge variant="secondary">
-            Pending QA
-          </Badge>
-        );
+        return "Take action";
+    }
+  };
+
+  const getChannelIcon = () => {
+    switch (decision.channelRecommended) {
+      case "LinkedIn":
+        return <Linkedin className="w-3 h-3" />;
+      case "Email":
+        return <Mail className="w-3 h-3" />;
+      case "Call":
+        return <Phone className="w-3 h-3" />;
+      case "Pause":
+        return <Pause className="w-3 h-3" />;
+      default:
+        return null;
+    }
+  };
+
+  const getPriorityColor = () => {
+    switch (decision.priority) {
+      case "High":
+        return "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400";
+      case "Medium":
+        return "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400";
+      case "Low":
+        return "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400";
+      default:
+        return "";
     }
   };
 
   return (
-    <Card className="overflow-hidden" data-testid={`card-result-${contact.id}`}>
-      <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
-        <CollapsibleTrigger asChild>
-          <CardHeader className="cursor-pointer hover-elevate">
-            <div className="flex items-center gap-4">
-              <Avatar className="w-12 h-12">
-                <AvatarFallback className="bg-muted text-muted-foreground font-medium">
-                  {initials}
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <h3 className="font-medium">{contact.name}</h3>
-                  {getQAStatusBadge()}
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  {contact.role} at {contact.company}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                {isExpanded ? (
-                  <ChevronDown className="w-5 h-5 text-muted-foreground" />
-                ) : (
-                  <ChevronRight className="w-5 h-5 text-muted-foreground" />
-                )}
-              </div>
-            </div>
-          </CardHeader>
-        </CollapsibleTrigger>
+    <Card
+      className={`transition-all ${isApproved ? "opacity-60 border-green-500/50" : ""}`}
+      data-testid={`card-decision-${decision.id}`}
+    >
+      <CardContent className="p-4 space-y-3">
+        <div className="flex items-start justify-between gap-2">
+          <h3 className="font-semibold text-base">{getActionText()}</h3>
+          {isApproved && (
+            <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 shrink-0">
+              <Check className="w-3 h-3 mr-1" />
+              Approved
+            </Badge>
+          )}
+        </div>
 
-        <CollapsibleContent>
-          <CardContent className="pt-0 space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <h4 className="text-sm font-medium flex items-center gap-2">
-                    <User className="w-4 h-4" />
-                    Prospect Snapshot
-                  </h4>
-                  <div className="p-3 bg-muted/50 rounded-md text-sm space-y-2">
-                    {research.prospectSnapshot?.background && (
-                      <p>{research.prospectSnapshot.background}</p>
-                    )}
-                    {research.prospectSnapshot?.experience && (
-                      <p className="text-muted-foreground">
-                        {research.prospectSnapshot.experience}
-                      </p>
-                    )}
-                    {!research.prospectSnapshot?.background && (
-                      <p className="text-muted-foreground italic">
-                        {contact.headline || contact.about || "No background information available"}
-                      </p>
-                    )}
-                  </div>
-                </div>
+        <p className="text-sm text-muted-foreground">
+          {decision.personName}, {decision.title} at {decision.company}
+        </p>
 
-                <div className="space-y-2">
-                  <h4 className="text-sm font-medium flex items-center gap-2">
-                    <Building2 className="w-4 h-4" />
-                    Company Snapshot
-                  </h4>
-                  <div className="p-3 bg-muted/50 rounded-md text-sm space-y-2">
-                    {research.companySnapshot?.description && (
-                      <p>{research.companySnapshot.description}</p>
-                    )}
-                    {research.companySnapshot?.funding && (
-                      <p className="text-muted-foreground">
-                        <span className="font-medium">Funding:</span> {research.companySnapshot.funding}
-                      </p>
-                    )}
-                    {research.companySnapshot?.recentNews && research.companySnapshot.recentNews.length > 0 && (
-                      <div>
-                        <span className="font-medium">Recent News:</span>
-                        <ul className="list-disc list-inside mt-1 text-muted-foreground">
-                          {research.companySnapshot.recentNews.slice(0, 3).map((news, i) => (
-                            <li key={i}>{news}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    {!research.companySnapshot?.description && (
-                      <p className="text-muted-foreground italic">
-                        {contact.company || "No company information available"}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
+        <p className="text-xs text-muted-foreground">{decision.reason}</p>
 
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <h4 className="text-sm font-medium flex items-center gap-2">
-                    <Target className="w-4 h-4" />
-                    Connection Angles
-                  </h4>
-                  <div className="p-3 bg-muted/50 rounded-md text-sm">
-                    {research.connectionAngles && research.connectionAngles.length > 0 ? (
-                      <ul className="space-y-1">
-                        {research.connectionAngles.map((angle, i) => (
-                          <li key={i} className="flex items-start gap-2">
-                            <span className="text-primary">•</span>
-                            {angle}
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="text-muted-foreground italic">No connection angles identified</p>
-                    )}
-                  </div>
-                </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Badge variant="outline" className="gap-1">
+            {getChannelIcon()}
+            {decision.channelRecommended}
+          </Badge>
+          <Badge className={getPriorityColor()}>{decision.priority}</Badge>
+        </div>
 
-                <div className="space-y-2">
-                  <h4 className="text-sm font-medium flex items-center gap-2">
-                    <Lightbulb className="w-4 h-4" />
-                    Conversation Hooks
-                  </h4>
-                  <div className="p-3 bg-muted/50 rounded-md text-sm">
-                    {research.conversationHooks && research.conversationHooks.length > 0 ? (
-                      <ul className="space-y-1">
-                        {research.conversationHooks.map((hook, i) => (
-                          <li key={i} className="flex items-start gap-2">
-                            <span className="text-primary">•</span>
-                            {hook}
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="text-muted-foreground italic">No conversation hooks identified</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <h4 className="text-sm font-medium flex items-center gap-2">
-                  <MessageSquare className="w-4 h-4" />
-                  Draft Message
-                </h4>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleCopyDraft}
-                  disabled={!research.draftMessage}
-                  data-testid="button-copy-draft"
-                >
-                  {copied ? (
-                    <>
-                      <Check className="w-4 h-4 mr-1" />
-                      Copied
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-4 h-4 mr-1" />
-                      Copy
-                    </>
-                  )}
-                </Button>
-              </div>
-              <div className="p-3 bg-muted/50 rounded-md text-sm whitespace-pre-wrap">
-                {research.draftMessage || (
-                  <span className="text-muted-foreground italic">No draft message available</span>
-                )}
-              </div>
-              {research.qaFeedback && (
-                <div className="p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-md text-sm">
-                  <span className="font-medium">QA Feedback:</span> {research.qaFeedback}
-                </div>
-              )}
-            </div>
-
-            <div className="flex items-center gap-2 pt-2 border-t flex-wrap">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => onRunQA(contact)}
-                disabled={isQALoading}
-                data-testid="button-run-qa"
-              >
-                {isQALoading ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <FileCheck className="w-4 h-4 mr-2" />
-                )}
-                Run QA
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => onEditDraft(contact)}
-                data-testid="button-edit-draft"
-              >
-                <Edit className="w-4 h-4 mr-2" />
-                Edit Draft
-              </Button>
-              <div className="flex-1" />
-              {contact.email && (
-                <Button
-                  size="sm"
-                  onClick={() => onSend(contact, "email")}
-                  data-testid="button-send-email"
-                >
-                  <Mail className="w-4 h-4 mr-2" />
-                  Send Email
-                </Button>
-              )}
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => onSend(contact, "linkedin")}
-                data-testid="button-log-linkedin"
-              >
-                <Linkedin className="w-4 h-4 mr-2" />
-                Log LinkedIn
-              </Button>
-            </div>
-          </CardContent>
-        </CollapsibleContent>
-      </Collapsible>
+        {!isApproved && (
+          <Button
+            onClick={onAction}
+            className="w-full mt-2"
+            data-testid={`button-action-${decision.id}`}
+          >
+            {getButtonText()}
+          </Button>
+        )}
+      </CardContent>
     </Card>
   );
 }
 
-function EditDraftModal({
-  contact,
+// Decision Drawer Component
+function DecisionDrawer({
+  decision,
   open,
   onOpenChange,
-  onSave,
+  onApprove,
+  onEdit,
 }: {
-  contact: Contact | null;
+  decision: DecisionItem | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSave: (contact: Contact, newDraft: string) => void;
+  onApprove: () => void;
+  onEdit: () => void;
 }) {
-  const [draft, setDraft] = useState("");
+  const [checklist, setChecklist] = useState({
+    personalizedOpener: false,
+    clearCta: false,
+    credibility: false,
+  });
 
-  const handleOpen = () => {
-    if (contact?.notes) {
-      try {
-        const research = JSON.parse(contact.notes);
-        setDraft(research.draftMessage || "");
-      } catch {
-        setDraft("");
-      }
-    }
+  const handleApprove = () => {
+    onApprove();
+    setChecklist({ personalizedOpener: false, clearCta: false, credibility: false });
   };
 
-  const handleSave = () => {
-    if (contact) {
-      onSave(contact, draft);
-      onOpenChange(false);
+  if (!decision) return null;
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+        <SheetHeader className="mb-6">
+          <SheetTitle>Review Message</SheetTitle>
+        </SheetHeader>
+
+        <div className="space-y-6">
+          <div>
+            <p className="text-sm text-muted-foreground mb-1">To</p>
+            <p className="font-medium">
+              {decision.personName}, {decision.title}
+            </p>
+            <p className="text-sm text-muted-foreground">{decision.company}</p>
+          </div>
+
+          {decision.suggestedSubject && (
+            <div>
+              <p className="text-sm text-muted-foreground mb-1">Subject</p>
+              <p className="font-medium">{decision.suggestedSubject}</p>
+            </div>
+          )}
+
+          <div>
+            <p className="text-sm text-muted-foreground mb-2">
+              {decision.actionType === "pause" ? "Recommendation" : "Message"}
+            </p>
+            <div className="p-4 bg-muted/50 rounded-lg text-sm whitespace-pre-wrap">
+              {decision.suggestedBody}
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <p className="text-sm font-medium">Quality checklist</p>
+            <div className="space-y-2">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <Checkbox
+                  checked={checklist.personalizedOpener}
+                  onCheckedChange={(checked) =>
+                    setChecklist((prev) => ({ ...prev, personalizedOpener: !!checked }))
+                  }
+                  data-testid="checkbox-personalized"
+                />
+                <span className="text-sm">Personalized opener</span>
+              </label>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <Checkbox
+                  checked={checklist.clearCta}
+                  onCheckedChange={(checked) =>
+                    setChecklist((prev) => ({ ...prev, clearCta: !!checked }))
+                  }
+                  data-testid="checkbox-cta"
+                />
+                <span className="text-sm">Clear CTA</span>
+              </label>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <Checkbox
+                  checked={checklist.credibility}
+                  onCheckedChange={(checked) =>
+                    setChecklist((prev) => ({ ...prev, credibility: !!checked }))
+                  }
+                  data-testid="checkbox-credibility"
+                />
+                <span className="text-sm">One sentence credibility</span>
+              </label>
+            </div>
+          </div>
+
+          <div className="flex gap-3 pt-4">
+            <Button onClick={handleApprove} className="flex-1" data-testid="button-approve">
+              <Check className="w-4 h-4 mr-2" />
+              Approve
+            </Button>
+            <Button variant="outline" onClick={onEdit} className="flex-1" data-testid="button-edit">
+              <Edit className="w-4 h-4 mr-2" />
+              Edit
+            </Button>
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+// Event Item Component
+function EventItem({
+  event,
+  onClick,
+}: {
+  event: ActivityEvent;
+  onClick: () => void;
+}) {
+  const getEventIcon = () => {
+    switch (event.type) {
+      case "positive_reply":
+        return <MessageSquare className="w-4 h-4 text-green-600" />;
+      case "bounce":
+        return <AlertCircle className="w-4 h-4 text-red-500" />;
+      case "marked_cold":
+        return <Snowflake className="w-4 h-4 text-blue-500" />;
+      case "opened":
+        return <Eye className="w-4 h-4 text-amber-500" />;
+      case "scheduled":
+        return <Calendar className="w-4 h-4 text-purple-500" />;
+      case "unparked":
+        return <RotateCcw className="w-4 h-4 text-emerald-500" />;
+      default:
+        return null;
     }
   };
 
   return (
+    <button
+      onClick={onClick}
+      className="w-full flex items-start gap-3 p-3 rounded-lg hover-elevate text-left transition-colors"
+      data-testid={`event-${event.id}`}
+    >
+      <div className="mt-0.5">{getEventIcon()}</div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm">{event.text}</p>
+        <p className="text-xs text-muted-foreground">{event.time}</p>
+      </div>
+    </button>
+  );
+}
+
+// Parked Lead Row Component
+function ParkedLeadRow({
+  lead,
+  onUnpark,
+}: {
+  lead: ParkedLead;
+  onUnpark: () => void;
+}) {
+  return (
+    <div
+      className="flex items-center justify-between gap-4 py-3 border-b last:border-0"
+      data-testid={`parked-${lead.id}`}
+    >
+      <div className="flex-1 min-w-0">
+        <p className="font-medium text-sm">{lead.personName}</p>
+        <p className="text-xs text-muted-foreground">{lead.company}</p>
+      </div>
+      <div className="flex-1 min-w-0 hidden sm:block">
+        <p className="text-sm text-muted-foreground">{lead.reason}</p>
+      </div>
+      <div className="text-sm text-muted-foreground shrink-0 hidden md:block">
+        Until {lead.parkedUntil}
+      </div>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={onUnpark}
+        data-testid={`button-unpark-${lead.id}`}
+      >
+        Unpark
+      </Button>
+    </div>
+  );
+}
+
+// Event Details Modal
+function EventModal({
+  event,
+  open,
+  onOpenChange,
+}: {
+  event: ActivityEvent | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  if (!event) return null;
+
+  return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl" onOpenAutoFocus={handleOpen}>
+      <DialogContent>
         <DialogHeader>
-          <DialogTitle>Edit Draft Message</DialogTitle>
+          <DialogTitle>{event.text}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
-          <div className="text-sm text-muted-foreground">
-            Editing message for <span className="font-medium">{contact?.name}</span>
-          </div>
-          <Textarea
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            rows={10}
-            className="font-mono text-sm"
-            placeholder="Enter your message..."
-            data-testid="textarea-edit-draft"
-          />
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleSave} data-testid="button-save-draft">
-              Save Changes
-            </Button>
-          </div>
+          <p className="text-sm text-muted-foreground">{event.time}</p>
+          <p className="text-sm">{event.details}</p>
         </div>
       </DialogContent>
     </Dialog>
   );
 }
 
+// Main Decisions Page
 export default function Decisions() {
-  const { toast } = useToast();
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [sortBy, setSortBy] = useState<string>("date");
-  const [editingContact, setEditingContact] = useState<Contact | null>(null);
-  const [qaLoadingId, setQaLoadingId] = useState<string | null>(null);
+  const [decisions, setDecisions] = useState<DecisionItem[]>(initialDecisions);
+  const [activityFeed, setActivityFeed] = useState<ActivityEvent[]>(initialActivityFeed);
+  const [parkedLeads, setParkedLeads] = useState<ParkedLead[]>(initialParkedLeads);
 
-  const { data: contacts = [], isLoading } = useQuery<Contact[]>({
-    queryKey: ["/api/contacts"],
-  });
+  const [selectedDecision, setSelectedDecision] = useState<DecisionItem | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [approvedIds, setApprovedIds] = useState<Set<string>>(new Set());
 
-  const researchedContacts = contacts.filter((c) => {
-    if (c.notes) {
-      try {
-        const research = JSON.parse(c.notes);
-        return research.draftMessage || research.prospectSnapshot || research.companySnapshot;
-      } catch {
-        return false;
-      }
-    }
-    return false;
-  });
+  const [selectedEvent, setSelectedEvent] = useState<ActivityEvent | null>(null);
+  const [eventModalOpen, setEventModalOpen] = useState(false);
 
-  const updateContactMutation = useMutation({
-    mutationFn: async ({ id, notes }: { id: string; notes: string }) => {
-      const response = await apiRequest("PUT", `/api/contacts/${id}`, { notes });
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
-      toast({ title: "Draft updated successfully" });
-    },
-    onError: () => {
-      toast({ title: "Failed to update draft", variant: "destructive" });
-    },
-  });
+  const [parkedOpen, setParkedOpen] = useState(false);
 
-  const runQAMutation = useMutation({
-    mutationFn: async (contact: Contact) => {
-      setQaLoadingId(contact.id);
-      const response = await apiRequest("POST", "/api/batch/qa/run", {
-        contactId: contact.id,
-        message: contact.notes ? JSON.parse(contact.notes).draftMessage : "",
-      });
-      return response.json();
-    },
-    onSuccess: (data, contact) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
-      toast({ title: "QA completed", description: data.approved ? "Message approved" : "Revisions suggested" });
-      setQaLoadingId(null);
-    },
-    onError: () => {
-      toast({ title: "QA failed", variant: "destructive" });
-      setQaLoadingId(null);
-    },
-  });
-
-  const sendMutation = useMutation({
-    mutationFn: async ({ contact, type }: { contact: Contact; type: "email" | "linkedin" }) => {
-      const response = await apiRequest("POST", "/api/batch/send", {
-        contactId: contact.id,
-        type,
-        message: contact.notes ? JSON.parse(contact.notes).draftMessage : "",
-      });
-      return response.json();
-    },
-    onSuccess: (_, { type }) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
-      toast({ title: type === "email" ? "Email sent" : "LinkedIn message logged" });
-    },
-    onError: () => {
-      toast({ title: "Failed to send message", variant: "destructive" });
-    },
-  });
-
-  const handleRunQA = (contact: Contact) => {
-    runQAMutation.mutate(contact);
+  const handleCardAction = (decision: DecisionItem) => {
+    setSelectedDecision(decision);
+    setDrawerOpen(true);
   };
 
-  const handleEditDraft = (contact: Contact) => {
-    setEditingContact(contact);
-  };
+  const handleApprove = () => {
+    if (!selectedDecision) return;
 
-  const handleSaveDraft = (contact: Contact, newDraft: string) => {
-    let research: ResearchData = {};
-    if (contact.notes) {
-      try {
-        research = JSON.parse(contact.notes);
-      } catch {}
-    }
-    research.draftMessage = newDraft;
-    research.qaStatus = "pending";
-    updateContactMutation.mutate({ id: contact.id, notes: JSON.stringify(research) });
-  };
+    // Mark as approved
+    setApprovedIds((prev) => new Set(prev).add(selectedDecision.id));
 
-  const handleSend = (contact: Contact, type: "email" | "linkedin") => {
-    sendMutation.mutate({ contact, type });
-  };
-
-  const filteredContacts = researchedContacts
-    .filter((contact) => {
-      const searchLower = search.toLowerCase();
-      const matchesSearch =
-        contact.name.toLowerCase().includes(searchLower) ||
-        contact.company?.toLowerCase().includes(searchLower) ||
-        contact.role?.toLowerCase().includes(searchLower);
-
-      if (!matchesSearch) return false;
-
-      if (statusFilter === "all") return true;
-
-      try {
-        const research = JSON.parse(contact.notes || "{}");
-        return research.qaStatus === statusFilter;
-      } catch {
-        return statusFilter === "pending";
-      }
-    })
-    .sort((a, b) => {
-      switch (sortBy) {
-        case "name":
-          return a.name.localeCompare(b.name);
-        case "company":
-          return (a.company || "").localeCompare(b.company || "");
-        case "date":
-        default:
-          return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
-      }
+    // Move approved to bottom
+    setDecisions((prev) => {
+      const approved = prev.find((d) => d.id === selectedDecision.id);
+      const others = prev.filter((d) => d.id !== selectedDecision.id);
+      return approved ? [...others, approved] : prev;
     });
+
+    // Add activity event
+    const actionText =
+      selectedDecision.actionType === "switch_to_linkedin"
+        ? "Switch to LinkedIn"
+        : selectedDecision.actionType === "follow_up_email"
+          ? "Email follow up"
+          : selectedDecision.actionType === "pause"
+            ? "Pause lead"
+            : "Action";
+
+    const newEvent: ActivityEvent = {
+      id: `evt-${Date.now()}`,
+      time: "Just now",
+      type: "scheduled",
+      text: `Approved: ${actionText} for ${selectedDecision.personName}`,
+      details: `You approved the recommended action "${actionText}" for ${selectedDecision.personName} at ${selectedDecision.company}. The message is ready to send.`,
+    };
+
+    setActivityFeed((prev) => [newEvent, ...prev]);
+    setDrawerOpen(false);
+  };
+
+  const handleEdit = () => {
+    // For now, just close drawer - in real app would open editor
+    setDrawerOpen(false);
+  };
+
+  const handleEventClick = (event: ActivityEvent) => {
+    setSelectedEvent(event);
+    setEventModalOpen(true);
+  };
+
+  const handleUnpark = (lead: ParkedLead) => {
+    // Remove from parked
+    setParkedLeads((prev) => prev.filter((l) => l.id !== lead.id));
+
+    // Add activity event
+    const newEvent: ActivityEvent = {
+      id: `evt-${Date.now()}`,
+      time: "Just now",
+      type: "unparked",
+      text: `Unparked: ${lead.personName}`,
+      details: `${lead.personName} from ${lead.company} was unparked. Originally parked because: "${lead.reason}". They are now back in your active pipeline.`,
+    };
+
+    setActivityFeed((prev) => [newEvent, ...prev]);
+  };
+
+  // Sort decisions: non-approved first, then approved
+  const sortedDecisions = [...decisions].sort((a, b) => {
+    const aApproved = approvedIds.has(a.id);
+    const bApproved = approvedIds.has(b.id);
+    if (aApproved === bApproved) return 0;
+    return aApproved ? 1 : -1;
+  });
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
+      {/* Header */}
+      <div>
         <h1 className="text-2xl font-semibold">Decisions</h1>
-        <Badge variant="secondary" className="text-sm">
-          {researchedContacts.length} researched
-        </Badge>
+        <p className="text-muted-foreground">Do the next right thing. Approve and move on.</p>
       </div>
 
-      <div className="flex items-center gap-4 flex-wrap">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Search results..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-            data-testid="input-search-results"
-          />
-        </div>
-
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[150px]" data-testid="select-status-filter">
-            <Filter className="w-4 h-4 mr-2" />
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="pending">Pending QA</SelectItem>
-            <SelectItem value="approved">Approved</SelectItem>
-            <SelectItem value="rejected">Needs Revision</SelectItem>
-          </SelectContent>
-        </Select>
-
-        <Select value={sortBy} onValueChange={setSortBy}>
-          <SelectTrigger className="w-[150px]" data-testid="select-sort-by">
-            <ArrowUpDown className="w-4 h-4 mr-2" />
-            <SelectValue placeholder="Sort by" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="date">Date Researched</SelectItem>
-            <SelectItem value="name">Name</SelectItem>
-            <SelectItem value="company">Company</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      {isLoading ? (
+      {/* Two Column Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Left Column - Decisions Queue */}
         <div className="space-y-4">
-          {[1, 2, 3].map((i) => (
-            <Card key={i}>
-              <CardHeader>
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-muted rounded-full animate-pulse" />
-                  <div className="flex-1 space-y-2">
-                    <div className="h-4 bg-muted rounded w-32 animate-pulse" />
-                    <div className="h-3 bg-muted rounded w-48 animate-pulse" />
-                  </div>
-                </div>
-              </CardHeader>
-            </Card>
-          ))}
+          <h2 className="text-lg font-medium">Next 3</h2>
+          <div className="space-y-4">
+            {sortedDecisions.slice(0, 3).map((decision) => (
+              <DecisionCard
+                key={decision.id}
+                decision={decision}
+                onAction={() => handleCardAction(decision)}
+                isApproved={approvedIds.has(decision.id)}
+              />
+            ))}
+          </div>
         </div>
-      ) : filteredContacts.length === 0 ? (
+
+        {/* Right Column - Activity Feed */}
+        <div className="space-y-4">
+          <h2 className="text-lg font-medium">Recently changed</h2>
+          <Card>
+            <CardContent className="p-2">
+              <div className="divide-y">
+                {activityFeed.slice(0, 6).map((event) => (
+                  <EventItem
+                    key={event.id}
+                    event={event}
+                    onClick={() => handleEventClick(event)}
+                  />
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      {/* Parked Section - Collapsible */}
+      <Collapsible open={parkedOpen} onOpenChange={setParkedOpen}>
         <Card>
-          <CardContent className="py-12 text-center">
-            <Sparkles className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-            <h3 className="font-medium mb-2">
-              {search || statusFilter !== "all" ? "No matching results" : "No research completed yet"}
-            </h3>
-            <p className="text-sm text-muted-foreground">
-              {search || statusFilter !== "all"
-                ? "Try adjusting your filters"
-                : "Import contacts and run research to see results here"}
-            </p>
-          </CardContent>
+          <CollapsibleTrigger asChild>
+            <CardHeader className="cursor-pointer hover-elevate">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base font-medium flex items-center gap-2">
+                  <Pause className="w-4 h-4" />
+                  Parked for now
+                  <Badge variant="secondary" className="ml-2">
+                    {parkedLeads.length}
+                  </Badge>
+                </CardTitle>
+                {parkedOpen ? (
+                  <ChevronDown className="w-5 h-5 text-muted-foreground" />
+                ) : (
+                  <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                )}
+              </div>
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent className="pt-0">
+              {parkedLeads.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4 text-center">
+                  No parked leads
+                </p>
+              ) : (
+                <div>
+                  {parkedLeads.map((lead) => (
+                    <ParkedLeadRow
+                      key={lead.id}
+                      lead={lead}
+                      onUnpark={() => handleUnpark(lead)}
+                    />
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </CollapsibleContent>
         </Card>
-      ) : (
-        <div className="space-y-4">
-          {filteredContacts.map((contact) => (
-            <ContactResultCard
-              key={contact.id}
-              contact={contact}
-              onRunQA={handleRunQA}
-              onEditDraft={handleEditDraft}
-              onSend={handleSend}
-              isQALoading={qaLoadingId === contact.id}
-            />
-          ))}
-        </div>
-      )}
+      </Collapsible>
 
-      <EditDraftModal
-        contact={editingContact}
-        open={!!editingContact}
-        onOpenChange={(open) => !open && setEditingContact(null)}
-        onSave={handleSaveDraft}
+      {/* Decision Drawer */}
+      <DecisionDrawer
+        decision={selectedDecision}
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
+        onApprove={handleApprove}
+        onEdit={handleEdit}
+      />
+
+      {/* Event Modal */}
+      <EventModal
+        event={selectedEvent}
+        open={eventModalOpen}
+        onOpenChange={setEventModalOpen}
       />
     </div>
   );

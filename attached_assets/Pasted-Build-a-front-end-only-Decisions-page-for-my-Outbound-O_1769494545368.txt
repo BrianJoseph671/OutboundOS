@@ -1,0 +1,125 @@
+Build a front end only “Decisions” page for my Outbound OS app.
+
+Stack: React + TypeScript. Use Tailwind if it exists in the project, otherwise use simple CSS. No backend calls. No database. Hardcode all data locally.
+
+Page goal:
+A Wizard of Oz decision surface that removes friction by telling the user the next best moves. It should feel like an execution queue, not a dashboard.
+
+Create this file:
+- src/mockData.ts
+
+Use these EXACT people for all fictional data shown on the page:
+- Jyoti Bansal (CEO & Co-Founder, Harness)
+- Jean Namkung (VP, Strategy and Operations, Pinterest)
+- Jose Mancera (Machine Learning Engineer, LinkedIn)
+- MacKenna Kelleher (Implementation Services Manager, West Coast, Datadog)
+- Nicolette Nigos-Loredo (Manager, Campus Recruiting, Datadog)
+- Annie Williams (Senior Program Manager, LinkedIn)
+
+Data model requirements:
+
+1) Decisions queue (exactly 3 cards shown)
+Use Jyoti, Jean, Jose as the 3 cards.
+
+Each decision item must include:
+- id
+- actionType (follow_up_email, switch_to_linkedin, call, pause)
+- personName
+- title
+- company
+- reason
+- channelRecommended (Email, LinkedIn, Call, Pause)
+- priority (High, Medium, Low)
+- lastTouchDate
+- suggestedSubject
+- suggestedBody
+
+Recommended decisions:
+- Jyoti: actionType = switch_to_linkedin, reason = "No reply after 6 days", channelRecommended = LinkedIn, priority = High
+- Jean: actionType = follow_up_email, reason = "Opened twice, no response", channelRecommended = Email, priority = Medium
+- Jose: actionType = pause, reason = "Not the right contact for this topic", channelRecommended = Pause, priority = Low
+
+2) Activity feed (exactly 6 events)
+Must include events referencing MacKenna, Nicolette, Annie, plus 3 more using any of the listed people.
+
+Each event must include:
+- id
+- time (example: "12:14 PM", "Yesterday")
+- type (positive_reply, bounce, marked_cold, opened, scheduled, unparked)
+- text
+- details
+
+3) Parked leads (exactly 5 rows)
+Must include MacKenna, Nicolette, Annie, plus two others from the list.
+
+Each parked lead must include:
+- id
+- personName
+- company
+- reason
+- parkedUntil
+
+Decisions page UI requirements:
+
+Layout:
+- Header bar with title "Decisions" and subtitle "Do the next right thing. Approve and move on."
+- Two column desktop layout:
+  Left column: Decisions queue
+  Right column: Decision details drawer and the Activity feed below it
+- On mobile, stack sections vertically.
+
+Decisions queue section (left):
+- Title: "Next 3"
+- Exactly 3 decision cards
+- Each card shows:
+  - Primary action line (large): examples "Switch channel to LinkedIn", "Send email follow up", "Pause lead"
+  - Person line: name, title, company
+  - Reason line (small)
+  - Two pills: Channel and Priority
+  - One primary button:
+    - For switch_to_linkedin: "Draft LinkedIn message"
+    - For follow_up_email: "Prepare email"
+    - For pause: "Mark paused"
+- Clicking the primary button opens a right side drawer with the suggested subject and body (fake text is fine) and a 3 item checklist:
+  - Personalized opener
+  - Clear CTA
+  - One sentence credibility
+- Drawer buttons:
+  - "Approve"
+  - "Edit"
+- Approve behavior:
+  - Mark that decision as Approved with a check icon and an "Approved" label
+  - Move the approved card to the bottom of the 3 card list (visual reorder)
+  - Add a new event to Activity feed like "Approved: [Action] for [Name]"
+
+Activity feed section (right, below drawer):
+- Title: "Recently changed"
+- Render 6 events
+- Clicking an event opens a modal with the details field.
+
+Parked section (bottom, collapsible):
+- Title: "Parked for now"
+- Collapsible panel with exactly 5 parked leads
+- Each row: name, company, reason, parkedUntil, and an "Unpark" button
+- Unpark behavior:
+  - Remove from parked list
+  - Add a new Activity feed event: type = unparked, text = "Unparked: [Name]", details describing why it returned
+
+Constraints:
+- No em dashes in any UI copy.
+- No charts, no scoring, no probabilities.
+- Clean modern UI with tasteful spacing and clear hierarchy.
+- Build small reusable components:
+  - DecisionCard
+  - DecisionDrawer
+  - EventItem
+  - ParkedLeadRow
+  - Modal
+
+Deliverables:
+- Working React UI in Replit
+- All data in src/mockData.ts using only the listed people
+- Default export App that renders the Decisions page
+- State management for approve, unpark, drawer open/close, modal open/close
+
+Make it look good on desktop and acceptable on mobile.

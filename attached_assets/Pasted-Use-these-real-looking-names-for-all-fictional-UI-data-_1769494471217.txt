@@ -1,0 +1,52 @@
+Use these real looking names for all fictional UI data in the Wizard of Oz “Next Best Actions” page.
+
+Build front end only. React + TypeScript. No backend calls. No database. Hardcode all data locally.
+
+Create a file: src/mockData.ts and populate it with the following EXACT people as the leads used across the page:
+- Jyoti Bansal (CEO & Co-Founder, Harness)
+- Jean Namkung (VP, Strategy and Operations, Pinterest)
+- Jose Mancera (Machine Learning Engineer, LinkedIn)
+- MacKenna Kelleher (Implementation Services Manager, West Coast, Datadog)
+- Nicolette Nigos-Loredo (Manager, Campus Recruiting, Datadog)
+- Annie Williams (Senior Program Manager, LinkedIn)
+
+Data requirements:
+
+1) Action items section: exactly 3 cards
+- Use Jyoti Bansal, Jean Namkung, Jose Mancera as the 3 “Do These Now” action cards.
+- Each action item object must include:
+  id, actionType, personName, title, company, reason, channelRecommended, priority, lastTouchDate, suggestedSubject, suggestedBody
+
+Recommended actions:
+- Jyoti: actionType = switch_to_linkedin, reason = “No reply after 6 days”, channelRecommended = LinkedIn, priority = High
+- Jean: actionType = follow_up_email, reason = “Opened twice, no response”, channelRecommended = Email, priority = Medium
+- Jose: actionType = pause, reason = “Not the right contact for this topic”, channelRecommended = Pause, priority = Low
+
+2) Recently Changed section: 6 events
+- Must include events referencing MacKenna, Nicolette, Annie (and you can reuse the others too to reach 6).
+- Each event object must include:
+  id, time, type, text, details
+- Example event types to use: positive_reply, bounce, marked_cold, opened, scheduled
+
+3) Parked for Now section: 5 leads
+- Must include MacKenna, Nicolette, Annie (and two others from the list).
+- Each parked lead must include:
+  id, personName, company, reason, parkedUntil
+
+UI behaviors:
+- Clicking the primary action button opens a right side drawer with the suggested subject and body and a 3 item checklist.
+- Clicking Approve marks the action as Approved and moves it to the bottom of the action list.
+- Parked section is collapsible. Clicking Unpark moves that lead into Recently Changed as a new event like “Unparked: [Name]”.
+
+Constraints:
+- No em dashes in any copy.
+- Keep the page clean and decisive. No scores, no charts.
+- Implement small reusable components: ActionCard, EventItem, Drawer, ParkedLeadRow.
+- Default export App and render this page.
+
+Deliverables:
+- Working UI with state management
+- All data in src/mockData.ts using the people listed above
+- No backend
+
+Make it look good on desktop and acceptable on mobile.
