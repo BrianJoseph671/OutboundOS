@@ -1453,7 +1453,7 @@ export default function Contacts() {
         className={`flex-1 space-y-6 ${selectedContact ? "hidden lg:block lg:max-w-md" : ""}`}
       >
         <div className="flex items-center justify-between gap-4">
-          <h1 className="text-2xl font-semibold">Contacts</h1>
+          <h1 className="text-2xl font-semibold">Prospects</h1>
           <div className="flex items-center gap-2 flex-wrap">
             {selectedIds.size > 0 && (
               <>
