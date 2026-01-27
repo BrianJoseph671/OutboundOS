@@ -308,6 +308,153 @@ export async function registerRoutes(
     }
   });
 
+  // Get Airtable connection config
+  app.get("/api/airtable/config", async (req, res) => {
+    try {
+      const config = await storage.getAirtableConfig();
+      if (!config) {
+        return res.json({ connected: false });
+      }
+      res.json({
+        connected: true,
+        baseId: config.baseId,
+        tableName: config.tableName,
+        lastSyncAt: config.lastSyncAt,
+        fieldMapping: config.fieldMapping ? JSON.parse(config.fieldMapping) : null,
+      });
+    } catch (error) {
+      console.error("[Airtable Config] Error:", error);
+      res.status(500).json({ message: "Failed to get Airtable config" });
+    }
+  });
+
+  // Save Airtable connection config
+  app.post("/api/airtable/config", async (req, res) => {
+    try {
+      const { baseId, tableName, personalAccessToken, fieldMapping } = req.body;
+      
+      if (!baseId || !tableName || !personalAccessToken) {
+        return res.status(400).json({ message: "Missing required fields" });
+      }
+
+      const config = await storage.saveAirtableConfig({
+        baseId,
+        tableName,
+        personalAccessToken,
+        fieldMapping: fieldMapping ? JSON.stringify(fieldMapping) : null,
+        lastSyncAt: new Date(),
+        isConnected: true,
+      });
+
+      res.json({
+        connected: true,
+        baseId: config.baseId,
+        tableName: config.tableName,
+        lastSyncAt: config.lastSyncAt,
+      });
+    } catch (error) {
+      console.error("[Airtable Config] Save error:", error);
+      res.status(500).json({ message: "Failed to save Airtable config" });
+    }
+  });
+
+  // Disconnect Airtable
+  app.delete("/api/airtable/config", async (req, res) => {
+    try {
+      await storage.deleteAirtableConfig();
+      res.json({ success: true });
+    } catch (error) {
+      console.error("[Airtable Config] Delete error:", error);
+      res.status(500).json({ message: "Failed to disconnect Airtable" });
+    }
+  });
+
+  // Sync/Refresh contacts from Airtable
+  app.post("/api/airtable/sync", async (req, res) => {
+    try {
+      const config = await storage.getAirtableConfig();
+      
+      if (!config) {
+        return res.status(400).json({ message: "Airtable not connected" });
+      }
+
+      const response = await fetch(
+        `https://api.airtable.com/v0/${config.baseId}/${encodeURIComponent(config.tableName)}?maxRecords=1000`,
+        {
+          headers: {
+            Authorization: `Bearer ${config.personalAccessToken}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        return res.status(response.status).json({ 
+          message: error.error?.message || "Failed to fetch from Airtable" 
+        });
+      }
+
+      const data = await response.json();
+      const records = data.records || [];
+
+      if (records.length === 0) {
+        return res.json({ synced: 0, created: 0, updated: 0, message: "No records found" });
+      }
+
+      const fieldMapping = config.fieldMapping ? JSON.parse(config.fieldMapping) : {};
+      let created = 0;
+      let updated = 0;
+
+      for (const record of records) {
+        const fields = record.fields || {};
+        
+        const contact: Record<string, string> = {};
+        
+        for (const [airtableField, appField] of Object.entries(fieldMapping)) {
+          if (appField && fields[airtableField]) {
+            contact[appField as string] = String(fields[airtableField]).trim();
+          }
+        }
+
+        if (!contact.name) continue;
+
+        const existingContacts = await storage.getContacts();
+        const existing = existingContacts.find(c => 
+          c.name.toLowerCase() === contact.name.toLowerCase() && 
+          (c.company?.toLowerCase() === contact.company?.toLowerCase() || (!c.company && !contact.company))
+        );
+
+        if (existing) {
+          await storage.updateContact(existing.id, {
+            ...contact,
+            tags: existing.tags?.includes("airtable-sync") ? existing.tags : `${existing.tags || ""},airtable-sync`,
+          });
+          updated++;
+        } else {
+          await storage.createContact({
+            ...contact,
+            tags: "airtable-sync",
+          } as any);
+          created++;
+        }
+      }
+
+      await storage.updateAirtableConfig(config.id, {
+        lastSyncAt: new Date(),
+      });
+
+      res.json({ 
+        synced: records.length, 
+        created, 
+        updated,
+        lastSyncAt: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error("[Airtable Sync] Error:", error);
+      res.status(500).json({ message: "Failed to sync from Airtable" });
+    }
+  });
+
   // Bulk Create Contacts - Create multiple contacts at once
   app.post("/api/contacts/bulk-create", async (req, res) => {
     try {

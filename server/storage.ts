@@ -2,7 +2,8 @@ import {
   contacts, type Contact, type InsertContact,
   outreachAttempts, type OutreachAttempt, type InsertOutreachAttempt,
   experiments, type Experiment, type InsertExperiment,
-  settings, type Settings, type InsertSettings 
+  settings, type Settings, type InsertSettings,
+  airtableConfig, type AirtableConfig, type InsertAirtableConfig
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc } from "drizzle-orm";
@@ -36,6 +37,12 @@ export interface IStorage {
   getSettings(): Promise<Settings | undefined>;
   createSettings(settings: InsertSettings): Promise<Settings>;
   updateSettings(id: string, settings: Partial<InsertSettings>): Promise<Settings | undefined>;
+
+  // Airtable Config
+  getAirtableConfig(): Promise<AirtableConfig | undefined>;
+  saveAirtableConfig(config: InsertAirtableConfig): Promise<AirtableConfig>;
+  updateAirtableConfig(id: string, config: Partial<InsertAirtableConfig>): Promise<AirtableConfig | undefined>;
+  deleteAirtableConfig(): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -146,6 +153,28 @@ export class DatabaseStorage implements IStorage {
   async updateSettings(id: string, update: Partial<InsertSettings>): Promise<Settings | undefined> {
     const [updated] = await db.update(settings).set(update).where(eq(settings.id, id)).returning();
     return updated;
+  }
+
+  // Airtable Config
+  async getAirtableConfig(): Promise<AirtableConfig | undefined> {
+    const [config] = await db.select().from(airtableConfig).limit(1);
+    return config;
+  }
+
+  async saveAirtableConfig(config: InsertAirtableConfig): Promise<AirtableConfig> {
+    await db.delete(airtableConfig);
+    const [saved] = await db.insert(airtableConfig).values(config).returning();
+    return saved;
+  }
+
+  async updateAirtableConfig(id: string, config: Partial<InsertAirtableConfig>): Promise<AirtableConfig | undefined> {
+    const [updated] = await db.update(airtableConfig).set(config).where(eq(airtableConfig.id, id)).returning();
+    return updated;
+  }
+
+  async deleteAirtableConfig(): Promise<boolean> {
+    const result = await db.delete(airtableConfig).returning();
+    return result.length > 0;
   }
 }
 

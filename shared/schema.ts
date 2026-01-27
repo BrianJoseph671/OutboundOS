@@ -118,3 +118,17 @@ export const insertUserSchema = createInsertSchema(users).pick({
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
+
+export const airtableConfig = pgTable("airtable_config", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  baseId: text("base_id").notNull(),
+  tableName: text("table_name").notNull(),
+  personalAccessToken: text("personal_access_token").notNull(),
+  fieldMapping: text("field_mapping"),
+  lastSyncAt: timestamp("last_sync_at"),
+  isConnected: boolean("is_connected").default(true),
+});
+
+export const insertAirtableConfigSchema = createInsertSchema(airtableConfig).omit({ id: true });
+export type InsertAirtableConfig = z.infer<typeof insertAirtableConfigSchema>;
+export type AirtableConfig = typeof airtableConfig.$inferSelect;
