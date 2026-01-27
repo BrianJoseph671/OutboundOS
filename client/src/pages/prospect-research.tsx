@@ -418,6 +418,8 @@ export default function ProspectResearch() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           personId: personName,
+          subject: finalSubject,
+          body: finalBody,
           researchBrief: `Draft outreach message for ${personName} at ${company}. Subject: ${finalSubject}. Body context: ${finalBody.substring(0, 500)}`,
           requestId: `variants-${personName.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`,
           forceRefresh: false
