@@ -22,12 +22,12 @@ import {
 } from "lucide-react";
 
 const menuItems = [
-  { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "Decisions", url: "/decisions", icon: Sparkles },
   { title: "Prospect Research", url: "/prospect-research", icon: FlaskConical },
   { title: "Import Prospects", url: "/research-setup", icon: Upload },
   { title: "Contacts", url: "/contacts", icon: Users },
   { title: "Outreach Log", url: "/outreach-log", icon: FileText },
+  { title: "Dashboard", url: "/", icon: LayoutDashboard },
+  { title: "Decisions", url: "/decisions", icon: Sparkles },
   { title: "Settings", url: "/settings", icon: Settings },
 ];
 
