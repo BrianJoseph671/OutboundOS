@@ -1055,7 +1055,7 @@ export async function registerRoutes(
         return res.status(400).json({ error: "personName and company are required" });
       }
 
-      const response = await fetch("https://n8n.srv1096794.hstgr.cloud/webhook/prospect-research", {
+      const response = await fetch("https://n8n.srv1096794.hstgr.cloud/webhook/028dc28a-4779-4a35-80cf-87dfbde544f8", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ personName, company }),
