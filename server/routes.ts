@@ -476,6 +476,7 @@ export async function registerRoutes(
 
   // n8n Webhook - Import batch outreach logs
   app.post("/api/webhooks/outreach-logs", express.json(), async (req, res) => {
+    console.log("WEBHOOK HIT - /api/webhooks/outreach-logs");
     try {
       console.log("[Outreach Webhook] Received payload:", JSON.stringify(req.body, null, 2));
       
