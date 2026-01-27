@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import express, { type Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import multer from "multer";
@@ -475,22 +475,8 @@ export async function registerRoutes(
   });
 
   // n8n Webhook - Import batch outreach logs
-  app.post("/api/webhooks/outreach-logs", async (req, res) => {
+  app.post("/api/webhooks/outreach-logs", express.json(), async (req, res) => {
     try {
-      const fullPayload = JSON.stringify(req.body, null, 2);
-      console.log("[Outreach Webhook] Received payload:", fullPayload);
-      
-      // Debug mode - add ?debug=1 to URL to just echo the payload
-      if (req.query.debug) {
-        return res.json({ 
-          ok: true, 
-          debug: true,
-          received: req.body,
-          isArray: Array.isArray(req.body),
-          length: Array.isArray(req.body) ? req.body.length : 1
-        });
-      }
-      
       // Handle n8n batch structure which might be [{data: {...}}] or just [{...}]
       let logs = Array.isArray(req.body) ? req.body : [req.body];
       
@@ -505,18 +491,21 @@ export async function registerRoutes(
 
       const outreachTypeMapping: Record<string, string> = {
         "LinkedIn Message": "linkedin_connected",
+        "LinkedIn Connection": "linkedin_connected",
         "LinkedIn Request": "linkedin_connect_request",
+        "LinkedIn Connect": "linkedin_connect_request",
         "LinkedIn InMail": "linkedin_inmail",
+        "InMail": "linkedin_inmail",
         "Email": "email",
+        "Cold Email": "email",
         "WhatsApp": "whatsapp",
       };
 
       for (const logData of logs) {
         try {
-          // Fields from image: contactName, outreachType, datesent, dateresponse, campaign, subjectLine, messageBody, responded, positiveResponse, meetingBooked, converted, notes
-          const personName = logData.contactName || logData.personId || logData.name;
+          const personName = logData.contactName || logData.personId || logData.name || logData.Name || logData.Contact;
           if (!personName) {
-            console.error("[Outreach Webhook] Log missing name:", logData);
+            console.error("[Outreach Webhook] Log missing name in data:", JSON.stringify(logData));
             results.failed++;
             results.errors.push("Missing contactName, personId, or name in log");
             continue;
@@ -530,32 +519,31 @@ export async function registerRoutes(
             console.log(`[Outreach Webhook] Auto-creating contact: ${personName}`);
             contact = await storage.createContact({
               name: personName,
-              company: logData.company || "Unknown",
+              company: logData.company || logData.Company || "Unknown",
               tags: "auto-created-from-webhook",
             } as any);
           }
 
-          const rawOutreachType = logData.outreachType || "Email";
+          const rawOutreachType = logData.outreachType || logData.OutreachType || "Email";
           const mappedType = outreachTypeMapping[rawOutreachType] || (rawOutreachType.toLowerCase().includes("linkedin") ? "linkedin_connected" : "email");
 
           const outreachData: any = {
             contactId: contact.id,
             outreachType: mappedType,
-            subject: logData.subjectLine || logData.subject || "",
-            messageBody: logData.messageBody || logData.body || "",
-            dateSent: logData.datesent ? new Date(logData.datesent) : new Date(),
-            campaign: logData.campaign || "n8n-import",
-            responded: logData.responded === true || logData.responded === "true",
-            positiveResponse: logData.positiveResponse === true || logData.positiveResponse === "true",
-            meetingBooked: logData.meetingBooked === true || logData.meetingBooked === "true",
-            converted: logData.converted === true || logData.converted === "true",
-            notes: logData.notes || "",
+            subject: logData.subjectLine || logData.subject || logData.Subject || "",
+            messageBody: logData.messageBody || logData.body || logData.Message || logData.MessageBody || "",
+            dateSent: logData.datesent || logData.dateSent || logData.DateSent ? new Date(logData.datesent || logData.dateSent || logData.DateSent) : new Date(),
+            campaign: logData.campaign || logData.Campaign || "n8n-import",
+            responded: logData.responded === true || logData.responded === "true" || logData.Responded === true,
+            positiveResponse: logData.positiveResponse === true || logData.positiveResponse === "true" || logData.PositiveResponse === true,
+            meetingBooked: logData.meetingBooked === true || logData.meetingBooked === "true" || logData.MeetingBooked === true,
+            converted: logData.converted === true || logData.converted === "true" || logData.Converted === true,
+            notes: logData.notes || logData.Notes || "",
+            relationshipType: logData.relationshipType || logData.RelationshipType || "cold",
           };
 
-          if (logData.dateresponse) {
-            outreachData.responseDate = new Date(logData.dateresponse);
-          } else if (logData.responseDate) {
-            outreachData.responseDate = new Date(logData.responseDate);
+          if (logData.dateresponse || logData.responseDate || logData.ResponseDate) {
+            outreachData.responseDate = new Date(logData.dateresponse || logData.responseDate || logData.ResponseDate);
           } else {
             outreachData.responseDate = null;
           }
@@ -570,7 +558,7 @@ export async function registerRoutes(
         }
       }
 
-      console.log("[Outreach Webhook] Result:", results);
+      console.log(`[Outreach Webhook] Import complete. Success: ${results.success}, Failed: ${results.failed}`);
       res.json(results);
     } catch (error) {
       console.error("[Outreach Webhook] Fatal error:", error);
