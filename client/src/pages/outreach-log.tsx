@@ -192,12 +192,13 @@ function ManualEntryModal({
   useEffect(() => {
     if (open) {
       const draftMessage = localStorage.getItem("composer-draft-message");
+      const draftSubject = localStorage.getItem("composer-draft-subject");
       const contactName = localStorage.getItem("composer-draft-name");
       const companyName = localStorage.getItem("composer-draft-company");
       const outreachType = localStorage.getItem("composer-draft-outreach-type");
       const storedContactId = localStorage.getItem("composer-draft-contact-id");
 
-      if (draftMessage || contactName || companyName || storedContactId || outreachType) {
+      if (draftMessage || draftSubject || contactName || companyName || storedContactId || outreachType) {
         // Prefer stored contactId, fallback to matching on both name AND company
         let matchedContactId = storedContactId || "";
         
@@ -214,12 +215,14 @@ function ManualEntryModal({
         setFormData(prev => ({
           ...prev,
           messageBody: draftMessage || prev.messageBody,
+          subject: draftSubject || prev.subject,
           contactId: matchedContactId || prev.contactId,
           outreachType: outreachType || prev.outreachType,
         }));
 
         // Clear after consumption
         localStorage.removeItem("composer-draft-message");
+        localStorage.removeItem("composer-draft-subject");
         localStorage.removeItem("composer-draft-name");
         localStorage.removeItem("composer-draft-company");
         localStorage.removeItem("composer-draft-outreach-type");

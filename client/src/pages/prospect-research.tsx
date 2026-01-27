@@ -283,8 +283,21 @@ export default function ProspectResearch() {
     if (!researchResult) return;
     const draftMessage = extractDraftMessage(researchResult);
     
+    // Extract subject from draft message if present
+    let finalSubject = `Outreach to ${personName} at ${company}`;
+    let finalBody = draftMessage;
+
+    if (draftMessage.toLowerCase().startsWith("subject:")) {
+      const subjectMatch = draftMessage.match(/^subject:\s*([^\n]+)/i);
+      if (subjectMatch) {
+        finalSubject = subjectMatch[1].trim();
+        finalBody = draftMessage.slice(subjectMatch[0].length).trim();
+      }
+    }
+
     // Store data for the composer/logger
-    localStorage.setItem("composer-draft-message", draftMessage);
+    localStorage.setItem("composer-draft-message", finalBody);
+    localStorage.setItem("composer-draft-subject", finalSubject);
     localStorage.setItem("composer-draft-name", personName);
     localStorage.setItem("composer-draft-company", company);
     localStorage.setItem("composer-draft-outreach-type", "email");
