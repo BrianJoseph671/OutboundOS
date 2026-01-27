@@ -194,24 +194,36 @@ function ManualEntryModal({
       const draftMessage = localStorage.getItem("composer-draft-message");
       const contactName = localStorage.getItem("composer-draft-name");
       const companyName = localStorage.getItem("composer-draft-company");
+      const outreachType = localStorage.getItem("composer-draft-outreach-type");
+      const storedContactId = localStorage.getItem("composer-draft-contact-id");
 
-      if (draftMessage || contactName || companyName) {
-        // Look for matching contact
-        const contact = contacts.find(c => 
-          c.name.toLowerCase() === contactName?.toLowerCase() || 
-          c.company?.toLowerCase() === companyName?.toLowerCase()
-        );
+      if (draftMessage || contactName || companyName || storedContactId || outreachType) {
+        // Prefer stored contactId, fallback to matching on both name AND company
+        let matchedContactId = storedContactId || "";
+        
+        if (!matchedContactId && contactName && companyName) {
+          const normalizedName = contactName.toLowerCase().trim();
+          const normalizedCompany = companyName.toLowerCase().trim();
+          const contact = contacts.find(c => 
+            c.name.toLowerCase().trim() === normalizedName && 
+            c.company?.toLowerCase().trim() === normalizedCompany
+          );
+          matchedContactId = contact?.id || "";
+        }
 
         setFormData(prev => ({
           ...prev,
           messageBody: draftMessage || prev.messageBody,
-          contactId: contact?.id || prev.contactId,
+          contactId: matchedContactId || prev.contactId,
+          outreachType: outreachType || prev.outreachType,
         }));
 
         // Clear after consumption
         localStorage.removeItem("composer-draft-message");
         localStorage.removeItem("composer-draft-name");
         localStorage.removeItem("composer-draft-company");
+        localStorage.removeItem("composer-draft-outreach-type");
+        localStorage.removeItem("composer-draft-contact-id");
       }
     }
   }, [open, contacts]);

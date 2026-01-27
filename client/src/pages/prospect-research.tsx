@@ -279,7 +279,7 @@ export default function ProspectResearch() {
     }
   };
 
-  const handleLogOutreach = () => {
+  const handleLogOutreach = async () => {
     if (!researchResult) return;
     const draftMessage = extractDraftMessage(researchResult);
     
@@ -287,13 +287,78 @@ export default function ProspectResearch() {
     localStorage.setItem("composer-draft-message", draftMessage);
     localStorage.setItem("composer-draft-name", personName);
     localStorage.setItem("composer-draft-company", company);
+    localStorage.setItem("composer-draft-outreach-type", "email");
+    
+    // Try to find or create the contact before navigating
+    try {
+      // Check if contact exists using apiRequest
+      const response = await apiRequest("GET", "/api/contacts");
+      if (!response.ok) {
+        throw new Error("Failed to fetch contacts");
+      }
+      const contacts = await response.json();
+      
+      // Match on both name AND company (case-insensitive) for accuracy
+      const normalizedName = personName.toLowerCase().trim();
+      const normalizedCompany = company.toLowerCase().trim();
+      
+      const existingContact = contacts.find((c: { name: string; company?: string }) => 
+        c.name.toLowerCase().trim() === normalizedName && 
+        c.company?.toLowerCase().trim() === normalizedCompany
+      );
+      
+      if (existingContact) {
+        // Contact exists, store the ID
+        localStorage.setItem("composer-draft-contact-id", existingContact.id);
+      } else {
+        // Create the contact first
+        const sections = parseResearchSections(researchResult);
+        const snapshot = sections.find(s => s.title.includes("Prospect Snapshot"))?.content || "";
+        
+        const titleMatch = snapshot.match(/Title:\s*([^\n]+)/i);
+        const headlineMatch = snapshot.match(/Headline:\s*([^\n]+)/i);
+        const aboutMatch = snapshot.match(/About:\s*([^\n]+)/i);
+        const locationMatch = snapshot.match(/Location:\s*([^\n]+)/i);
+        const experienceMatch = sections.find(s => s.title.includes("Experience"))?.content || "";
+        const educationMatch = snapshot.match(/Background:\s*([^\n]+)/i);
+        
+        const contactData = {
+          name: personName,
+          company: company,
+          role: titleMatch?.[1]?.trim() || null,
+          headline: headlineMatch?.[1]?.trim() || titleMatch?.[1]?.trim() || null,
+          about: aboutMatch?.[1]?.trim() || null,
+          location: locationMatch?.[1]?.trim() || null,
+          experience: experienceMatch || null,
+          education: educationMatch?.[1]?.trim() || null,
+          tags: "research-import"
+        };
+
+        const createResponse = await apiRequest("POST", "/api/contacts", contactData);
+        if (!createResponse.ok) {
+          throw new Error("Failed to create contact");
+        }
+        const newContact = await createResponse.json();
+        
+        if (newContact.id) {
+          localStorage.setItem("composer-draft-contact-id", newContact.id);
+          queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
+          toast({ 
+            title: "Contact created", 
+            description: `${personName} added to contacts` 
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Error finding/creating contact:", error);
+      toast({ 
+        title: "Note", 
+        description: "Could not auto-select contact. Please select manually." 
+      });
+    }
     
     // Navigate to outreach log to record the attempt
     setLocation("/outreach-log?action=new");
-    toast({ 
-      title: "Opening Outreach Log", 
-      description: "Record your outreach attempt for " + personName 
-    });
   };
 
   return (
