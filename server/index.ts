@@ -28,7 +28,10 @@ app.use(express.urlencoded({ limit: "10mb", extended: false }));
 
 // Debug middleware for webhook requests
 app.use("/api/webhooks", (req, res, next) => {
-  console.log(`[WEBHOOK DEBUG] ${req.method} ${req.path} - Body:`, req.body ? "present" : "missing");
+  console.log(
+    `[WEBHOOK DEBUG] ${req.method} ${req.path} - Body:`,
+    req.body ? "present" : "missing",
+  );
   next();
 });
 

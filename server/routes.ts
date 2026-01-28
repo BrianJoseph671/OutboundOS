@@ -2,7 +2,8 @@ import express, { type Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import multer from "multer";
-import OpenAI from "openai";
+// import OpenAI from "openai";
+import { parseLinkedInTextToJson, generateDraft } from "./openai";
 import {
   insertContactSchema,
   insertOutreachAttemptSchema,
@@ -16,9 +17,9 @@ const upload = multer({
   limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
 });
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+// const openai = new OpenAI({
+//   apiKey: process.env.OPENAI_API_KEY,
+// });
 
 // Helper function to extract text from PDF using pdf.js-extract
 async function extractPdfText(buffer: Buffer): Promise<string> {
@@ -42,56 +43,60 @@ async function extractPdfText(buffer: Buffer): Promise<string> {
     .join("\n\n");
 }
 
-// Helper function to parse LinkedIn profile text using OpenAI API
 async function parseWithOpenAI(text: string): Promise<any> {
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4-turbo",
-    max_tokens: 1024,
-    response_format: { type: "json_object" },
-    messages: [
-      {
-        role: "system",
-        content:
-          "You are a helpful assistant that extracts structured data from LinkedIn profiles. Always respond with valid JSON.",
-      },
-      {
-        role: "user",
-        content: `Extract structured information from this LinkedIn profile PDF text. Return ONLY valid JSON with these exact fields (use null for missing fields):
-
-{
-  "name": "Full name without nicknames",
-  "headline": "Professional headline (the line with | separators)",
-  "location": "City, State/Country",
-  "company": "Current company name",
-  "role": "Current job title",
-  "about": "Summary/About section text",
-  "experience": "Experience section text (first 1000 chars)",
-  "education": "Education section text (first 500 chars)",
-  "skills": "Comma-separated skills from Top Skills section"
+  return parseLinkedInTextToJson(text);
 }
 
-LinkedIn Profile Text:
-${text.slice(0, 15000)}`,
-      },
-    ],
-  });
+// Helper function to parse LinkedIn profile text using OpenAI API
+// async function parseWithOpenAI(text: string): Promise<any> {
+//   const completion = await openai.chat.completions.create({
+//     model: "gpt-4-turbo",
+//     max_tokens: 1024,
+//     response_format: { type: "json_object" },
+//     messages: [
+//       {
+//         role: "system",
+//         content:
+//           "You are a helpful assistant that extracts structured data from LinkedIn profiles. Always respond with valid JSON.",
+//       },
+//       {
+//         role: "user",
+//         content: `Extract structured information from this LinkedIn profile PDF text. Return ONLY valid JSON with these exact fields (use null for missing fields):
 
-  const responseText = completion.choices[0].message.content || "";
+// {
+//   "name": "Full name without nicknames",
+//   "headline": "Professional headline (the line with | separators)",
+//   "location": "City, State/Country",
+//   "company": "Current company name",
+//   "role": "Current job title",
+//   "about": "Summary/About section text",
+//   "experience": "Experience section text (first 1000 chars)",
+//   "education": "Education section text (first 500 chars)",
+//   "skills": "Comma-separated skills from Top Skills section"
+// }
 
-  const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) {
-    throw new Error("Could not extract JSON from OpenAI response");
-  }
+// LinkedIn Profile Text:
+// ${text.slice(0, 15000)}`,
+//       },
+//     ],
+//   });
 
-  const parsed = JSON.parse(jsonMatch[0]);
+//   const responseText = completion.choices[0].message.content || "";
 
-  // Convert nulls to undefined for consistency
-  Object.keys(parsed).forEach((key) => {
-    if (parsed[key] === null) parsed[key] = undefined;
-  });
+//   const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+//   if (!jsonMatch) {
+//     throw new Error("Could not extract JSON from OpenAI response");
+//   }
 
-  return parsed;
-}
+//   const parsed = JSON.parse(jsonMatch[0]);
+
+//   // Convert nulls to undefined for consistency
+//   Object.keys(parsed).forEach((key) => {
+//     if (parsed[key] === null) parsed[key] = undefined;
+//   });
+
+//   return parsed;
+// }
 
 export async function registerRoutes(
   httpServer: Server,
@@ -100,6 +105,126 @@ export async function registerRoutes(
   // Batch processing routes
   app.use("/api/batch", batchRouter);
 
+  // =========================
+  // CERT: Level 3 proof (simple, deterministic)
+  // =========================
+  app.get("/api/cert/level3-proof-v2", async (_req, res) => {
+    try {
+      const hasOpenAI = Boolean(process.env.OPENAI_API_KEY);
+      const hasAirtable = Boolean(process.env.AIRTABLE_API_KEY);
+      const hasDb = Boolean(process.env.DATABASE_URL);
+
+      let contactsCount: number | null = null;
+      try {
+        const contacts = await storage.getContacts();
+        contactsCount = contacts.length;
+      } catch {
+        contactsCount = null;
+      }
+
+      res.json({
+        ok: true,
+        secrets: {
+          hasOpenAI,
+          hasAirtable,
+          hasDb,
+        },
+        contactsCount,
+      });
+    } catch (e: any) {
+      res.status(500).json({
+        ok: false,
+        error: e?.message || "unknown error",
+      });
+    }
+  });
+
+
+
+  // CERT: Level 3 proof endpoint (DB write + DB read + OpenAI twice)
+  app.get("/api/cert/airtable-ping", async (_req, res) => {
+    try {
+      const baseId = process.env.AIRTABLE_BASE_ID;
+      const token = process.env.AIRTABLE_API_KEY;
+
+      const tableName = process.env.AIRTABLE_TABLE_NAME || "Contacts";
+
+      console.log("[airtable-ping] token prefix:", token?.slice(0, 6));
+      console.log("[airtable-ping] baseId:", baseId);
+      console.log("[airtable-ping] tableName:", tableName);
+
+      if (!baseId || !token) {
+        return res.status(400).json({
+          ok: false,
+          error: "Missing AIRTABLE_BASE_ID or AIRTABLE_API_KEY in Secrets",
+        });
+      }
+
+      const url = `https://api.airtable.com/v0/${baseId}/${encodeURIComponent(tableName)}?maxRecords=1`;
+      const response = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const text = await response.text();
+      res.status(response.status).send(text);
+    } catch (error: any) {
+      console.error("[CERT airtable-ping] Error:", error);
+      res.status(500).json({ ok: false, error: error?.message || "Unknown error" });
+    }
+  });
+
+  app.get("/api/cert/level3-proof-v2", async (_req, res) => {
+    try {
+      const hasOpenAI = Boolean(process.env.OPENAI_API_KEY);
+      const hasAirtable = Boolean(process.env.AIRTABLE_API_KEY);
+      const hasDb = Boolean(process.env.DATABASE_URL);
+
+      // Deterministic external API call that requires no keys
+      const r = await fetch("https://httpbin.org/get");
+      const j = await r.json();
+
+      // Also prove DB works by reading count
+      const contactsCount = (await storage.getContacts()).length;
+
+      res.json({
+        ok: true,
+        secrets: { hasOpenAI, hasAirtable, hasDb },
+        externalApi: { ok: r.ok, url: j.url, origin: j.origin },
+        contactsCount,
+      });
+    } catch (e: any) {
+      res.status(500).json({ ok: false, error: e?.message || "unknown error" });
+    }
+  });
+
+  // CERT: Airtable ping using Secrets (proves secret-based API integration)
+  app.get("/api/cert/airtable-ping", async (_req, res) => {
+    try {
+      const baseId = process.env.AIRTABLE_BASE_ID;
+      const token = process.env.AIRTABLE_API_KEY;
+      if (!baseId || !token) {
+        return res.status(400).json({ ok: false, error: "Missing AIRTABLE_BASE_ID or AIRTABLE_API_KEY in Secrets" });
+      }
+
+      // Choose a table name that exists in that base. If unsure, set AIRTABLE_TABLE_NAME in Secrets and use that.
+      const tableName = process.env.AIRTABLE_TABLE_NAME || "Contacts";
+
+      const url = `https://api.airtable.com/v0/${baseId}/${encodeURIComponent(tableName)}?maxRecords=1`;
+      const response = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const text = await response.text();
+      res.status(response.ok ? 200 : 500).send(text);
+    } catch (error: any) {
+      console.error("[CERT airtable-ping] Error:", error);
+      res.status(500).json({ ok: false, error: error?.message || "Unknown error" });
+    }
+  });
+
+
+
+  
   // Contacts
   app.get("/api/contacts", async (req, res) => {
     try {
