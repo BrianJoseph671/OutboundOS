@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { 
   User, 
@@ -45,9 +46,177 @@ interface ProfileResearchResponse {
   }>;
 }
 
+function parseLines(text: string): string[] {
+  return text
+    .split(/\n/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+interface EditPersonaFormProps {
+  profileData: UserProfile;
+  onSave: (profile: UserProfile) => void;
+  onBack: () => void;
+}
+
+function EditPersonaForm({ profileData, onSave, onBack }: EditPersonaFormProps) {
+  const [name, setName] = useState(profileData.name);
+  const [currentRole, setCurrentRole] = useState(profileData.currentRole ?? "");
+  const [company, setCompany] = useState(profileData.company ?? "");
+  const [headline, setHeadline] = useState(profileData.headline ?? "");
+  const [background, setBackground] = useState(profileData.background ?? "");
+  const [linkedinUrl, setLinkedinUrl] = useState(profileData.linkedinUrl ?? "");
+  const [keyExperiencesText, setKeyExperiencesText] = useState(
+    (profileData.keyExperiences ?? []).join("\n")
+  );
+  const [skillsText, setSkillsText] = useState((profileData.skills ?? []).join("\n"));
+  const [interestsText, setInterestsText] = useState((profileData.interests ?? []).join("\n"));
+  const [talkingPointsText, setTalkingPointsText] = useState(
+    (profileData.talkingPoints ?? []).join("\n")
+  );
+
+  const handleSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    const updated: UserProfile = {
+      name: name.trim(),
+      currentRole: currentRole.trim() || undefined,
+      company: company.trim() || undefined,
+      headline: headline.trim() || undefined,
+      background: background.trim() || undefined,
+      keyExperiences: parseLines(keyExperiencesText),
+      skills: parseLines(skillsText),
+      interests: parseLines(interestsText),
+      talkingPoints: parseLines(talkingPointsText),
+      linkedinUrl: linkedinUrl.trim() || undefined,
+      createdAt: profileData.createdAt,
+    };
+    onSave(updated);
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      <Card className="w-full max-w-2xl">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-2xl">Edit persona</CardTitle>
+          <CardDescription>
+            Update your profile information below, then Save or Back to results.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSave} className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-name">Full Name</Label>
+                <Input
+                  id="edit-name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-company">Company</Label>
+                <Input
+                  id="edit-company"
+                  value={company}
+                  onChange={(e) => setCompany(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-headline">Headline</Label>
+              <Input
+                id="edit-headline"
+                value={headline}
+                onChange={(e) => setHeadline(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-currentRole">Current role</Label>
+              <Input
+                id="edit-currentRole"
+                value={currentRole}
+                onChange={(e) => setCurrentRole(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-linkedinUrl">LinkedIn URL</Label>
+              <Input
+                id="edit-linkedinUrl"
+                value={linkedinUrl}
+                onChange={(e) => setLinkedinUrl(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-background">Background</Label>
+              <Textarea
+                id="edit-background"
+                value={background}
+                onChange={(e) => setBackground(e.target.value)}
+                rows={3}
+                className="resize-none"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-keyExperiences">Key experiences (one per line)</Label>
+              <Textarea
+                id="edit-keyExperiences"
+                value={keyExperiencesText}
+                onChange={(e) => setKeyExperiencesText(e.target.value)}
+                rows={3}
+                className="resize-none"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-skills">Skills (one per line)</Label>
+              <Textarea
+                id="edit-skills"
+                value={skillsText}
+                onChange={(e) => setSkillsText(e.target.value)}
+                rows={3}
+                className="resize-none"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-interests">Interests (one per line)</Label>
+              <Textarea
+                id="edit-interests"
+                value={interestsText}
+                onChange={(e) => setInterestsText(e.target.value)}
+                rows={2}
+                className="resize-none"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-talkingPoints">Talking points (one per line)</Label>
+              <Textarea
+                id="edit-talkingPoints"
+                value={talkingPointsText}
+                onChange={(e) => setTalkingPointsText(e.target.value)}
+                rows={3}
+                className="resize-none"
+              />
+            </div>
+            <div className="flex gap-3 pt-4">
+              <Button type="button" variant="outline" onClick={onBack} className="flex-1">
+                Back
+              </Button>
+              <Button type="submit" className="flex-1">
+                <Check className="w-4 h-4 mr-2" />
+                Save
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+type Step = "inputs" | "researching" | "results" | "editPersona";
+
 export function ProfileSetup({ onComplete, existingProfile }: ProfileSetupProps) {
   const { toast } = useToast();
-  const [step, setStep] = useState<"form" | "loading" | "review">(existingProfile ? "review" : "form");
+  const [step, setStep] = useState<Step>(existingProfile ? "results" : "inputs");
   const [formData, setFormData] = useState({
     personName: existingProfile?.name || "",
     company: existingProfile?.company || "",
@@ -90,15 +259,15 @@ export function ProfileSetup({ onComplete, existingProfile }: ProfileSetupProps)
           createdAt: new Date().toISOString(),
         };
         setProfileData(profile);
-        setStep("review");
+        setStep("results");
       } catch {
         toast({ title: "Failed to parse profile data", variant: "destructive" });
-        setStep("form");
+        setStep("inputs");
       }
     },
     onError: () => {
       toast({ title: "Research failed", description: "Please try again", variant: "destructive" });
-      setStep("form");
+      // Stay in researching so error UI with Retry is shown
     },
   });
 
@@ -108,7 +277,7 @@ export function ProfileSetup({ onComplete, existingProfile }: ProfileSetupProps)
       toast({ title: "Please fill in required fields", variant: "destructive" });
       return;
     }
-    setStep("loading");
+    setStep("researching");
     researchMutation.mutate({
       personName: formData.personName.trim(),
       company: formData.company.trim(),
@@ -124,37 +293,86 @@ export function ProfileSetup({ onComplete, existingProfile }: ProfileSetupProps)
     }
   };
 
-  const handleEditProfile = () => {
-    setStep("form");
+  const handleEditPersona = () => {
+    setStep("editPersona");
   };
 
-  if (step === "loading") {
+  const handleChangeInputs = () => {
+    setStep("inputs");
+  };
+
+  const handleBackToResults = () => {
+    setStep("results");
+  };
+
+  const handleBackToInputs = () => {
+    setStep("inputs");
+  };
+
+  if (step === "researching") {
+    const isError = researchMutation.isError;
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
         <Card className="w-full max-w-md">
           <CardContent className="py-16">
-            <div className="flex flex-col items-center justify-center gap-6">
-              <div className="relative">
-                <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center">
-                  <Loader2 className="w-10 h-10 animate-spin text-primary" />
+            {isError ? (
+              <div className="flex flex-col items-center justify-center gap-6">
+                <div className="text-center space-y-2">
+                  <h2 className="text-xl font-semibold text-destructive">Research failed</h2>
+                  <p className="text-muted-foreground">
+                    We couldn&apos;t complete the research. Please try again or go back to change your inputs.
+                  </p>
                 </div>
-                <Sparkles className="w-6 h-6 text-primary absolute -top-1 -right-1" />
+                <div className="flex flex-col sm:flex-row gap-3 w-full">
+                  <Button
+                    variant="outline"
+                    onClick={handleBackToInputs}
+                    className="flex-1"
+                  >
+                    Back to inputs
+                  </Button>
+                  <Button
+                    onClick={() =>
+                      researchMutation.mutate({
+                        personName: formData.personName.trim(),
+                        company: formData.company.trim(),
+                        linkedinUrl: formData.linkedinUrl.trim(),
+                      })
+                    }
+                    disabled={researchMutation.isPending}
+                    className="flex-1"
+                  >
+                    {researchMutation.isPending ? (
+                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    ) : null}
+                    Retry
+                  </Button>
+                </div>
               </div>
-              <div className="text-center space-y-2">
-                <h2 className="text-xl font-semibold">Building Your Profile</h2>
-                <p className="text-muted-foreground">
-                  Researching {formData.personName} at {formData.company}...
-                </p>
-                <p className="text-sm text-muted-foreground">This typically takes 15-30 seconds</p>
+            ) : (
+              <div className="flex flex-col items-center justify-center gap-6">
+                <div className="relative">
+                  <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center">
+                    <Loader2 className="w-10 h-10 animate-spin text-primary" />
+                  </div>
+                  <Sparkles className="w-6 h-6 text-primary absolute -top-1 -right-1" />
+                </div>
+                <div className="text-center space-y-2">
+                  <h2 className="text-xl font-semibold">Building Your Profile</h2>
+                  <p className="text-muted-foreground">
+                    Researching {formData.personName} at {formData.company}...
+                  </p>
+                  <p className="text-sm text-muted-foreground">This typically takes 15-30 seconds</p>
+                </div>
               </div>
-            </div>
+            )}
           </CardContent>
         </Card>
       </div>
     );
   }
 
-  if (step === "review" && profileData) {
+  if (step === "results" && profileData) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
         <Card className="w-full max-w-2xl">
@@ -244,18 +462,25 @@ export function ProfileSetup({ onComplete, existingProfile }: ProfileSetupProps)
               </div>
             )}
 
-            <div className="flex gap-3 pt-4">
+            <div className="flex flex-wrap gap-3 pt-4">
               <Button 
                 variant="outline" 
-                onClick={handleEditProfile}
-                className="flex-1"
+                onClick={handleEditPersona}
+                className="flex-1 min-w-[120px]"
                 data-testid="button-edit-profile"
               >
-                Edit Info
+                Edit persona
+              </Button>
+              <Button 
+                variant="outline"
+                onClick={handleChangeInputs}
+                className="flex-1 min-w-[120px]"
+              >
+                Change inputs
               </Button>
               <Button 
                 onClick={handleSaveProfile}
-                className="flex-1"
+                className="flex-1 min-w-[120px]"
                 data-testid="button-save-profile"
               >
                 <Check className="w-4 h-4 mr-2" />
@@ -268,6 +493,22 @@ export function ProfileSetup({ onComplete, existingProfile }: ProfileSetupProps)
     );
   }
 
+  if (step === "editPersona" && profileData) {
+    return (
+      <EditPersonaForm
+        key="editPersona"
+        profileData={profileData}
+        onSave={(updated) => {
+          setProfileData(updated);
+          localStorage.setItem("userProfile", JSON.stringify(updated));
+          toast({ title: "Profile updated" });
+          setStep("results");
+        }}
+        onBack={() => setStep("results")}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
@@ -277,7 +518,7 @@ export function ProfileSetup({ onComplete, existingProfile }: ProfileSetupProps)
           </div>
           <CardTitle className="text-2xl">Welcome to Outbound OS</CardTitle>
           <CardDescription>
-            Let's set up your profile so we can personalize your outreach messages
+            Let&apos;s set up your profile so we can personalize your outreach messages
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -293,6 +534,7 @@ export function ProfileSetup({ onComplete, existingProfile }: ProfileSetupProps)
                 placeholder="e.g. Jane Smith"
                 value={formData.personName}
                 onChange={(e) => setFormData(prev => ({ ...prev, personName: e.target.value }))}
+                disabled={researchMutation.isPending}
               />
             </div>
 
@@ -307,6 +549,7 @@ export function ProfileSetup({ onComplete, existingProfile }: ProfileSetupProps)
                 placeholder="e.g. Acme Corp"
                 value={formData.company}
                 onChange={(e) => setFormData(prev => ({ ...prev, company: e.target.value }))}
+                disabled={researchMutation.isPending}
               />
             </div>
 
@@ -321,21 +564,42 @@ export function ProfileSetup({ onComplete, existingProfile }: ProfileSetupProps)
                 placeholder="https://linkedin.com/in/yourprofile"
                 value={formData.linkedinUrl}
                 onChange={(e) => setFormData(prev => ({ ...prev, linkedinUrl: e.target.value }))}
+                disabled={researchMutation.isPending}
               />
               <p className="text-xs text-muted-foreground">
                 Optional, but helps us extract more accurate profile information
               </p>
             </div>
 
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={!formData.personName.trim() || !formData.company.trim()}
-              data-testid="button-setup-profile"
-            >
-              <Sparkles className="w-4 h-4 mr-2" />
-              Set Up My Profile
-            </Button>
+            <div className="flex flex-col gap-3">
+              {profileData != null && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleBackToResults}
+                  className="w-full"
+                >
+                  Back
+                </Button>
+              )}
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={
+                  researchMutation.isPending ||
+                  !formData.personName.trim() ||
+                  !formData.company.trim()
+                }
+                data-testid="button-setup-profile"
+              >
+                {researchMutation.isPending ? (
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                ) : (
+                  <Sparkles className="w-4 h-4 mr-2" />
+                )}
+                Research
+              </Button>
+            </div>
           </form>
         </CardContent>
       </Card>
