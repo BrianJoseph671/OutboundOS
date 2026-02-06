@@ -1,30 +1,52 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronLeft, ChevronRight, ArrowLeft, User, Building2, Zap, MessageSquare, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, ArrowLeft, User, Building2, Zap, MessageSquare, Loader2, RefreshCw } from "lucide-react";
 import type { Contact } from "@shared/schema";
 
-interface PlaceholderResearch {
+/** Research Packet: separate artifact per contact, not stored on the contact record. */
+export interface ResearchPacket {
   prospectSnapshot: string;
   companySnapshot: string;
-  signalsAndHooks: string[];
-  personalizedMessage: string;
+  signalsHooks: string[];
+  messageDraft: string;
 }
 
-function buildPlaceholderResearch(contactName: string): PlaceholderResearch {
+function generateMockPacket(contact: Contact): ResearchPacket {
   return {
-    prospectSnapshot: `${contactName} — placeholder prospect snapshot. Key role and background will appear here after research.`,
+    prospectSnapshot: `${contact.name} — placeholder prospect snapshot. Key role and background will appear here after research.`,
     companySnapshot: "Company overview placeholder. Industry, size, recent news and relevance will appear here.",
-    signalsAndHooks: [
+    signalsHooks: [
       "Recent LinkedIn activity or post",
       "Shared connection or alma mater",
       "Company initiative or product launch",
     ],
-    personalizedMessage: "Hi [Name], I noticed [hook]. I’d love to connect because [value prop]. Would you be open to a brief conversation?",
+    messageDraft: "Hi [Name], I noticed [hook]. I’d love to connect because [value prop]. Would you be open to a brief conversation?",
   };
+}
+
+function generateMockSection(section: keyof ResearchPacket, contact: Contact): Partial<ResearchPacket> {
+  switch (section) {
+    case "prospectSnapshot":
+      return { prospectSnapshot: `${contact.name} — updated snapshot (regenerated). Background and key points will appear here.` };
+    case "companySnapshot":
+      return { companySnapshot: "Updated company overview (regenerated). Industry, size, and recent news will appear here." };
+    case "signalsHooks":
+      return {
+        signalsHooks: [
+          "New signal: recent conference talk or article",
+          "New hook: mutual connection or interest",
+          "New hook: company expansion or product launch",
+        ],
+      };
+    case "messageDraft":
+      return { messageDraft: "Hi [Name], I saw that [new hook]. I'd be glad to [value prop]. Would you have 15 minutes for a quick call?" };
+    default:
+      return {};
+  }
 }
 
 export default function ResearchQueue() {
@@ -46,18 +68,50 @@ export default function ResearchQueue() {
   }, [ids, contacts]);
 
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [researchReady, setResearchReady] = useState(false);
+  /** Research packets keyed by contactId; research is a separate artifact, not stored on contact. */
+  const [packetsByContactId, setPacketsByContactId] = useState<Record<string, ResearchPacket>>({});
+  /** Contact IDs currently loading a packet (show loading until mock is ready). */
+  const [loadingPacketIds, setLoadingPacketIds] = useState<Set<string>>(new Set());
+  /** Section keys currently regenerating (mocked). */
+  const [regeneratingSection, setRegeneratingSection] = useState<{ contactId: string; section: keyof ResearchPacket } | null>(null);
 
   const contact = queueContacts[currentIndex] ?? null;
-  const placeholderResearch = contact ? buildPlaceholderResearch(contact.name) : null;
+  const packet = contact ? packetsByContactId[contact.id] : null;
+  const isLoadingPacket = contact ? loadingPacketIds.has(contact.id) : false;
 
   useEffect(() => {
     if (!contact) return;
-    setResearchReady(false);
+    if (packetsByContactId[contact.id]) return;
+    setLoadingPacketIds((prev) => new Set(prev).add(contact.id));
     const delay = 800 + Math.random() * 700;
-    const t = setTimeout(() => setResearchReady(true), delay);
+    const t = setTimeout(() => {
+      setPacketsByContactId((prev) => ({ ...prev, [contact.id]: generateMockPacket(contact) }));
+      setLoadingPacketIds((prev) => {
+        const next = new Set(prev);
+        next.delete(contact.id);
+        return next;
+      });
+    }, delay);
     return () => clearTimeout(t);
-  }, [currentIndex, contact?.id]);
+  }, [contact?.id]);
+
+  const handleRegenerateSection = useCallback(
+    (contactId: string, section: keyof ResearchPacket) => {
+      const c = queueContacts.find((x) => x.id === contactId);
+      const current = packetsByContactId[contactId];
+      if (!c || !current) return;
+      setRegeneratingSection({ contactId, section });
+      const updated = generateMockSection(section, c);
+      setTimeout(() => {
+        setPacketsByContactId((prev) => ({
+          ...prev,
+          [contactId]: { ...prev[contactId], ...updated } as ResearchPacket,
+        }));
+        setRegeneratingSection(null);
+      }, 400);
+    },
+    [queueContacts, packetsByContactId]
+  );
 
   if (ids.length === 0 || queueContacts.length === 0) {
     return (
@@ -159,7 +213,7 @@ export default function ResearchQueue() {
             </CardContent>
           </Card>
 
-          {!researchReady ? (
+          {isLoadingPacket ? (
             <Card>
               <CardContent className="py-8">
                 <div className="flex items-center gap-2 text-muted-foreground mb-4">
@@ -174,45 +228,90 @@ export default function ResearchQueue() {
                 </div>
               </CardContent>
             </Card>
-          ) : placeholderResearch ? (
+          ) : packet ? (
             <>
               {/* B) Prospect Snapshot Card */}
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <User className="w-4 h-4" />
-                    Prospect Snapshot
-                  </CardTitle>
+                  <div className="flex items-center justify-between gap-2">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <User className="w-4 h-4" />
+                      Prospect Snapshot
+                    </CardTitle>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => contact && handleRegenerateSection(contact.id, "prospectSnapshot")}
+                      disabled={regeneratingSection?.section === "prospectSnapshot" && regeneratingSection?.contactId === contact?.id}
+                    >
+                      {regeneratingSection?.section === "prospectSnapshot" && regeneratingSection?.contactId === contact?.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <RefreshCw className="w-4 h-4" />
+                      )}
+                      Regenerate
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-sm text-muted-foreground">{placeholderResearch.prospectSnapshot}</p>
+                  <p className="text-sm text-muted-foreground">{packet.prospectSnapshot}</p>
                 </CardContent>
               </Card>
 
               {/* C) Company Snapshot Card */}
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Building2 className="w-4 h-4" />
-                    Company Snapshot
-                  </CardTitle>
+                  <div className="flex items-center justify-between gap-2">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Building2 className="w-4 h-4" />
+                      Company Snapshot
+                    </CardTitle>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => contact && handleRegenerateSection(contact.id, "companySnapshot")}
+                      disabled={regeneratingSection?.section === "companySnapshot" && regeneratingSection?.contactId === contact?.id}
+                    >
+                      {regeneratingSection?.section === "companySnapshot" && regeneratingSection?.contactId === contact?.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <RefreshCw className="w-4 h-4" />
+                      )}
+                      Regenerate
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-sm text-muted-foreground">{placeholderResearch.companySnapshot}</p>
+                  <p className="text-sm text-muted-foreground">{packet.companySnapshot}</p>
                 </CardContent>
               </Card>
 
               {/* D) Signals & Hooks Card */}
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Zap className="w-4 h-4" />
-                    Signals & Hooks
-                  </CardTitle>
+                  <div className="flex items-center justify-between gap-2">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Zap className="w-4 h-4" />
+                      Signals & Hooks
+                    </CardTitle>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => contact && handleRegenerateSection(contact.id, "signalsHooks")}
+                      disabled={regeneratingSection?.section === "signalsHooks" && regeneratingSection?.contactId === contact?.id}
+                    >
+                      {regeneratingSection?.section === "signalsHooks" && regeneratingSection?.contactId === contact?.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <RefreshCw className="w-4 h-4" />
+                      )}
+                      Regenerate
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
-                    {placeholderResearch.signalsAndHooks.map((item, i) => (
+                    {packet.signalsHooks.map((item, i) => (
                       <li key={i}>{item}</li>
                     ))}
                   </ul>
@@ -222,13 +321,28 @@ export default function ResearchQueue() {
               {/* E) Personalized Message Card */}
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <MessageSquare className="w-4 h-4" />
-                    Personalized Message
-                  </CardTitle>
+                  <div className="flex items-center justify-between gap-2">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <MessageSquare className="w-4 h-4" />
+                      Personalized Message
+                    </CardTitle>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => contact && handleRegenerateSection(contact.id, "messageDraft")}
+                      disabled={regeneratingSection?.section === "messageDraft" && regeneratingSection?.contactId === contact?.id}
+                    >
+                      {regeneratingSection?.section === "messageDraft" && regeneratingSection?.contactId === contact?.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <RefreshCw className="w-4 h-4" />
+                      )}
+                      Regenerate
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">{placeholderResearch.personalizedMessage}</p>
+                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">{packet.messageDraft}</p>
                 </CardContent>
               </Card>
             </>
