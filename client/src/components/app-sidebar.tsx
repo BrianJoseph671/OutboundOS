@@ -50,8 +50,10 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {menuItems.map((item) => {
-                const isActive = location === item.url || 
-                  (item.url !== "/" && location.startsWith(item.url));
+                const isActive =
+                  location === item.url ||
+                  (item.url !== "/" && location.startsWith(item.url)) ||
+                  (item.url === "/contacts" && location === "/research-queue");
                 return (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton

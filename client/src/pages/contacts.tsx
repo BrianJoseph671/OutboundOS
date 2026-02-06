@@ -1393,7 +1393,8 @@ export default function Contacts() {
       toast({ title: "No contacts selected", variant: "destructive" });
       return;
     }
-    batchResearchMutation.mutate(Array.from(selectedIds));
+    const idsParam = encodeURIComponent(Array.from(selectedIds).join(","));
+    setLocation("/research-queue?ids=" + idsParam);
   };
 
   const handleResearchAll = () => {
@@ -1459,7 +1460,7 @@ export default function Contacts() {
                   variant="outline"
                   size="sm"
                   onClick={handleResearchSelected}
-                  disabled={batchResearchMutation.isPending || (activeJobId !== null && !isComplete)}
+                  disabled={selectedIds.size === 0}
                   data-testid="button-research-selected"
                 >
                   <Sparkles className="w-4 h-4 mr-2" />
