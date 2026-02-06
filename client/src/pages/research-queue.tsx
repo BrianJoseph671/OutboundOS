@@ -3,7 +3,6 @@ import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChevronLeft, ChevronRight, ArrowLeft, User, Building2, Zap, MessageSquare, Loader2 } from "lucide-react";
 import type { Contact } from "@shared/schema";
@@ -143,25 +142,27 @@ export default function ResearchQueue() {
       </div>
 
       {contact && (
-        <Card>
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <CardTitle className="text-lg">{contact.name}</CardTitle>
-              {contact.company && (
-                <Badge variant="secondary" className="flex items-center gap-1">
-                  <Building2 className="w-3 h-3" />
-                  {contact.company}
-                </Badge>
+        <div className="space-y-6">
+          {/* A) Name / Header Card - same blue styling as Prospect Research draft message card */}
+          <Card className="bg-primary/5 border-primary/20 shadow-md ring-1 ring-primary/10">
+            <CardContent className="pt-6">
+              <h2 className="text-xl font-semibold text-primary">{contact.name}</h2>
+              {contact.role && (
+                <p className="text-sm text-foreground/90 mt-1">{contact.role}</p>
               )}
-            </div>
-            {contact.role && (
-              <p className="text-sm text-muted-foreground">{contact.role}</p>
-            )}
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {!researchReady ? (
-              <div className="space-y-4 py-4">
-                <div className="flex items-center gap-2 text-muted-foreground">
+              {contact.company && (
+                <p className="text-sm text-foreground/80 mt-0.5 flex items-center gap-1">
+                  <Building2 className="w-4 h-4" />
+                  {contact.company}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          {!researchReady ? (
+            <Card>
+              <CardContent className="py-8">
+                <div className="flex items-center gap-2 text-muted-foreground mb-4">
                   <Loader2 className="w-4 h-4 animate-spin" />
                   <span>Researching…</span>
                 </div>
@@ -171,45 +172,68 @@ export default function ResearchQueue() {
                   <Skeleton className="h-24 w-full" />
                   <Skeleton className="h-20 w-full" />
                 </div>
-              </div>
-            ) : placeholderResearch ? (
-              <div className="space-y-6">
-                <div>
-                  <h3 className="text-sm font-medium flex items-center gap-2 mb-2">
+              </CardContent>
+            </Card>
+          ) : placeholderResearch ? (
+            <>
+              {/* B) Prospect Snapshot Card */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base flex items-center gap-2">
                     <User className="w-4 h-4" />
                     Prospect Snapshot
-                  </h3>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
                   <p className="text-sm text-muted-foreground">{placeholderResearch.prospectSnapshot}</p>
-                </div>
-                <div>
-                  <h3 className="text-sm font-medium flex items-center gap-2 mb-2">
+                </CardContent>
+              </Card>
+
+              {/* C) Company Snapshot Card */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base flex items-center gap-2">
                     <Building2 className="w-4 h-4" />
                     Company Snapshot
-                  </h3>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
                   <p className="text-sm text-muted-foreground">{placeholderResearch.companySnapshot}</p>
-                </div>
-                <div>
-                  <h3 className="text-sm font-medium flex items-center gap-2 mb-2">
+                </CardContent>
+              </Card>
+
+              {/* D) Signals & Hooks Card */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base flex items-center gap-2">
                     <Zap className="w-4 h-4" />
                     Signals & Hooks
-                  </h3>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
                   <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
                     {placeholderResearch.signalsAndHooks.map((item, i) => (
                       <li key={i}>{item}</li>
                     ))}
                   </ul>
-                </div>
-                <div>
-                  <h3 className="text-sm font-medium flex items-center gap-2 mb-2">
+                </CardContent>
+              </Card>
+
+              {/* E) Personalized Message Card */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base flex items-center gap-2">
                     <MessageSquare className="w-4 h-4" />
                     Personalized Message
-                  </h3>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
                   <p className="text-sm text-muted-foreground whitespace-pre-wrap">{placeholderResearch.personalizedMessage}</p>
-                </div>
-              </div>
-            ) : null}
-          </CardContent>
-        </Card>
+                </CardContent>
+              </Card>
+            </>
+          ) : null}
+        </div>
       )}
     </div>
   );
