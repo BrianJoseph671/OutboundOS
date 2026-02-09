@@ -55,6 +55,131 @@ interface ContactStatusMap {
   };
 }
 
+interface BulkResearchResult {
+  contactId: string;
+  personName: string;
+  company: string;
+  status: "success" | "failed";
+  error?: string;
+}
+
+interface BulkResearchResponse {
+  total: number;
+  results: BulkResearchResult[];
+}
+
+type BulkContactStatus = "queued" | "running" | "success" | "failed";
+
+interface BulkContactEntry {
+  contactId: string;
+  name: string;
+  company: string;
+  status: BulkContactStatus;
+  error?: string;
+}
+
+function BulkResearchDialog({
+  open,
+  onOpenChange,
+  entries,
+  total,
+  completed,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  entries: BulkContactEntry[];
+  total: number;
+  completed: number;
+}) {
+  const isDone = completed === total;
+  const successCount = entries.filter((e) => e.status === "success").length;
+  const failedCount = entries.filter((e) => e.status === "failed").length;
+  const progressPct = total > 0 ? (completed / total) * 100 : 0;
+
+  return (
+    <Dialog open={open} onOpenChange={isDone ? onOpenChange : undefined}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            {isDone ? (
+              <Check className="w-5 h-5 text-green-600" />
+            ) : (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            )}
+            {isDone ? "Bulk Research Complete" : "Researching Contacts..."}
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">
+                {completed}/{total} contacts processed
+              </span>
+              {isDone && (
+                <span className="text-muted-foreground">
+                  {successCount} succeeded, {failedCount} failed
+                </span>
+              )}
+            </div>
+            <Progress value={progressPct} className="h-2" data-testid="progress-bulk-research" />
+          </div>
+
+          <div className="max-h-64 overflow-y-auto space-y-1 border rounded-md p-2">
+            {entries.map((entry) => (
+              <div
+                key={entry.contactId}
+                className="flex items-center justify-between py-1.5 px-2 rounded text-sm"
+                data-testid={`bulk-status-${entry.contactId}`}
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="truncate font-medium">{entry.name}</span>
+                  {entry.company && (
+                    <span className="truncate text-muted-foreground text-xs">
+                      {entry.company}
+                    </span>
+                  )}
+                </div>
+                <div className="flex-shrink-0 ml-2">
+                  {entry.status === "queued" && (
+                    <Badge variant="secondary" className="text-xs">Queued</Badge>
+                  )}
+                  {entry.status === "running" && (
+                    <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+                      <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                      Running
+                    </Badge>
+                  )}
+                  {entry.status === "success" && (
+                    <Badge variant="secondary" className="text-xs bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">
+                      <Check className="w-3 h-3 mr-1" />
+                      Success
+                    </Badge>
+                  )}
+                  {entry.status === "failed" && (
+                    <Badge variant="destructive" className="text-xs" title={entry.error}>
+                      <AlertCircle className="w-3 h-3 mr-1" />
+                      Failed
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {isDone && (
+            <div className="flex justify-end">
+              <Button onClick={() => onOpenChange(false)} data-testid="button-close-bulk-dialog">
+                Close
+              </Button>
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function ResearchStatusBadge({
   status,
   error,
@@ -1273,6 +1398,10 @@ export default function Contacts() {
   const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [contactStatuses, setContactStatuses] = useState<ContactStatusMap>({});
+  const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
+  const [bulkEntries, setBulkEntries] = useState<BulkContactEntry[]>([]);
+  const [bulkCompleted, setBulkCompleted] = useState(0);
+  const [bulkTotal, setBulkTotal] = useState(0);
 
   const { data: contacts = [], isLoading } = useQuery<Contact[]>({
     queryKey: ["/api/contacts"],
@@ -1388,13 +1517,109 @@ export default function Contacts() {
     },
   });
 
-  const handleResearchSelected = () => {
+  const [bulkResearchPending, setBulkResearchPending] = useState(false);
+
+  const handleResearchSelected = async () => {
     if (selectedIds.size === 0) {
       toast({ title: "No contacts selected", variant: "destructive" });
       return;
     }
-    const idsParam = encodeURIComponent(Array.from(selectedIds).join(","));
-    setLocation("/research-queue?ids=" + idsParam);
+
+    const ids = Array.from(selectedIds);
+    const entries: BulkContactEntry[] = ids.map((id) => {
+      const c = contacts.find((ct) => ct.id === id);
+      return {
+        contactId: id,
+        name: c?.name || "Unknown",
+        company: c?.company || "",
+        status: "queued" as BulkContactStatus,
+      };
+    });
+
+    setBulkEntries(entries);
+    setBulkTotal(ids.length);
+    setBulkCompleted(0);
+    setBulkDialogOpen(true);
+    setBulkResearchPending(true);
+
+    try {
+      const response = await fetch("/api/research/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contactIds: ids }),
+      });
+
+      if (!response.ok || !response.body) {
+        throw new Error("Failed to start bulk research");
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      const processSSEBlock = (block: string) => {
+        let eventType = "";
+        let dataLines: string[] = [];
+
+        for (const line of block.split("\n")) {
+          if (line.startsWith("event: ")) {
+            eventType = line.slice(7).trim();
+          } else if (line.startsWith("data: ")) {
+            dataLines.push(line.slice(6));
+          }
+        }
+
+        if (!eventType || dataLines.length === 0) return;
+
+        try {
+          const data = JSON.parse(dataLines.join("\n"));
+
+          if (eventType === "status") {
+            setBulkEntries((prev) =>
+              prev.map((e) =>
+                e.contactId === data.contactId
+                  ? { ...e, status: data.status as BulkContactStatus, error: data.error }
+                  : e
+              )
+            );
+          } else if (eventType === "progress") {
+            setBulkCompleted(data.completed);
+          } else if (eventType === "done") {
+            setBulkCompleted(data.total);
+            queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
+          }
+        } catch {
+          // skip malformed SSE data
+        }
+      }
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const blocks = buffer.split("\n\n");
+        buffer = blocks.pop() || "";
+
+        for (const block of blocks) {
+          if (block.trim()) processSSEBlock(block);
+        }
+      }
+
+      if (buffer.trim()) processSSEBlock(buffer);
+    } catch (err: any) {
+      setBulkEntries((prev) =>
+        prev.map((e) =>
+          e.status === "queued" || e.status === "running"
+            ? { ...e, status: "failed" as BulkContactStatus, error: err.message || "Request failed" }
+            : e
+        )
+      );
+      setBulkCompleted(ids.length);
+      toast({ title: "Bulk research failed", variant: "destructive" });
+    } finally {
+      setBulkResearchPending(false);
+    }
   };
 
   const handleResearchAll = () => {
@@ -1460,10 +1685,14 @@ export default function Contacts() {
                   variant="outline"
                   size="sm"
                   onClick={handleResearchSelected}
-                  disabled={selectedIds.size === 0}
+                  disabled={selectedIds.size === 0 || bulkResearchPending}
                   data-testid="button-research-selected"
                 >
-                  <Sparkles className="w-4 h-4 mr-2" />
+                  {bulkResearchPending ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Search className="w-4 h-4 mr-2" />
+                  )}
                   Research Selected ({selectedIds.size})
                 </Button>
                 <Button 
@@ -1645,6 +1874,13 @@ export default function Contacts() {
       )}
 
       <AddContactModal open={addModalOpen} onOpenChange={setAddModalOpen} />
+      <BulkResearchDialog
+        open={bulkDialogOpen}
+        onOpenChange={setBulkDialogOpen}
+        entries={bulkEntries}
+        total={bulkTotal}
+        completed={bulkCompleted}
+      />
     </div>
   );
 }

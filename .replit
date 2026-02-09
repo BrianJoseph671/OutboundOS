@@ -45,3 +45,4 @@ integrations = ["javascript_database:1.0.0"]
 
 [userenv.shared]
 N8N_WEBHOOK_URL = "https://n8n.srv1096794.hstgr.cloud"
+N8N_RESEARCH_WEBHOOK_URL = "https://n8n.srv1096794.hstgr.cloud/webhook/028dc28a-4779-4a35-80cf-87dfbde544f8"

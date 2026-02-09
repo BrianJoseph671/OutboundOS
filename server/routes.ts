@@ -1555,5 +1555,191 @@ export async function registerRoutes(
       });
     }
   });
+  // ---------------------------------------------------------------------------
+  // POST /api/research/bulk — Bulk research via n8n webhook (one call per contact)
+  //
+  // "Will the n8n workflow handle 3 concurrent inputs?"
+  // Answer: Each HTTP request triggers a *separate* n8n execution, so the
+  // workflow remains linear per execution — it never receives an array.
+  // The only risk is too many simultaneous requests overwhelming n8n, which is
+  // why we rate-limit concurrency to 3 at a time on this side.
+  //
+  // This endpoint uses Server-Sent Events (SSE) to stream per-contact status
+  // updates to the client as each webhook call starts, succeeds, or fails.
+  // ---------------------------------------------------------------------------
+  app.post("/api/research/bulk", async (req, res) => {
+    const { contactIds } = req.body as { contactIds?: string[] };
+
+    if (!Array.isArray(contactIds) || contactIds.length === 0) {
+      return res.status(400).json({ error: "contactIds array is required" });
+    }
+
+    const CONCURRENCY = 3;
+    const MAX_RETRIES = 1;
+    const TIMEOUT_MS = 90_000;
+    const WEBHOOK_URL =
+      process.env.N8N_RESEARCH_WEBHOOK_URL ||
+      "https://n8n.srv1096794.hstgr.cloud/webhook/028dc28a-4779-4a35-80cf-87dfbde544f8";
+
+    const batchId = `bulk-${Date.now()}`;
+
+    const contacts = await Promise.all(
+      contactIds.map((id) => storage.getContact(id))
+    );
+
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    });
+
+    function send(event: string, data: Record<string, unknown>) {
+      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    }
+
+    interface BulkResult {
+      contactId: string;
+      personName: string;
+      company: string;
+      status: "success" | "failed";
+      error?: string;
+    }
+
+    const results: BulkResult[] = [];
+
+    async function callWebhook(
+      contactId: string,
+      personName: string,
+      company: string
+    ): Promise<BulkResult> {
+      const idempotencyKey = `${contactId}:${batchId}`;
+
+      send("status", { contactId, status: "running" });
+
+      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+          const response = await fetch(WEBHOOK_URL, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Idempotency-Key": idempotencyKey,
+            },
+            body: JSON.stringify({ personName, company }),
+            signal: controller.signal,
+          });
+
+          clearTimeout(timer);
+
+          if (!response.ok) {
+            const errText = await response.text().catch(() => "");
+            throw new Error(`HTTP ${response.status}: ${errText}`);
+          }
+
+          await response.json();
+          const result: BulkResult = { contactId, personName, company, status: "success" };
+          send("status", { contactId, status: "success" });
+          return result;
+        } catch (err: any) {
+          if (attempt < MAX_RETRIES) {
+            await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+            continue;
+          }
+          const errorMsg = err.message || "Unknown error";
+          const result: BulkResult = { contactId, personName, company, status: "failed", error: errorMsg };
+          send("status", { contactId, status: "failed", error: errorMsg });
+          return result;
+        }
+      }
+
+      const result: BulkResult = { contactId, personName, company, status: "failed", error: "Exhausted retries" };
+      send("status", { contactId, status: "failed", error: "Exhausted retries" });
+      return result;
+    }
+
+    for (const id of contactIds!) {
+      send("status", { contactId: id, status: "queued" });
+    }
+
+    interface QueueTask {
+      contactId: string;
+      personName: string;
+      company: string;
+      fn: () => Promise<BulkResult>;
+    }
+
+    const queue: QueueTask[] = contacts.map((contact, idx) => {
+      const id = contactIds![idx];
+      const name = contact?.name || "Unknown";
+      const comp = contact?.company || "";
+
+      if (!contact) {
+        return {
+          contactId: id,
+          personName: name,
+          company: comp,
+          fn: async (): Promise<BulkResult> => {
+            const result: BulkResult = {
+              contactId: id,
+              personName: name,
+              company: comp,
+              status: "failed",
+              error: "Contact not found",
+            };
+            send("status", { contactId: id, status: "failed", error: "Contact not found" });
+            return result;
+          },
+        };
+      }
+      return {
+        contactId: id,
+        personName: name,
+        company: comp,
+        fn: () => callWebhook(id, name, comp),
+      };
+    });
+
+    let running = 0;
+    let queueIndex = 0;
+
+    await new Promise<void>((resolve) => {
+      function next() {
+        if (results.length === queue.length) {
+          resolve();
+          return;
+        }
+        while (running < CONCURRENCY && queueIndex < queue.length) {
+          const task = queue[queueIndex++];
+          running++;
+          task
+            .fn()
+            .catch((err: any): BulkResult => {
+              const failResult: BulkResult = {
+                contactId: task.contactId,
+                personName: task.personName,
+                company: task.company,
+                status: "failed",
+                error: err?.message || "Unexpected error",
+              };
+              send("status", { contactId: task.contactId, status: "failed", error: failResult.error });
+              return failResult;
+            })
+            .then((result) => {
+              results.push(result);
+              running--;
+              send("progress", { completed: results.length, total: queue.length });
+              next();
+            });
+        }
+      }
+      next();
+    });
+
+    send("done", { total: contactIds.length, results });
+    res.end();
+  });
+
   return httpServer;
 }
