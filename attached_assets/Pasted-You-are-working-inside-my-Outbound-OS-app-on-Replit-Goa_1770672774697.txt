@@ -1,0 +1,41 @@
+You are working inside my Outbound OS app on Replit.
+
+Goal
+When I click “Research” on the Contacts page with multiple selected contacts, call my existing n8n webhook that currently researches ONE prospect, but do it once per contact. Each request must send the same payload shape:
+{
+  "personName": "<Full Name>",
+  "company": "<Company Name>"
+}
+
+Constraints
+- Do NOT change the n8n workflow to accept arrays. Treat it as single contact only.
+- Handle multiple contacts by firing multiple HTTP requests from the app.
+- Avoid breaking n8n if I select 20 contacts. Add a concurrency limit (default 2 or 3 at a time) and basic retry.
+- Each request should be independent. If one fails, continue the others and show a per contact status report.
+- Add idempotency so repeated clicks do not create duplicate “records” downstream if the n8n side writes to Airtable:
+  Include an optional header like "Idempotency-Key" equal to `${contactId}:${updatedAt}` (or a stable hash).
+- Show progress UI: queued, running, success, failed, plus a progress bar like “7/20”.
+- The endpoint should be configurable via env var:
+  N8N_RESEARCH_WEBHOOK_URL
+
+Implementation details
+- Tech stack: React front end + Node/Express API (or Next.js API route if that is what the app uses). Choose the existing pattern in the repo and follow it.
+- Add a backend route POST /api/research/bulk that accepts:
+  { contactIds: string[] }
+  It should fetch contacts from the DB, then enqueue jobs and call the n8n webhook per contact with payload { personName, company }.
+- Use a small in memory queue for now (p-limit style). No external queue required.
+- Return a structured response to the UI:
+  {
+    total: number,
+    results: Array<{ contactId, personName, company, status: "success"|"failed", error?: string }>
+  }
+
+Also answer this question in comments in the code
+- “Will the n8n workflow handle 3 inputs?”
+Explain: Each webhook HTTP request is a separate n8n execution, so the workflow remains linear per execution. The only risk is too many simultaneous requests, so we rate limit concurrency.
+
+Deliverables
+1) The backend route and helper for concurrency limiting + retries
+2) The front end handler wired to my multi select “Research” button
+3) A simple progress UI update while requests run
+4) Use fetch/axios with timeouts
