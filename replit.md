@@ -32,7 +32,7 @@ Preferred communication style: Simple, everyday language.
 - **Current Storage**: In-memory storage implementation (MemStorage class) with interface ready for database migration
 
 ### Core Data Models
-1. **Contacts**: Name, company, role, LinkedIn URL, email, headline, about, location, experience, education, skills, keywords, notes, tags
+1. **Contacts**: Name, company, role, LinkedIn URL, email, headline, about, location, experience, education, skills, keywords, notes, tags, researchStatus, researchData (JSON string with prospectSnapshot, companySnapshot, signalsHooks[], messageDraft)
 2. **Outreach Attempts**: Links to contacts/experiments, tracks outreach type, message content, and outcomes (responded, positive response, meeting booked, converted). Also includes: companyTier, responseDate, daysToResponse, followUpSent, respondedAfterFollowup for advanced analytics.
 3. **Experiments**: A/B test configuration with variant labels, messages, target variable, and active status
 4. **Settings**: User preferences for default tone, CTA options, email signatures, character limits
@@ -43,6 +43,7 @@ Preferred communication style: Simple, everyday language.
 - **Composer**: Guided wizard for crafting structured outreach messages
 - **Experiments**: A/B test management
 - **Outreach Log**: History of all outreach attempts with outcome tracking
+- **Research Queue**: Displays structured research results (prospect/company snapshots, signals, personalized message) from bulk research, loaded from contact.researchData
 - **Settings**: Application configuration
 
 ### Design System

@@ -1,13 +1,13 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronLeft, ChevronRight, ArrowLeft, User, Building2, Zap, MessageSquare, Loader2, RefreshCw } from "lucide-react";
+import { ChevronLeft, ChevronRight, ArrowLeft, User, Building2, Zap, MessageSquare, Loader2, RefreshCw, Copy, Check, AlertCircle } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 import type { Contact } from "@shared/schema";
 
-/** Research Packet: separate artifact per contact, not stored on the contact record. */
 export interface ResearchPacket {
   prospectSnapshot: string;
   companySnapshot: string;
@@ -15,42 +15,25 @@ export interface ResearchPacket {
   messageDraft: string;
 }
 
-function generateMockPacket(contact: Contact): ResearchPacket {
-  return {
-    prospectSnapshot: `${contact.name} — placeholder prospect snapshot. Key role and background will appear here after research.`,
-    companySnapshot: "Company overview placeholder. Industry, size, recent news and relevance will appear here.",
-    signalsHooks: [
-      "Recent LinkedIn activity or post",
-      "Shared connection or alma mater",
-      "Company initiative or product launch",
-    ],
-    messageDraft: "Hi [Name], I noticed [hook]. I’d love to connect because [value prop]. Would you be open to a brief conversation?",
-  };
-}
+function parseResearchData(contact: Contact): ResearchPacket | null {
+  if (!contact.researchData) return null;
 
-function generateMockSection(section: keyof ResearchPacket, contact: Contact): Partial<ResearchPacket> {
-  switch (section) {
-    case "prospectSnapshot":
-      return { prospectSnapshot: `${contact.name} — updated snapshot (regenerated). Background and key points will appear here.` };
-    case "companySnapshot":
-      return { companySnapshot: "Updated company overview (regenerated). Industry, size, and recent news will appear here." };
-    case "signalsHooks":
-      return {
-        signalsHooks: [
-          "New signal: recent conference talk or article",
-          "New hook: mutual connection or interest",
-          "New hook: company expansion or product launch",
-        ],
-      };
-    case "messageDraft":
-      return { messageDraft: "Hi [Name], I saw that [new hook]. I'd be glad to [value prop]. Would you have 15 minutes for a quick call?" };
-    default:
-      return {};
+  try {
+    const data = JSON.parse(contact.researchData);
+    return {
+      prospectSnapshot: data.prospectSnapshot || "",
+      companySnapshot: data.companySnapshot || "",
+      signalsHooks: Array.isArray(data.signalsHooks) ? data.signalsHooks : [],
+      messageDraft: data.messageDraft || "",
+    };
+  } catch {
+    return null;
   }
 }
 
 export default function ResearchQueue() {
   const [location, setLocation] = useLocation();
+  const { toast } = useToast();
   const ids = useMemo(() => {
     const p = new URLSearchParams(window.location.search);
     const idParam = p.get("ids");
@@ -68,52 +51,24 @@ export default function ResearchQueue() {
   }, [ids, contacts]);
 
   const [currentIndex, setCurrentIndex] = useState(0);
-  /** Research packets keyed by contactId; research is a separate artifact, not stored on contact. */
-  const [packetsByContactId, setPacketsByContactId] = useState<Record<string, ResearchPacket>>({});
-  /** Contact IDs currently loading a packet (show loading until mock is ready). */
-  const [loadingPacketIds, setLoadingPacketIds] = useState<Set<string>>(new Set());
-  /** Section keys currently regenerating (mocked). */
-  const [regeneratingSection, setRegeneratingSection] = useState<{ contactId: string; section: keyof ResearchPacket } | null>(null);
+  const [copiedSection, setCopiedSection] = useState<string | null>(null);
 
   const contact = queueContacts[currentIndex] ?? null;
-  const packet = contact ? packetsByContactId[contact.id] : null;
-  const isLoadingPacket = contact ? loadingPacketIds.has(contact.id) : false;
+  const packet = contact ? parseResearchData(contact) : null;
+  const hasResearch = contact?.researchStatus === "completed" && packet !== null;
 
-  useEffect(() => {
-    if (!contact) return;
-    if (packetsByContactId[contact.id]) return;
-    setLoadingPacketIds((prev) => new Set(prev).add(contact.id));
-    const delay = 800 + Math.random() * 700;
-    const t = setTimeout(() => {
-      setPacketsByContactId((prev) => ({ ...prev, [contact.id]: generateMockPacket(contact) }));
-      setLoadingPacketIds((prev) => {
-        const next = new Set(prev);
-        next.delete(contact.id);
-        return next;
-      });
-    }, delay);
-    return () => clearTimeout(t);
-  }, [contact?.id]);
+  const handleCopy = useCallback(async (text: string, section: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedSection(section);
+      toast({ title: "Copied to clipboard" });
+      setTimeout(() => setCopiedSection(null), 2000);
+    } catch {
+      toast({ title: "Failed to copy", variant: "destructive" });
+    }
+  }, [toast]);
 
-  const handleRegenerateSection = useCallback(
-    (contactId: string, section: keyof ResearchPacket) => {
-      const c = queueContacts.find((x) => x.id === contactId);
-      const current = packetsByContactId[contactId];
-      if (!c || !current) return;
-      setRegeneratingSection({ contactId, section });
-      const updated = generateMockSection(section, c);
-      setTimeout(() => {
-        setPacketsByContactId((prev) => ({
-          ...prev,
-          [contactId]: { ...prev[contactId], ...updated } as ResearchPacket,
-        }));
-        setRegeneratingSection(null);
-      }, 400);
-    },
-    [queueContacts, packetsByContactId]
-  );
-
-  if (ids.length === 0 || queueContacts.length === 0) {
+  if (ids.length === 0 || (queueContacts.length === 0 && !contactsLoading)) {
     return (
       <div className="max-w-2xl mx-auto py-8">
         <div className="flex items-center gap-4 mb-6">
@@ -127,7 +82,7 @@ export default function ResearchQueue() {
             <p className="text-muted-foreground">
               {ids.length === 0 ? "No contacts selected." : "No contacts found for the selected IDs."}
             </p>
-            <Button className="mt-4" onClick={() => setLocation("/contacts")}>
+            <Button className="mt-4" onClick={() => setLocation("/contacts")} data-testid="button-back-contacts-empty">
               Back to Contacts
             </Button>
           </CardContent>
@@ -168,7 +123,7 @@ export default function ResearchQueue() {
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Contacts
           </Button>
-          <h1 className="text-2xl font-semibold">Research Queue</h1>
+          <h1 className="text-2xl font-semibold">Research Results</h1>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -177,6 +132,7 @@ export default function ResearchQueue() {
             onClick={() => setCurrentIndex((i) => Math.max(0, i - 1))}
             disabled={!canGoPrev}
             aria-label="Previous contact"
+            data-testid="button-prev-contact"
           >
             <ChevronLeft className="w-4 h-4" />
           </Button>
@@ -189,6 +145,7 @@ export default function ResearchQueue() {
             onClick={() => setCurrentIndex((i) => Math.min(queueContacts.length - 1, i + 1))}
             disabled={!canGoNext}
             aria-label="Next contact"
+            data-testid="button-next-contact"
           >
             <ChevronRight className="w-4 h-4" />
           </Button>
@@ -197,7 +154,6 @@ export default function ResearchQueue() {
 
       {contact && (
         <div className="space-y-6">
-          {/* A) Name / Header Card - same blue styling as Prospect Research draft message card */}
           <Card className="bg-primary/5 border-primary/20 shadow-md ring-1 ring-primary/10">
             <CardContent className="pt-6">
               <h2 className="text-xl font-semibold text-primary">{contact.name}</h2>
@@ -213,140 +169,147 @@ export default function ResearchQueue() {
             </CardContent>
           </Card>
 
-          {isLoadingPacket ? (
+          {!hasResearch ? (
             <Card>
               <CardContent className="py-8">
-                <div className="flex items-center gap-2 text-muted-foreground mb-4">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Researching…</span>
-                </div>
-                <div className="space-y-3">
-                  <Skeleton className="h-16 w-full" />
-                  <Skeleton className="h-16 w-full" />
-                  <Skeleton className="h-24 w-full" />
-                  <Skeleton className="h-20 w-full" />
+                <div className="flex flex-col items-center gap-3 text-muted-foreground">
+                  <AlertCircle className="w-8 h-8" />
+                  <p className="text-sm">No research data available for this contact yet.</p>
+                  <p className="text-xs">Run bulk research from the Contacts page to populate this data.</p>
                 </div>
               </CardContent>
             </Card>
-          ) : packet ? (
+          ) : (
             <>
-              {/* B) Prospect Snapshot Card */}
-              <Card>
-                <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <User className="w-4 h-4" />
-                      Prospect Snapshot
-                    </CardTitle>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => contact && handleRegenerateSection(contact.id, "prospectSnapshot")}
-                      disabled={regeneratingSection?.section === "prospectSnapshot" && regeneratingSection?.contactId === contact?.id}
-                    >
-                      {regeneratingSection?.section === "prospectSnapshot" && regeneratingSection?.contactId === contact?.id ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <RefreshCw className="w-4 h-4" />
-                      )}
-                      Regenerate
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">{packet.prospectSnapshot}</p>
-                </CardContent>
-              </Card>
+              {packet!.prospectSnapshot && (
+                <Card data-testid="card-prospect-snapshot">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <User className="w-4 h-4" />
+                        Prospect Snapshot
+                      </CardTitle>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleCopy(packet!.prospectSnapshot, "prospect")}
+                        data-testid="button-copy-prospect"
+                      >
+                        {copiedSection === "prospect" ? (
+                          <Check className="w-4 h-4" />
+                        ) : (
+                          <Copy className="w-4 h-4" />
+                        )}
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">{packet!.prospectSnapshot}</p>
+                  </CardContent>
+                </Card>
+              )}
 
-              {/* C) Company Snapshot Card */}
-              <Card>
-                <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <Building2 className="w-4 h-4" />
-                      Company Snapshot
-                    </CardTitle>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => contact && handleRegenerateSection(contact.id, "companySnapshot")}
-                      disabled={regeneratingSection?.section === "companySnapshot" && regeneratingSection?.contactId === contact?.id}
-                    >
-                      {regeneratingSection?.section === "companySnapshot" && regeneratingSection?.contactId === contact?.id ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <RefreshCw className="w-4 h-4" />
-                      )}
-                      Regenerate
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">{packet.companySnapshot}</p>
-                </CardContent>
-              </Card>
+              {packet!.companySnapshot && (
+                <Card data-testid="card-company-snapshot">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <Building2 className="w-4 h-4" />
+                        Company Snapshot
+                      </CardTitle>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleCopy(packet!.companySnapshot, "company")}
+                        data-testid="button-copy-company"
+                      >
+                        {copiedSection === "company" ? (
+                          <Check className="w-4 h-4" />
+                        ) : (
+                          <Copy className="w-4 h-4" />
+                        )}
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">{packet!.companySnapshot}</p>
+                  </CardContent>
+                </Card>
+              )}
 
-              {/* D) Signals & Hooks Card */}
-              <Card>
-                <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <Zap className="w-4 h-4" />
-                      Signals & Hooks
-                    </CardTitle>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => contact && handleRegenerateSection(contact.id, "signalsHooks")}
-                      disabled={regeneratingSection?.section === "signalsHooks" && regeneratingSection?.contactId === contact?.id}
-                    >
-                      {regeneratingSection?.section === "signalsHooks" && regeneratingSection?.contactId === contact?.id ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <RefreshCw className="w-4 h-4" />
-                      )}
-                      Regenerate
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
-                    {packet.signalsHooks.map((item, i) => (
-                      <li key={i}>{item}</li>
-                    ))}
-                  </ul>
-                </CardContent>
-              </Card>
+              {packet!.signalsHooks.length > 0 && (
+                <Card data-testid="card-signals-hooks">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <Zap className="w-4 h-4" />
+                        Signals & Hooks
+                      </CardTitle>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleCopy(packet!.signalsHooks.join("\n"), "signals")}
+                        data-testid="button-copy-signals"
+                      >
+                        {copiedSection === "signals" ? (
+                          <Check className="w-4 h-4" />
+                        ) : (
+                          <Copy className="w-4 h-4" />
+                        )}
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
+                      {packet!.signalsHooks.map((item, i) => (
+                        <li key={i}>{item}</li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </Card>
+              )}
 
-              {/* E) Personalized Message Card */}
-              <Card>
-                <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <MessageSquare className="w-4 h-4" />
-                      Personalized Message
-                    </CardTitle>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => contact && handleRegenerateSection(contact.id, "messageDraft")}
-                      disabled={regeneratingSection?.section === "messageDraft" && regeneratingSection?.contactId === contact?.id}
-                    >
-                      {regeneratingSection?.section === "messageDraft" && regeneratingSection?.contactId === contact?.id ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <RefreshCw className="w-4 h-4" />
-                      )}
-                      Regenerate
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">{packet.messageDraft}</p>
-                </CardContent>
-              </Card>
+              {packet!.messageDraft && (
+                <Card className="bg-primary/5 border-primary/20 shadow-md ring-1 ring-primary/10" data-testid="card-message-draft">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <MessageSquare className="w-4 h-4" />
+                        Personalized Message
+                      </CardTitle>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleCopy(packet!.messageDraft, "message")}
+                        data-testid="button-copy-message"
+                      >
+                        {copiedSection === "message" ? (
+                          <Check className="w-4 h-4" />
+                        ) : (
+                          <Copy className="w-4 h-4" />
+                        )}
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">{packet!.messageDraft}</p>
+                  </CardContent>
+                </Card>
+              )}
+
+              {!packet!.prospectSnapshot && !packet!.companySnapshot && packet!.signalsHooks.length === 0 && !packet!.messageDraft && (
+                <Card>
+                  <CardContent className="py-8">
+                    <div className="flex flex-col items-center gap-3 text-muted-foreground">
+                      <AlertCircle className="w-8 h-8" />
+                      <p className="text-sm">Research completed but no structured data was returned.</p>
+                      <p className="text-xs">The webhook may need to be configured to return prospectSnapshot, companySnapshot, signalsHooks, and messageDraft fields.</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
             </>
-          ) : null}
+          )}
         </div>
       )}
     </div>

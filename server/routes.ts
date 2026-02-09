@@ -1567,6 +1567,72 @@ export async function registerRoutes(
   // This endpoint uses Server-Sent Events (SSE) to stream per-contact status
   // updates to the client as each webhook call starts, succeeds, or fails.
   // ---------------------------------------------------------------------------
+  function extractResearchData(
+    raw: any,
+    personName: string,
+    company: string
+  ): {
+    prospectSnapshot: string;
+    companySnapshot: string;
+    signalsHooks: string[];
+    messageDraft: string;
+  } {
+    const result = {
+      prospectSnapshot: "",
+      companySnapshot: "",
+      signalsHooks: [] as string[],
+      messageDraft: "",
+    };
+
+    if (!raw || typeof raw !== "object") return result;
+
+    const data = raw.data && typeof raw.data === "object" ? raw.data : raw;
+
+    if (typeof data.prospectSnapshot === "string") result.prospectSnapshot = data.prospectSnapshot;
+    else if (typeof data.prospect_snapshot === "string") result.prospectSnapshot = data.prospect_snapshot;
+    else if (typeof data.profileInsight === "string") result.prospectSnapshot = data.profileInsight;
+    else if (typeof data.profile_insight === "string") result.prospectSnapshot = data.profile_insight;
+
+    if (typeof data.companySnapshot === "string") result.companySnapshot = data.companySnapshot;
+    else if (typeof data.company_snapshot === "string") result.companySnapshot = data.company_snapshot;
+    else if (typeof data.companyInsight === "string") result.companySnapshot = data.companyInsight;
+    else if (typeof data.company_insight === "string") result.companySnapshot = data.company_insight;
+
+    if (Array.isArray(data.signalsHooks)) result.signalsHooks = data.signalsHooks.filter((s: any) => typeof s === "string");
+    else if (Array.isArray(data.signals_hooks)) result.signalsHooks = data.signals_hooks.filter((s: any) => typeof s === "string");
+    else if (Array.isArray(data.signals)) result.signalsHooks = data.signals.filter((s: any) => typeof s === "string");
+    else if (Array.isArray(data.hooks)) result.signalsHooks = data.hooks.filter((s: any) => typeof s === "string");
+    else if (typeof data.signalsHooks === "string") result.signalsHooks = data.signalsHooks.split("\n").filter(Boolean);
+    else if (typeof data.signals === "string") result.signalsHooks = data.signals.split("\n").filter(Boolean);
+
+    if (typeof data.messageDraft === "string") result.messageDraft = data.messageDraft;
+    else if (typeof data.message_draft === "string") result.messageDraft = data.message_draft;
+    else if (typeof data.draft === "string") result.messageDraft = data.draft;
+    else if (typeof data.message === "string") result.messageDraft = data.message;
+
+    if (!result.prospectSnapshot && !result.companySnapshot && !result.messageDraft) {
+      const researchText = typeof data.research === "string" ? data.research
+        : typeof data.output === "string" ? data.output
+        : typeof data.result === "string" ? data.result
+        : typeof data.text === "string" ? data.text
+        : null;
+
+      if (researchText) {
+        result.prospectSnapshot = researchText;
+      } else {
+        const keys = Object.keys(data).filter(k => !["success", "error", "fallback"].includes(k));
+        for (const key of keys) {
+          if (typeof data[key] === "string" && data[key].length > 30) {
+            result.prospectSnapshot = data[key];
+            break;
+          }
+        }
+      }
+    }
+
+    return result;
+  }
+
   app.post("/api/research/bulk", async (req, res) => {
     const { contactIds } = req.body as { contactIds?: string[] };
 
@@ -1638,7 +1704,22 @@ export async function registerRoutes(
             throw new Error(`HTTP ${response.status}: ${errText}`);
           }
 
-          await response.json();
+          const responseData = await response.json();
+          console.log(`[BulkResearch] Webhook response for ${personName}:`, JSON.stringify(responseData).substring(0, 500));
+
+          try {
+            const researchPayload = extractResearchData(responseData, personName, company);
+            await storage.updateContact(contactId, {
+              researchStatus: "completed",
+              researchData: JSON.stringify(researchPayload),
+            });
+          } catch (storeErr: any) {
+            console.error(`[BulkResearch] Failed to store research for ${personName}:`, storeErr.message);
+            const result: BulkResult = { contactId, personName, company, status: "failed", error: "Research received but failed to save" };
+            send("status", { contactId, status: "failed", error: result.error });
+            return result;
+          }
+
           const result: BulkResult = { contactId, personName, company, status: "success" };
           send("status", { contactId, status: "success" });
           return result;
