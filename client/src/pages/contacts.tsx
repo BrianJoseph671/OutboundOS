@@ -91,10 +91,12 @@ function BulkResearchDialog({
   total: number;
   completed: number;
 }) {
+  const [, setLocation] = useLocation();
   const isDone = completed === total;
   const successCount = entries.filter((e) => e.status === "success").length;
   const failedCount = entries.filter((e) => e.status === "failed").length;
   const progressPct = total > 0 ? (completed / total) * 100 : 0;
+  const successIds = entries.filter((e) => e.status === "success").map((e) => e.contactId);
 
   return (
     <Dialog open={open} onOpenChange={isDone ? onOpenChange : undefined}>
@@ -168,10 +170,21 @@ function BulkResearchDialog({
           </div>
 
           {isDone && (
-            <div className="flex justify-end">
-              <Button onClick={() => onOpenChange(false)} data-testid="button-close-bulk-dialog">
+            <div className="flex items-center justify-end gap-2">
+              <Button variant="outline" onClick={() => onOpenChange(false)} data-testid="button-close-bulk-dialog">
                 Close
               </Button>
+              {successIds.length > 0 && (
+                <Button
+                  onClick={() => {
+                    onOpenChange(false);
+                    setLocation(`/research-queue?ids=${successIds.join(",")}`);
+                  }}
+                  data-testid="button-view-research-results"
+                >
+                  View Research Results
+                </Button>
+              )}
             </div>
           )}
         </div>
