@@ -14,7 +14,7 @@ import {
   Linkedin, 
   Loader2, 
   Check, 
-  Sparkles,
+  Search,
   Briefcase,
   Target,
   MessageSquare,
@@ -355,7 +355,7 @@ export function ProfileSetup({ onComplete, existingProfile }: ProfileSetupProps)
                   <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center">
                     <Loader2 className="w-10 h-10 animate-spin text-primary" />
                   </div>
-                  <Sparkles className="w-6 h-6 text-primary absolute -top-1 -right-1" />
+                  <Search className="w-6 h-6 text-primary absolute -top-1 -right-1" />
                 </div>
                 <div className="text-center space-y-2">
                   <h2 className="text-xl font-semibold">Building Your Profile</h2>
@@ -595,7 +595,7 @@ export function ProfileSetup({ onComplete, existingProfile }: ProfileSetupProps)
                 {researchMutation.isPending ? (
                   <Loader2 className="w-4 h-4 animate-spin mr-2" />
                 ) : (
-                  <Sparkles className="w-4 h-4 mr-2" />
+                  <Search className="w-4 h-4 mr-2" />
                 )}
                 Research
               </Button>

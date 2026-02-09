@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Search, Loader2, Copy, Check, User, Building2, Trash2, Sparkles, LogIn, ExternalLink, UserPlus } from "lucide-react";
+import { Search, Loader2, Copy, Check, User, Building2, Trash2, Brain, LogIn, ExternalLink, UserPlus, Microscope } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { useLocation } from "wouter";
 
@@ -548,7 +548,7 @@ export default function ProspectResearch() {
                 <div className="relative">
                   <div className="absolute inset-0 rounded-full bg-primary/20 blur-xl animate-pulse" />
                   <div className="relative w-16 h-16 rounded-full bg-muted flex items-center justify-center">
-                    <Sparkles className="w-8 h-8 text-primary animate-pulse" />
+                    <Microscope className="w-8 h-8 text-primary animate-pulse" />
                   </div>
                 </div>
                 <div className="text-center space-y-2">
@@ -591,6 +591,7 @@ export default function ProspectResearch() {
                     </CardTitle>
                     {section.isDraftMessage && (
                       <div className="flex items-center gap-2">
+                        <Brain className="w-4 h-4 text-primary animate-pulse mr-1" />
                         <Button
                           variant="secondary"
                           size="sm"
@@ -627,7 +628,7 @@ export default function ProspectResearch() {
                           onClick={handleDraftVariants}
                           className="h-8"
                         >
-                          <Sparkles className="w-3.5 h-3.5 mr-1.5" />
+                          <Brain className="w-3.5 h-3.5 mr-1.5" />
                           Draft Variants
                         </Button>
                       </div>

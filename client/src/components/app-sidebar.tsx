@@ -19,7 +19,7 @@ import {
   Settings,
   Zap,
   Upload,
-  Sparkles,
+  Brain,
 } from "lucide-react";
 
 const menuItems = [
@@ -28,7 +28,7 @@ const menuItems = [
   { title: "Contacts", url: "/contacts", icon: Users },
   { title: "Outreach Log", url: "/outreach-log", icon: FileText },
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "Decisions", url: "/decisions", icon: Sparkles },
+  { title: "Decisions", url: "/decisions", icon: Brain },
   { title: "Settings", url: "/settings", icon: Settings },
 ];
 
