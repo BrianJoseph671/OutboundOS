@@ -19,6 +19,8 @@ export const contacts = pgTable("contacts", {
   keywords: text("keywords"),
   notes: text("notes"),
   tags: text("tags"),
+  researchStatus: text("research_status"),
+  researchData: text("research_data"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
