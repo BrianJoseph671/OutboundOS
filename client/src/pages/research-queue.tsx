@@ -1,10 +1,10 @@
 import { useState, useMemo, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronLeft, ChevronRight, ArrowLeft, User, Building2, Zap, MessageSquare, Loader2, RefreshCw, Copy, Check, AlertCircle } from "lucide-react";
+import { ChevronLeft, ChevronRight, ArrowLeft, User, Building2, Zap, MessageSquare, Loader2, Copy, Check, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { Contact } from "@shared/schema";
 
@@ -15,21 +15,15 @@ export interface ResearchPacket {
   messageDraft: string;
 }
 
-function parseResearchData(contact: Contact): ResearchPacket | null {
-  if (!contact.researchData) return null;
-
-  try {
-    const data = JSON.parse(contact.researchData);
-    return {
-      prospectSnapshot: data.prospectSnapshot || "",
-      companySnapshot: data.companySnapshot || "",
-      signalsHooks: Array.isArray(data.signalsHooks) ? data.signalsHooks : [],
-      messageDraft: data.messageDraft || "",
-    };
-  } catch {
-    return null;
-  }
-}
+type ApiResearchPacket = {
+  contactId: string;
+  status: string;
+  prospectSnapshot: string | null;
+  companySnapshot: string | null;
+  signalsHooks: string[];
+  personalizedMessage: string | null;
+  variants: unknown[];
+};
 
 export default function ResearchQueue() {
   const [location, setLocation] = useLocation();
@@ -44,6 +38,24 @@ export default function ResearchQueue() {
     queryKey: ["/api/contacts"],
   });
 
+  const { data: packetsData, isLoading: packetsLoading } = useQuery<{ packets: ApiResearchPacket[] }>({
+    queryKey: ["/api/research-packets", ids.join(",")],
+    queryFn: async () => {
+      if (ids.length === 0) return { packets: [] };
+      const res = await apiRequest("GET", `/api/research-packets?contactIds=${encodeURIComponent(ids.join(","))}`);
+      return res.json();
+    },
+    enabled: ids.length > 0,
+  });
+
+  const packetsByContactId = useMemo(() => {
+    const map = new Map<string, ApiResearchPacket>();
+    for (const p of packetsData?.packets ?? []) {
+      map.set(p.contactId, p);
+    }
+    return map;
+  }, [packetsData?.packets]);
+
   const queueContacts = useMemo(() => {
     if (ids.length === 0) return [];
     const byId = new Map(contacts.map((c) => [c.id, c]));
@@ -54,8 +66,17 @@ export default function ResearchQueue() {
   const [copiedSection, setCopiedSection] = useState<string | null>(null);
 
   const contact = queueContacts[currentIndex] ?? null;
-  const packet = contact ? parseResearchData(contact) : null;
-  const hasResearch = contact?.researchStatus === "completed" && packet !== null;
+  const apiPacket = contact ? packetsByContactId.get(contact.id) : null;
+  const packet: ResearchPacket | null = apiPacket
+    ? {
+        prospectSnapshot: apiPacket.prospectSnapshot ?? "",
+        companySnapshot: apiPacket.companySnapshot ?? "",
+        signalsHooks: Array.isArray(apiPacket.signalsHooks) ? apiPacket.signalsHooks : [],
+        messageDraft: apiPacket.personalizedMessage ?? "",
+      }
+    : null;
+  const packetStatus = apiPacket?.status ?? "not_started";
+  const hasResearch = packetStatus === "complete" && packet !== null;
 
   const handleCopy = useCallback(async (text: string, section: string) => {
     try {
@@ -91,7 +112,7 @@ export default function ResearchQueue() {
     );
   }
 
-  if (contactsLoading) {
+  if (contactsLoading || (ids.length > 0 && packetsLoading)) {
     return (
       <div className="max-w-2xl mx-auto py-8">
         <div className="flex items-center gap-4 mb-6">
@@ -169,7 +190,28 @@ export default function ResearchQueue() {
             </CardContent>
           </Card>
 
-          {!hasResearch ? (
+          {packetStatus === "queued" || packetStatus === "researching" ? (
+            <Card>
+              <CardContent className="py-8">
+                <div className="flex flex-col items-center gap-3 text-muted-foreground">
+                  <Loader2 className="w-8 h-8 animate-spin" />
+                  <p className="text-sm">
+                    {packetStatus === "queued" ? "Research queued..." : "Researching..."}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          ) : packetStatus === "failed" ? (
+            <Card>
+              <CardContent className="py-8">
+                <div className="flex flex-col items-center gap-3 text-muted-foreground">
+                  <AlertCircle className="w-8 h-8" />
+                  <p className="text-sm">Research failed for this contact.</p>
+                  <p className="text-xs">Run bulk research again from the Contacts page to retry.</p>
+                </div>
+              </CardContent>
+            </Card>
+          ) : !hasResearch ? (
             <Card>
               <CardContent className="py-8">
                 <div className="flex flex-col items-center gap-3 text-muted-foreground">

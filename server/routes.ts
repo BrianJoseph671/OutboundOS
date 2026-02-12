@@ -1555,6 +1555,24 @@ export async function registerRoutes(
       });
     }
   });
+
+  // GET /api/research-packets — Fetch research packets by contact IDs
+  app.get("/api/research-packets", async (req, res) => {
+    try {
+      const contactIdsParam = req.query.contactIds as string | undefined;
+      const contactIds = contactIdsParam
+        ? contactIdsParam.split(",").map((id) => id.trim()).filter(Boolean)
+        : [];
+      const packets = contactIds.length > 0
+        ? await storage.getResearchPacketsByContactIds(contactIds)
+        : await storage.getAllResearchPackets();
+      res.json({ packets });
+    } catch (error) {
+      console.error("[research-packets] Error:", error);
+      res.status(500).json({ error: "Failed to fetch research packets" });
+    }
+  });
+
   // ---------------------------------------------------------------------------
   // POST /api/research/bulk — Bulk research via n8n webhook (one call per contact)
   //
@@ -1680,6 +1698,7 @@ export async function registerRoutes(
     ): Promise<BulkResult> {
       const idempotencyKey = `${contactId}:${batchId}`;
 
+      await storage.upsertResearchPacket(contactId, { status: "researching" });
       send("status", { contactId, status: "running" });
 
       for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
@@ -1709,12 +1728,17 @@ export async function registerRoutes(
 
           try {
             const researchPayload = extractResearchData(responseData, personName, company);
-            await storage.updateContact(contactId, {
-              researchStatus: "completed",
-              researchData: JSON.stringify(researchPayload),
+            await storage.upsertResearchPacket(contactId, {
+              status: "complete",
+              prospectSnapshot: researchPayload.prospectSnapshot || null,
+              companySnapshot: researchPayload.companySnapshot || null,
+              signalsHooks: researchPayload.signalsHooks || [],
+              personalizedMessage: researchPayload.messageDraft || null,
+              variants: [],
             });
           } catch (storeErr: any) {
             console.error(`[BulkResearch] Failed to store research for ${personName}:`, storeErr.message);
+            await storage.upsertResearchPacket(contactId, { status: "failed" });
             const result: BulkResult = { contactId, personName, company, status: "failed", error: "Research received but failed to save" };
             send("status", { contactId, status: "failed", error: result.error });
             return result;
@@ -1729,12 +1753,14 @@ export async function registerRoutes(
             continue;
           }
           const errorMsg = err.message || "Unknown error";
+          await storage.upsertResearchPacket(contactId, { status: "failed" });
           const result: BulkResult = { contactId, personName, company, status: "failed", error: errorMsg };
           send("status", { contactId, status: "failed", error: errorMsg });
           return result;
         }
       }
 
+      await storage.upsertResearchPacket(contactId, { status: "failed" });
       const result: BulkResult = { contactId, personName, company, status: "failed", error: "Exhausted retries" };
       send("status", { contactId, status: "failed", error: "Exhausted retries" });
       return result;
@@ -1742,6 +1768,7 @@ export async function registerRoutes(
 
     for (const id of contactIds!) {
       send("status", { contactId: id, status: "queued" });
+      await storage.upsertResearchPacket(id, { status: "queued" });
     }
 
     interface QueueTask {

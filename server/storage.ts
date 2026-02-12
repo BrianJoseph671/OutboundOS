@@ -3,10 +3,11 @@ import {
   outreachAttempts, type OutreachAttempt, type InsertOutreachAttempt,
   experiments, type Experiment, type InsertExperiment,
   settings, type Settings, type InsertSettings,
-  airtableConfig, type AirtableConfig, type InsertAirtableConfig
+  airtableConfig, type AirtableConfig, type InsertAirtableConfig,
+  researchPackets, type ResearchPacket, type InsertResearchPacket
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, inArray } from "drizzle-orm";
 
 export interface IStorage {
   // Contacts
@@ -43,6 +44,12 @@ export interface IStorage {
   saveAirtableConfig(config: InsertAirtableConfig): Promise<AirtableConfig>;
   updateAirtableConfig(id: string, config: Partial<InsertAirtableConfig>): Promise<AirtableConfig | undefined>;
   deleteAirtableConfig(): Promise<boolean>;
+
+  // Research Packets
+  getResearchPacket(contactId: string): Promise<ResearchPacket | undefined>;
+  getResearchPacketsByContactIds(contactIds: string[]): Promise<ResearchPacket[]>;
+  getAllResearchPackets(): Promise<ResearchPacket[]>;
+  upsertResearchPacket(contactId: string, data: Partial<Omit<InsertResearchPacket, "contactId">>): Promise<ResearchPacket>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -175,6 +182,55 @@ export class DatabaseStorage implements IStorage {
   async deleteAirtableConfig(): Promise<boolean> {
     const result = await db.delete(airtableConfig).returning();
     return result.length > 0;
+  }
+
+  // Research Packets
+  async getResearchPacket(contactId: string): Promise<ResearchPacket | undefined> {
+    const [packet] = await db.select().from(researchPackets).where(eq(researchPackets.contactId, contactId));
+    return packet;
+  }
+
+  async getResearchPacketsByContactIds(contactIds: string[]): Promise<ResearchPacket[]> {
+    if (contactIds.length === 0) return [];
+    return await db
+      .select()
+      .from(researchPackets)
+      .where(inArray(researchPackets.contactId, contactIds));
+  }
+
+  async getAllResearchPackets(): Promise<ResearchPacket[]> {
+    return await db.select().from(researchPackets);
+  }
+
+  async upsertResearchPacket(contactId: string, data: Partial<Omit<InsertResearchPacket, "contactId">>): Promise<ResearchPacket> {
+    const now = new Date();
+    const [packet] = await db
+      .insert(researchPackets)
+      .values({
+        contactId,
+        status: data.status ?? "not_started",
+        prospectSnapshot: data.prospectSnapshot ?? null,
+        companySnapshot: data.companySnapshot ?? null,
+        signalsHooks: data.signalsHooks ?? [],
+        personalizedMessage: data.personalizedMessage ?? null,
+        variants: data.variants ?? [],
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoUpdate({
+        target: researchPackets.contactId,
+        set: {
+          ...(data.status !== undefined && { status: data.status }),
+          ...(data.prospectSnapshot !== undefined && { prospectSnapshot: data.prospectSnapshot }),
+          ...(data.companySnapshot !== undefined && { companySnapshot: data.companySnapshot }),
+          ...(data.signalsHooks !== undefined && { signalsHooks: data.signalsHooks }),
+          ...(data.personalizedMessage !== undefined && { personalizedMessage: data.personalizedMessage }),
+          ...(data.variants !== undefined && { variants: data.variants }),
+          updatedAt: now,
+        },
+      })
+      .returning();
+    return packet!;
   }
 }
 

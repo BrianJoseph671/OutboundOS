@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, boolean, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, boolean, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -135,3 +135,22 @@ export const airtableConfig = pgTable("airtable_config", {
 export const insertAirtableConfigSchema = createInsertSchema(airtableConfig).omit({ id: true });
 export type InsertAirtableConfig = z.infer<typeof insertAirtableConfigSchema>;
 export type AirtableConfig = typeof airtableConfig.$inferSelect;
+
+export const researchPacketStatuses = ["not_started", "queued", "researching", "complete", "failed"] as const;
+export type ResearchPacketStatus = typeof researchPacketStatuses[number];
+
+export const researchPackets = pgTable("research_packets", {
+  contactId: varchar("contact_id").primaryKey().references(() => contacts.id, { onDelete: "cascade" }),
+  status: text("status").notNull().default("not_started"),
+  prospectSnapshot: text("prospect_snapshot"),
+  companySnapshot: text("company_snapshot"),
+  signalsHooks: jsonb("signals_hooks").$type<string[]>().default([]),
+  personalizedMessage: text("personalized_message"),
+  variants: jsonb("variants").$type<unknown[]>().default([]),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertResearchPacketSchema = createInsertSchema(researchPackets);
+export type InsertResearchPacket = z.infer<typeof insertResearchPacketSchema>;
+export type ResearchPacket = typeof researchPackets.$inferSelect;

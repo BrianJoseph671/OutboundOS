@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -1420,6 +1420,22 @@ export default function Contacts() {
     queryKey: ["/api/contacts"],
   });
 
+  const { data: packetsData } = useQuery<{ packets: Array<{ contactId: string; status: string }> }>({
+    queryKey: ["/api/research-packets"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/research-packets");
+      return res.json();
+    },
+  });
+
+  const packetsByContactId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const p of packetsData?.packets ?? []) {
+      map.set(p.contactId, p.status);
+    }
+    return map;
+  }, [packetsData?.packets]);
+
   const { data: airtableConfig, refetch: refetchAirtableConfig } = useQuery<AirtableConfig>({
     queryKey: ["/api/airtable/config"],
   });
@@ -1600,6 +1616,7 @@ export default function Contacts() {
           } else if (eventType === "done") {
             setBulkCompleted(data.total);
             queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/research-packets"] });
           }
         } catch {
           // skip malformed SSE data
@@ -1865,7 +1882,15 @@ export default function Contacts() {
                   <ContactCard
                     contact={contact}
                     onClick={() => setSelectedContact(contact)}
-                    researchStatus={contactStatuses[contact.id]?.status}
+                    researchStatus={(() => {
+                    const live = contactStatuses[contact.id]?.status;
+                    if (live) return live;
+                    const s = packetsByContactId.get(contact.id);
+                    if (s === "complete") return "completed";
+                    if (s === "failed") return "failed";
+                    if (s === "queued" || s === "researching") return "processing";
+                    return undefined;
+                  })()}
                     onRetry={() => handleRetryContact(contact.id)}
                   />
                 </div>
