@@ -35,6 +35,9 @@ OutboundOS is a GTM automation platform I built to solve the core bottleneck in 
 ### Prospect Research
 <img width="1603" height="816" alt="image" src="https://github.com/user-attachments/assets/5c0509bc-10dd-4271-a73e-662f8fe76291" />
 
+### Personalized Messages
+<img width="1369" height="618" alt="image" src="https://github.com/user-attachments/assets/d6a362a0-1f93-4a1c-9c14-0496dcf98e02" />
+
 ### Decisions Board
 <img width="1818" height="1005" alt="image" src="https://github.com/user-attachments/assets/7af4dd50-a8a7-4285-9290-ec4dcdd12015" />
 
@@ -77,7 +80,7 @@ Gathers and structures information about the sender (you) to create authentic, p
 
 ---
 
-### Prospect Research Workflow
+### Prospect Research and Personalized Outreach Workflow
 
 <img width="1610" height="555" alt="image" src="https://github.com/user-attachments/assets/a347fc52-4762-4fb1-a5fb-9214814f0b82" />
 
@@ -91,8 +94,8 @@ Deep research on target prospects to find relevant connection points and convers
 - Recent activity monitoring (posts, articles, mentions)
 - Merger & acquisition context
 - Filter and structure results
-- AI message generation based on gathered context
-- Return research package to frontend
+- Personalized AI message generation based on gathered context
+- Return research package and message to frontend
 
 ---
 
