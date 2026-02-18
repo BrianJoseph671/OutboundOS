@@ -131,7 +131,7 @@ Generates multiple outreach message options tailored to different angles and com
 
 ## Demo
 
-**Video Walkthrough:** [Watch on Google Drive](https://drive.google.com/file/d/1sTlIPDmxJZxiHjXrVUVmV9ZcnLJSPjzM/view)
+**Video Walkthrough:** [Watch on Google Drive](https://drive.google.com/file/d/1sTIIPDmxJZxiHjXrVUVmV9ZcnLJSPjzM/view)
 
 **Live Site:** [Try it out Here](https://networker-master.replit.app)
 
