@@ -1,0 +1,607 @@
+{
+  "updatedAt": "2026-02-18T18:01:21.786Z",
+  "createdAt": "2026-01-22T19:14:23.752Z",
+  "id": "O9uLSP88brUA0csE",
+  "name": "Networking: User Profile Research",
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4O-MINI"
+        },
+        "responses": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are a profile extraction assistant. You receive raw search results about a person and extract structured data about their background for use in personalized outreach.\n\nYour goal is to understand WHO this person is so their profile can be used to find connection angles with prospects they want to reach out to.\n\nOUTPUT FORMAT - Return valid JSON only, no markdown:\n\n{\n  \"name\": \"Full name\",\n  \"currentRole\": \"Current job title\",\n  \"currentCompany\": \"Current company name\",\n  \"headline\": \"One-line professional summary (like a LinkedIn headline)\",\n  \"background\": \"Comprehensive summary of their career path and education (specifically where they went to undergrad and graduate school if any)\",\n  \"keyExperiences\": [\n    \"Specific achievement or experience 1\",\n    \"Specific achievement or experience 2\",\n    \"Specific achievement or experience 3\"\n  ],\n  \"skills\": [\"skill1\", \"skill2\", \"skill3\"],\n  \"interests\": [\"interest1\", \"interest2\", \"interest3\"],\n  \"talkingPoints\": [\n    \"Unique angle or strength they can reference in outreach 1\",\n    \"Unique angle or strength they can reference in outreach 2\",\n    \"Unique angle or strength they can reference in outreach 3\"\n  ],\n  \"education\": \"School and degree if found\",\n  \"location\": \"City/region if found\"\n}\n\nRules:\n- Return ONLY valid JSON, no explanation or markdown\n- Only include information actually found in search results\n- If something isn't found, use null for that field\n- Keep keyExperiences specific and quantified where possible\n- talkingPoints should be things that make this person stand out or create connection opportunities"
+            },
+            {
+              "content": "=Here is the raw search data about a user who wants to set up their profile:\n\nTARGET PERSON:\n- Name: {{ $json.personName }}\n- Company: {{ $json.company }}\n- LinkedIn: {{ $json.linkedinUrl }}\n\nSEARCH RESULTS:\n{{ JSON.stringify($json.filteredResults) }}\n\nExtract their profile as JSON. IMPORTANT: Only use information that is clearly about the target person listed above. Ignore any search results about other people with similar names."
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {
+          "temperature": 0
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.1,
+      "position": [
+        896,
+        0
+      ],
+      "id": "9698c0da-5a1b-4f0e-94f3-60ce28e80cd0",
+      "name": "Message a model",
+      "executeOnce": true,
+      "credentials": {
+        "openAiApi": {
+          "id": "lkCgV0rIGVDbl0Jd",
+          "name": "OpenAi account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "user-profile-research",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "",
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "POST, OPTIONS"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "Content-Type"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "40d780f3-6a59-4520-9be8-a5a6e85bb4ab",
+      "name": "Webhook",
+      "webhookId": "d8e15e83-7599-4ea7-b3cb-dc44c5683dc3"
+    },
+    {
+      "parameters": {
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "POST, GET, OPTIONS"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "Content-Type, Authorization"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1248,
+        0
+      ],
+      "id": "a4fb0d3d-dee1-4856-9daa-e3f40ca0ad66",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        448,
+        0
+      ],
+      "id": "566938c3-527e-4bdf-abf7-3e1093204c9c",
+      "name": "Merger and Acquisition"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://google.serper.dev/search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-KEY",
+              "value": "22c0253164e3659ee7f76741f2d9602cb51d23d3"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{$json.body.linkedinUrl }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        224,
+        -96
+      ],
+      "id": "79c082e4-63cc-4362-9497-a95d2546d2e7",
+      "name": "Background & Career"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://google.serper.dev/search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-KEY",
+              "value": "22c0253164e3659ee7f76741f2d9602cb51d23d3"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{$json.body.linkedinUrl.split('/in/').pop().replace(/\\//g, '')}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        224,
+        96
+      ],
+      "id": "0b5fc8a2-ee33-468c-858a-6d98a0d441d6",
+      "name": "Skills & Projects"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get identity info from the original webhook\nconst webhookData = $('Webhook').first().json.body;\nconst personName = (webhookData.personName || '').toLowerCase();\nconst linkedinUrl = (webhookData.linkedinUrl || '').toLowerCase();\n\n// Extract the unique LinkedIn slug (e.g., \"brianmathewjoseph\")\nconst linkedinSlug = linkedinUrl.match(/linkedin\\.com\\/in\\/([^\\/\\?]+)/)?.[1] || '';\n\nif (!linkedinSlug) {\n  return [{ json: { personName: webhookData.personName, company: webhookData.company, linkedinUrl: webhookData.linkedinUrl, filteredResults: [] } }];\n}\n\nconst allItems = $input.all();\nconst filteredResults = [];\nconst seenLinks = new Set();\n\nfor (const item of allItems) {\n  const data = item.json;\n\n  if (data.organic && Array.isArray(data.organic)) {\n    for (const result of data.organic) {\n      const link = (result.link || '').toLowerCase();\n      const text = ((result.title || '') + ' ' + (result.snippet || '') + ' ' + (result.subtitle || '') + ' ' + link).toLowerCase();\n\n      if (seenLinks.has(link)) continue;\n\n      let keep = false;\n\n      // Keep if the link contains the exact LinkedIn slug\n      if (link.includes('/in/' + linkedinSlug)) {\n        keep = true;\n      }\n      // Keep if the text/snippet references the LinkedIn slug\n      else if (text.includes(linkedinSlug)) {\n        keep = true;\n      }\n\n      if (keep) {\n        seenLinks.add(link);\n        filteredResults.push(result);\n      }\n    }\n  }\n\n  // Keep knowledgeGraph if it mentions the slug\n  if (data.knowledgeGraph) {\n    const kgText = JSON.stringify(data.knowledgeGraph).toLowerCase();\n    if (kgText.includes(linkedinSlug)) {\n      filteredResults.push({ type: 'knowledgeGraph', ...data.knowledgeGraph });\n    }\n  }\n}\n\nreturn [{\n  json: {\n    personName: webhookData.personName,\n    company: webhookData.company,\n    linkedinUrl: webhookData.linkedinUrl,\n    filteredResults\n  }\n}];"
+      },
+      "id": "80ddb665-7069-4e3a-887d-3b33424514d3",
+      "name": "Filter Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Background & Career",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Skills & Projects",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Background & Career": {
+      "main": [
+        [
+          {
+            "node": "Merger and Acquisition",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Skills & Projects": {
+      "main": [
+        [
+          {
+            "node": "Merger and Acquisition",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Filter Results": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merger and Acquisition": {
+      "main": [
+        [
+          {
+            "node": "Filter Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": true,
+    "timeSavedPerExecution": 90,
+    "errorWorkflow": "oWmtUNe7BW28qNXW"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {},
+  "versionId": "c8c292a9-9a1f-4482-8060-cc2d9ee92b0c",
+  "activeVersionId": "c8c292a9-9a1f-4482-8060-cc2d9ee92b0c",
+  "triggerCount": 1,
+  "shared": [
+    {
+      "updatedAt": "2026-01-22T19:14:23.756Z",
+      "createdAt": "2026-01-22T19:14:23.756Z",
+      "role": "workflow:owner",
+      "workflowId": "O9uLSP88brUA0csE",
+      "projectId": "JXFm39uiH4OT7tOz"
+    }
+  ],
+  "activeVersion": {
+    "updatedAt": "2026-02-18T18:01:21.788Z",
+    "createdAt": "2026-02-18T18:01:21.788Z",
+    "versionId": "c8c292a9-9a1f-4482-8060-cc2d9ee92b0c",
+    "workflowId": "O9uLSP88brUA0csE",
+    "nodes": [
+      {
+        "parameters": {
+          "modelId": {
+            "__rl": true,
+            "value": "gpt-4o-mini",
+            "mode": "list",
+            "cachedResultName": "GPT-4O-MINI"
+          },
+          "responses": {
+            "values": [
+              {
+                "role": "system",
+                "content": "You are a profile extraction assistant. You receive raw search results about a person and extract structured data about their background for use in personalized outreach.\n\nYour goal is to understand WHO this person is so their profile can be used to find connection angles with prospects they want to reach out to.\n\nOUTPUT FORMAT - Return valid JSON only, no markdown:\n\n{\n  \"name\": \"Full name\",\n  \"currentRole\": \"Current job title\",\n  \"currentCompany\": \"Current company name\",\n  \"headline\": \"One-line professional summary (like a LinkedIn headline)\",\n  \"background\": \"Comprehensive summary of their career path and education (specifically where they went to undergrad and graduate school if any)\",\n  \"keyExperiences\": [\n    \"Specific achievement or experience 1\",\n    \"Specific achievement or experience 2\",\n    \"Specific achievement or experience 3\"\n  ],\n  \"skills\": [\"skill1\", \"skill2\", \"skill3\"],\n  \"interests\": [\"interest1\", \"interest2\", \"interest3\"],\n  \"talkingPoints\": [\n    \"Unique angle or strength they can reference in outreach 1\",\n    \"Unique angle or strength they can reference in outreach 2\",\n    \"Unique angle or strength they can reference in outreach 3\"\n  ],\n  \"education\": \"School and degree if found\",\n  \"location\": \"City/region if found\"\n}\n\nRules:\n- Return ONLY valid JSON, no explanation or markdown\n- Only include information actually found in search results\n- If something isn't found, use null for that field\n- Keep keyExperiences specific and quantified where possible\n- talkingPoints should be things that make this person stand out or create connection opportunities"
+              },
+              {
+                "content": "=Here is the raw search data about a user who wants to set up their profile:\n\nTARGET PERSON:\n- Name: {{ $json.personName }}\n- Company: {{ $json.company }}\n- LinkedIn: {{ $json.linkedinUrl }}\n\nSEARCH RESULTS:\n{{ JSON.stringify($json.filteredResults) }}\n\nExtract their profile as JSON. IMPORTANT: Only use information that is clearly about the target person listed above. Ignore any search results about other people with similar names."
+              }
+            ]
+          },
+          "builtInTools": {},
+          "options": {
+            "temperature": 0
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.openAi",
+        "typeVersion": 2.1,
+        "position": [
+          896,
+          0
+        ],
+        "id": "9698c0da-5a1b-4f0e-94f3-60ce28e80cd0",
+        "name": "Message a model",
+        "executeOnce": true,
+        "credentials": {
+          "openAiApi": {
+            "id": "lkCgV0rIGVDbl0Jd",
+            "name": "OpenAi account 4"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "user-profile-research",
+          "responseMode": "responseNode",
+          "options": {
+            "allowedOrigins": "",
+            "responseHeaders": {
+              "entries": [
+                {
+                  "name": "Access-Control-Allow-Origin",
+                  "value": "*"
+                },
+                {
+                  "name": "Access-Control-Allow-Methods",
+                  "value": "POST, OPTIONS"
+                },
+                {
+                  "name": "Access-Control-Allow-Headers",
+                  "value": "Content-Type"
+                }
+              ]
+            }
+          }
+        },
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2.1,
+        "position": [
+          0,
+          0
+        ],
+        "id": "40d780f3-6a59-4520-9be8-a5a6e85bb4ab",
+        "name": "Webhook",
+        "webhookId": "d8e15e83-7599-4ea7-b3cb-dc44c5683dc3"
+      },
+      {
+        "parameters": {
+          "options": {
+            "responseHeaders": {
+              "entries": [
+                {
+                  "name": "Access-Control-Allow-Origin",
+                  "value": "*"
+                },
+                {
+                  "name": "Access-Control-Allow-Methods",
+                  "value": "POST, GET, OPTIONS"
+                },
+                {
+                  "name": "Access-Control-Allow-Headers",
+                  "value": "Content-Type, Authorization"
+                }
+              ]
+            }
+          }
+        },
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.5,
+        "position": [
+          1248,
+          0
+        ],
+        "id": "a4fb0d3d-dee1-4856-9daa-e3f40ca0ad66",
+        "name": "Respond to Webhook"
+      },
+      {
+        "parameters": {},
+        "type": "n8n-nodes-base.merge",
+        "typeVersion": 3.2,
+        "position": [
+          448,
+          0
+        ],
+        "id": "566938c3-527e-4bdf-abf7-3e1093204c9c",
+        "name": "Merger and Acquisition"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://google.serper.dev/search",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-API-KEY",
+                "value": "22c0253164e3659ee7f76741f2d9602cb51d23d3"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "q",
+                "value": "={{$json.body.linkedinUrl }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.3,
+        "position": [
+          224,
+          -96
+        ],
+        "id": "79c082e4-63cc-4362-9497-a95d2546d2e7",
+        "name": "Background & Career"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://google.serper.dev/search",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-API-KEY",
+                "value": "22c0253164e3659ee7f76741f2d9602cb51d23d3"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "q",
+                "value": "={{$json.body.linkedinUrl.split('/in/').pop().replace(/\\//g, '')}}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.3,
+        "position": [
+          224,
+          96
+        ],
+        "id": "0b5fc8a2-ee33-468c-858a-6d98a0d441d6",
+        "name": "Skills & Projects"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Get identity info from the original webhook\nconst webhookData = $('Webhook').first().json.body;\nconst personName = (webhookData.personName || '').toLowerCase();\nconst linkedinUrl = (webhookData.linkedinUrl || '').toLowerCase();\n\n// Extract the unique LinkedIn slug (e.g., \"brianmathewjoseph\")\nconst linkedinSlug = linkedinUrl.match(/linkedin\\.com\\/in\\/([^\\/\\?]+)/)?.[1] || '';\n\nif (!linkedinSlug) {\n  return [{ json: { personName: webhookData.personName, company: webhookData.company, linkedinUrl: webhookData.linkedinUrl, filteredResults: [] } }];\n}\n\nconst allItems = $input.all();\nconst filteredResults = [];\nconst seenLinks = new Set();\n\nfor (const item of allItems) {\n  const data = item.json;\n\n  if (data.organic && Array.isArray(data.organic)) {\n    for (const result of data.organic) {\n      const link = (result.link || '').toLowerCase();\n      const text = ((result.title || '') + ' ' + (result.snippet || '') + ' ' + (result.subtitle || '') + ' ' + link).toLowerCase();\n\n      if (seenLinks.has(link)) continue;\n\n      let keep = false;\n\n      // Keep if the link contains the exact LinkedIn slug\n      if (link.includes('/in/' + linkedinSlug)) {\n        keep = true;\n      }\n      // Keep if the text/snippet references the LinkedIn slug\n      else if (text.includes(linkedinSlug)) {\n        keep = true;\n      }\n\n      if (keep) {\n        seenLinks.add(link);\n        filteredResults.push(result);\n      }\n    }\n  }\n\n  // Keep knowledgeGraph if it mentions the slug\n  if (data.knowledgeGraph) {\n    const kgText = JSON.stringify(data.knowledgeGraph).toLowerCase();\n    if (kgText.includes(linkedinSlug)) {\n      filteredResults.push({ type: 'knowledgeGraph', ...data.knowledgeGraph });\n    }\n  }\n}\n\nreturn [{\n  json: {\n    personName: webhookData.personName,\n    company: webhookData.company,\n    linkedinUrl: webhookData.linkedinUrl,\n    filteredResults\n  }\n}];"
+        },
+        "id": "80ddb665-7069-4e3a-887d-3b33424514d3",
+        "name": "Filter Results",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          672,
+          0
+        ]
+      }
+    ],
+    "connections": {
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "Background & Career",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Skills & Projects",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Message a model": {
+        "main": [
+          [
+            {
+              "node": "Respond to Webhook",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Background & Career": {
+        "main": [
+          [
+            {
+              "node": "Merger and Acquisition",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Skills & Projects": {
+        "main": [
+          [
+            {
+              "node": "Merger and Acquisition",
+              "type": "main",
+              "index": 1
+            }
+          ]
+        ]
+      },
+      "Filter Results": {
+        "main": [
+          [
+            {
+              "node": "Message a model",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Merger and Acquisition": {
+        "main": [
+          [
+            {
+              "node": "Filter Results",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "authors": "Brian Joseph",
+    "name": null,
+    "description": null
+  },
+  "tags": [
+    {
+      "updatedAt": "2026-02-18T18:01:20.406Z",
+      "createdAt": "2026-02-18T18:01:20.406Z",
+      "id": "xzq4Tl6kjE4nIlmn",
+      "name": "OutboundOS"
+    }
+  ],
+  "targetRepo": "OutboundOS"
+}
