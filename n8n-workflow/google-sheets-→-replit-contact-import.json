@@ -1,0 +1,156 @@
+{
+  "updatedAt": "2026-02-18T18:03:53.024Z",
+  "createdAt": "2026-01-15T20:26:57.760Z",
+  "id": "lxgQ3h9RtJdxmZpC",
+  "name": "Google Sheets → Replit Contact Import",
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1WCr0Gi5abRhA4-Gh0-UyOWlO1OfeTUfVbmjT6LiBbxM",
+          "mode": "list",
+          "cachedResultName": "Networking Tool Data Set",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1WCr0Gi5abRhA4-Gh0-UyOWlO1OfeTUfVbmjT6LiBbxM/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1WCr0Gi5abRhA4-Gh0-UyOWlO1OfeTUfVbmjT6LiBbxM/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        192,
+        -16
+      ],
+      "id": "812f05d5-0ed8-4917-ac2f-fdf96fb94b03",
+      "name": "Get row(s) in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "8pISVmRoRT8vD20E",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -32,
+        -16
+      ],
+      "id": "6f692fa0-3f77-42dc-af59-3780d5c896d3",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Transform Google Sheets rows to Replit contact format\nconst contacts = items.map(item => ({\n  name: item.json.name || undefined,\n  company: item.json.company || undefined,\n  role: item.json.role || undefined,\n  location: item.json.location || undefined,\n  headline: item.json.headline || undefined,\n  about: item.json.about || undefined,\n  skills: item.json.skills || undefined,\n  tags: 'demo-import',\n  email: item.json.email || undefined,\n  linkedinUrl: item.json.linkedinUrl || undefined\n}));\n\nreturn [{\n  json: {\n    contacts: contacts\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        416,
+        -16
+      ],
+      "id": "bb4c5618-5265-4014-b766-faf96d0612d0",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://ebcca18e-642a-4f38-a4c1-f6aba49d81c2-00-3ta5968ww060x.riker.replit.dev/api/contacts/bulk-import",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "=contacts",
+              "value": "={{ $json.contacts }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        640,
+        -16
+      ],
+      "id": "e6327eee-7339-4adf-803b-bf56af92da0a",
+      "name": "HTTP Request"
+    }
+  ],
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {},
+  "versionId": "335ee811-65aa-4abc-afdc-dba71fd67ea8",
+  "activeVersionId": null,
+  "triggerCount": 0,
+  "shared": [
+    {
+      "updatedAt": "2026-01-15T20:26:57.764Z",
+      "createdAt": "2026-01-15T20:26:57.764Z",
+      "role": "workflow:owner",
+      "workflowId": "lxgQ3h9RtJdxmZpC",
+      "projectId": "JXFm39uiH4OT7tOz"
+    }
+  ],
+  "activeVersion": null,
+  "tags": [
+    {
+      "updatedAt": "2026-02-18T18:01:20.406Z",
+      "createdAt": "2026-02-18T18:01:20.406Z",
+      "id": "xzq4Tl6kjE4nIlmn",
+      "name": "OutboundOS"
+    }
+  ],
+  "targetRepo": "OutboundOS"
+}

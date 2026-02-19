@@ -1,0 +1,2079 @@
+{
+  "updatedAt": "2026-02-18T18:03:04.697Z",
+  "createdAt": "2026-01-26T13:04:44.477Z",
+  "id": "mqmioBggYLj79t1f",
+  "name": "Variants Drafter",
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "drafting-agent",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        224,
+        432
+      ],
+      "webhookId": "0da7258d-af60-4570-a392-7e75d00e88df"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get input data\nconst body = $input.first().json.body || $input.first().json;\n\n// Extract and validate fields\nconst personId = body.personId;\nconst researchBrief = body.researchBrief;\nconst requestId = body.requestId;\n\nif (!personId || typeof personId !== 'string') {\n  throw new Error('personId is required and must be a string');\n}\n\nif (!researchBrief || typeof researchBrief !== 'string') {\n  throw new Error('researchBrief is required and must be a string');\n}\n\n// Generate idempotency key if not provided\nconst idempotencyKey = requestId || `draft-${personId}-${Date.now()}`;\n\nreturn {\n  personId,\n  researchBrief,\n  requestId: idempotencyKey,\n  startTime: Date.now(),\n  forceRefresh: body.forceRefresh || false\n};\n"
+      },
+      "id": "validate-input",
+      "name": "Validate Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        432
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appxRz5Vc87OQmr6N",
+          "mode": "list",
+          "cachedResultName": "Agentic Outbound OS",
+          "cachedResultUrl": "https://airtable.com/appxRz5Vc87OQmr6N"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblzJITcVfxHSEgpS",
+          "mode": "list",
+          "cachedResultName": "Messages",
+          "cachedResultUrl": "https://airtable.com/appxRz5Vc87OQmr6N/tblzJITcVfxHSEgpS"
+        },
+        "filterByFormula": "={Request ID} = '{{$json.requestId}}'",
+        "options": {}
+      },
+      "id": "check-idempotency",
+      "name": "Check Idempotency",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [
+        224,
+        112
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "xj1C47FymD4jCvSB",
+          "name": "Airtable Personal Access Token account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "dede719a-44f9-4843-b5de-b3b923168b59",
+              "leftValue": "={{ $input.all().length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            },
+            {
+              "id": "5ab05fa5-6b2e-45d2-89e9-12dcfcd7bd55",
+              "leftValue": "={{$('Validate Input').item.json.forceRefresh}}",
+              "rightValue": "True",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-if-cached",
+      "name": "Check If Cached",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        672,
+        432
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const cachedRecords = $('Check Idempotency').first().json.records;\n\nreturn {\n  success: true,\n  cached: true,\n  requestId: $('Validate Input').first().json.requestId,\n  messages: cachedRecords.map(r => ({\n    id: r.id,\n    variant: r.fields['Variant'],\n    subject: r.fields['Subject'],\n    body: r.fields['Body']\n  }))\n};\n"
+      },
+      "id": "return-cached",
+      "name": "Return Cached Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appxRz5Vc87OQmr6N",
+          "mode": "list",
+          "cachedResultName": "Agentic Outbound OS",
+          "cachedResultUrl": "https://airtable.com/appxRz5Vc87OQmr6N"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblIXoIPR8XsBCYeH",
+          "mode": "list",
+          "cachedResultName": "People",
+          "cachedResultUrl": "https://airtable.com/appxRz5Vc87OQmr6N/tblIXoIPR8XsBCYeH"
+        },
+        "filterByFormula": "=={{ \"{Full Name} = '\" + $node[\"Webhook Trigger\"].json.body.personId + \"'\" }}",
+        "options": {}
+      },
+      "id": "fetch-person",
+      "name": "Fetch Person Record",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [
+        896,
+        528
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "xj1C47FymD4jCvSB",
+          "name": "Airtable Personal Access Token account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get data from previous nodes - data is directly on json, not json.fields\nconst person = $('Fetch Person Record1').first().json;\n\nconst input = $('Validate Input1').first().json;\n\n// Format signals for prompt\n\n\nconst userPrompt = `Research Brief: ${input.researchBrief}\n\n\nProspect Context:\n- Name: ${person['Full Name'] || 'Unknown'}\n- Title: ${person['Role Title'] || 'Unknown'}\n- Company: ${person['Company Name'] || person['Account'] || 'Unknown'}\n- Seniority: ${person['Seniority'] || 'Unknown'}`;\n\nreturn {\n  systemPrompt: `You are an expert sales message writer specializing in personalized outbound outreach.\n\nTASK: Generate exactly 3 variations of an outreach message based on research and verified signals.\n\nCONSTRAINTS:\n1. Only reference information from the provided signals - NO assumptions\n2. Maximum 150 words per message body\n3. Include a clear, specific call-to-action\n4. Match tone to prospect seniority\n\nOUTPUT FORMAT (JSON only, no markdown):\n{\n  \"variations\": [\n    {\"type\": \"direct\", \"subject\": \"Subject line\", \"body\": \"Message body\"},\n    {\"type\": \"conversational\", \"subject\": \"Subject line\", \"body\": \"Message body\"},\n    {\"type\": \"formal\", \"subject\": \"Subject line\", \"body\": \"Message body\"}\n  ]\n}`,\n  userPrompt: userPrompt,\n  personId: input.personId,\n  requestId: input.requestId\n};\n"
+      },
+      "id": "prepare-prompt",
+      "name": "Prepare OpenAI Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        944
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst input = $('Validate Input1').first().json;\n\n// Extract the text from the response\nconst text = response.output[0].content[0].text;\n\n// Parse the JSON (handle potential markdown code blocks)\nlet jsonStr = text;\nif (text.includes('```json')) {\n  jsonStr = text.split('```json')[1].split('```')[0];\n} else if (text.includes('```')) {\n  jsonStr = text.split('```')[1].split('```')[0];\n}\n\nconst parsed = JSON.parse(jsonStr.trim());\n\n// Return each variation as a separate item\nreturn parsed.variations.map(v => ({\n  json: {\n    requestId: input.requestId,\n    personId: input.personId,\n    subject: v.subject,\n    body: v.body,\n    variant: v.type.charAt(0).toUpperCase() + v.type.slice(1)\n  }\n}));\n"
+      },
+      "id": "parse-response",
+      "name": "Parse OpenAI Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        944
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appxRz5Vc87OQmr6N",
+          "mode": "list",
+          "cachedResultName": "Agentic Outbound OS",
+          "cachedResultUrl": "https://airtable.com/appxRz5Vc87OQmr6N"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblzJITcVfxHSEgpS",
+          "mode": "list",
+          "cachedResultName": "Messages",
+          "cachedResultUrl": "https://airtable.com/appxRz5Vc87OQmr6N/tblzJITcVfxHSEgpS"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Request ID": "={{ $json.requestId }}",
+            "Person": "={{ $json.personId }}",
+            "Subject": "={{ $json.subject }}",
+            "Body": "={{ $json.body }}",
+            "Variant": "={{ $json.variant }}",
+            "QA Status": "Needs QA"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Request ID",
+              "displayName": "Request ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "QA Score",
+              "displayName": "QA Score",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "QA Notes",
+              "displayName": "QA Notes",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Risk Flags",
+              "displayName": "Risk Flags",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "options": [
+                {
+                  "name": "Spam Risk",
+                  "value": "Spam Risk"
+                },
+                {
+                  "name": "Compliance Issue",
+                  "value": "Compliance Issue"
+                },
+                {
+                  "name": "Incomplete Data",
+                  "value": "Incomplete Data"
+                },
+                {
+                  "name": "Formatting Error",
+                  "value": "Formatting Error"
+                },
+                {
+                  "name": "Potential Bounce",
+                  "value": "Potential Bounce"
+                },
+                {
+                  "name": "High Sensitivity",
+                  "value": "High Sensitivity"
+                },
+                {
+                  "name": "Language Concern",
+                  "value": "Language Concern"
+                },
+                {
+                  "name": "Other",
+                  "value": "Other"
+                }
+              ],
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "QA Checked At",
+              "displayName": "QA Checked At",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "QA Execution Time",
+              "displayName": "QA Execution Time",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Person",
+              "displayName": "Person",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Subject",
+              "displayName": "Subject",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Body",
+              "displayName": "Body",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Variant",
+              "displayName": "Variant",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Direct",
+                  "value": "Direct"
+                },
+                {
+                  "name": "Conversational",
+                  "value": "Conversational"
+                },
+                {
+                  "name": "Formal",
+                  "value": "Formal"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "QA Status",
+              "displayName": "QA Status",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Needs QA",
+                  "value": "Needs QA"
+                },
+                {
+                  "name": "Passed",
+                  "value": "Passed"
+                },
+                {
+                  "name": "Failed",
+                  "value": "Failed"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "create-messages",
+      "name": "Create Message Records",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [
+        2144,
+        944
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "xj1C47FymD4jCvSB",
+          "name": "Airtable Personal Access Token account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const createdRecords = $input.all();\nconst metadata = $('Parse OpenAI Response').first().json;\n\nreturn {\n  success: true,\n  cached: false,\n  requestId: metadata.requestId,\n  personId: metadata.personId,\n  messagesCreated: createdRecords.length,\n  messages: createdRecords.map(r => ({\n    id: r.json.id,\n    variant: r.json.fields?.['Variant'],\n    subject: r.json.fields?.['Subject'],\n    qaStatus: 'Needs QA'\n  }))\n};\n"
+      },
+      "id": "format-response",
+      "name": "Format Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2368,
+        944
+      ]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4.1-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4.1-MINI"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "={{ $json.userPrompt }}"
+            },
+            {
+              "role": "system",
+              "content": "={{ $json.systemPrompt }}"
+            }
+          ]
+        },
+        "simplify": false,
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.1,
+      "position": [
+        1568,
+        944
+      ],
+      "id": "31d7e962-a178-4cf5-b70b-47ecb42a9020",
+      "name": "Message a model",
+      "credentials": {
+        "openAiApi": {
+          "id": "lkCgV0rIGVDbl0Jd",
+          "name": "OpenAi account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get input data\nconst body = $input.first().json.body || $input.first().json;\n\n// Extract and validate fields\nconst personId = body.personId;\nconst researchBrief = body.researchBrief;\nconst requestId = body.requestId;\n\nif (!personId || typeof personId !== 'string') {\n  throw new Error('personId is required and must be a string');\n}\n\nif (!researchBrief || typeof researchBrief !== 'string') {\n  throw new Error('researchBrief is required and must be a string');\n}\n\n// Generate idempotency key if not provided\nconst idempotencyKey = requestId || `draft-${personId}-${Date.now()}`;\n\nreturn {\n  personId,\n  researchBrief,\n  requestId: idempotencyKey,\n  startTime: Date.now(),\n  forceRefresh: body.forceRefresh || false\n};\n"
+      },
+      "id": "59ce63b1-02b0-4e88-8de5-d4f6ee617d0b",
+      "name": "Validate Input1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        848
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "dede719a-44f9-4843-b5de-b3b923168b59",
+              "leftValue": "={{ $input.all().length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            },
+            {
+              "id": "5ab05fa5-6b2e-45d2-89e9-12dcfcd7bd55",
+              "leftValue": "={{$('Validate Input1').item.json.forceRefresh}}",
+              "rightValue": "True",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "2b5bdaad-888f-4024-83c1-27b802c70148",
+      "name": "Check If Cached1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        672,
+        848
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appxRz5Vc87OQmr6N",
+          "mode": "list",
+          "cachedResultName": "Agentic Outbound OS",
+          "cachedResultUrl": "https://airtable.com/appxRz5Vc87OQmr6N"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblIXoIPR8XsBCYeH",
+          "mode": "list",
+          "cachedResultName": "People",
+          "cachedResultUrl": "https://airtable.com/appxRz5Vc87OQmr6N/tblIXoIPR8XsBCYeH"
+        },
+        "filterByFormula": "=={{ \"{Full Name} = '\" + $node[\"Webhook Variant\"].json.body.personId + \"'\" }}",
+        "options": {}
+      },
+      "id": "6f58041f-91b6-45a2-a176-d8189cf9039d",
+      "name": "Fetch Person Record1",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [
+        896,
+        944
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "xj1C47FymD4jCvSB",
+          "name": "Airtable Personal Access Token account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "createvariants",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        224,
+        848
+      ],
+      "id": "23ab417f-0ae4-4c95-8b6a-2ebf235a4b84",
+      "name": "Webhook Variant",
+      "webhookId": "af9085a4-4318-40e2-9f2a-1c04de264f32"
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appxRz5Vc87OQmr6N",
+          "mode": "list",
+          "cachedResultName": "Agentic Outbound OS",
+          "cachedResultUrl": "https://airtable.com/appxRz5Vc87OQmr6N"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblzJITcVfxHSEgpS",
+          "mode": "list",
+          "cachedResultName": "Messages",
+          "cachedResultUrl": "https://airtable.com/appxRz5Vc87OQmr6N/tblzJITcVfxHSEgpS"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Person": "={{ $json['Full Name'] }}",
+            "Subject": "={{ $('Webhook Trigger').item.json.body.subject }}",
+            "Body": "={{ $('Webhook Trigger').item.json.body.body }}",
+            "Variant": "Conversational",
+            "QA Status": "Needs QA",
+            "Request ID": "={{ $json.id }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Request ID",
+              "displayName": "Request ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Person",
+              "displayName": "Person",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Subject",
+              "displayName": "Subject",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Body",
+              "displayName": "Body",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Variant",
+              "displayName": "Variant",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Direct",
+                  "value": "Direct"
+                },
+                {
+                  "name": "Conversational",
+                  "value": "Conversational"
+                },
+                {
+                  "name": "Formal",
+                  "value": "Formal"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "QA Status",
+              "displayName": "QA Status",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Needs QA",
+                  "value": "Needs QA"
+                },
+                {
+                  "name": "Passed",
+                  "value": "Passed"
+                },
+                {
+                  "name": "Failed",
+                  "value": "Failed"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "QA Score",
+              "displayName": "QA Score",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "QA Notes",
+              "displayName": "QA Notes",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Risk Flags",
+              "displayName": "Risk Flags",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "options": [
+                {
+                  "name": "Spam Risk",
+                  "value": "Spam Risk"
+                },
+                {
+                  "name": "Compliance Issue",
+                  "value": "Compliance Issue"
+                },
+                {
+                  "name": "Incomplete Data",
+                  "value": "Incomplete Data"
+                },
+                {
+                  "name": "Formatting Error",
+                  "value": "Formatting Error"
+                },
+                {
+                  "name": "Potential Bounce",
+                  "value": "Potential Bounce"
+                },
+                {
+                  "name": "High Sensitivity",
+                  "value": "High Sensitivity"
+                },
+                {
+                  "name": "Language Concern",
+                  "value": "Language Concern"
+                },
+                {
+                  "name": "Other",
+                  "value": "Other"
+                }
+              ],
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "QA Checked At",
+              "displayName": "QA Checked At",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "QA Execution Time",
+              "displayName": "QA Execution Time",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "fetch-signals",
+      "name": "Log Outreach Message",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        528
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "xj1C47FymD4jCvSB",
+          "name": "Airtable Personal Access Token account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const cachedRecords = $('Check Idempotency').first().json.records;\n\nreturn {\n  success: true,\n  cached: true,\n  requestId: $('Validate Input').first().json.requestId,\n  messages: cachedRecords.map(r => ({\n    id: r.id,\n    variant: r.fields['Variant'],\n    subject: r.fields['Subject'],\n    body: r.fields['Body']\n  }))\n};\n"
+      },
+      "id": "e95f90b1-9bba-40f0-a2f6-4888864adc24",
+      "name": "Return Cached Result1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        752
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Validate Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Input": {
+      "main": [
+        [
+          {
+            "node": "Check If Cached",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Idempotency": {
+      "main": [
+        []
+      ]
+    },
+    "Check If Cached": {
+      "main": [
+        [
+          {
+            "node": "Return Cached Result",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fetch Person Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Person Record": {
+      "main": [
+        [
+          {
+            "node": "Log Outreach Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare OpenAI Prompt": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse OpenAI Response": {
+      "main": [
+        [
+          {
+            "node": "Create Message Records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Message Records": {
+      "main": [
+        [
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Parse OpenAI Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Input1": {
+      "main": [
+        [
+          {
+            "node": "Check If Cached1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check If Cached1": {
+      "main": [
+        [
+          {
+            "node": "Return Cached Result1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fetch Person Record1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Person Record1": {
+      "main": [
+        [
+          {
+            "node": "Prepare OpenAI Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Variant": {
+      "main": [
+        [
+          {
+            "node": "Validate Input1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Outreach Message": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true,
+    "saveExecutionProgress": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": true
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {
+    "Webhook Trigger": [
+      {
+        "json": {
+          "headers": {
+            "host": "n8n.srv1096794.hstgr.cloud",
+            "user-agent": "Mozilla/5.0 (Windows NT; Windows NT 10.0; en-US) WindowsPowerShell/5.1.19041.6216",
+            "content-length": "87",
+            "content-type": "application/json",
+            "x-forwarded-for": "129.74.34.89",
+            "x-forwarded-host": "n8n.srv1096794.hstgr.cloud",
+            "x-forwarded-port": "443",
+            "x-forwarded-proto": "https",
+            "x-forwarded-server": "3913100048b9",
+            "x-real-ip": "129.74.34.89",
+            "accept-encoding": "gzip"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "personId": "Horacio Lopez",
+            "researchBrief": "test",
+            "subject": "yo",
+            "body": "hi"
+          },
+          "webhookUrl": "https://n8n.srv1096794.hstgr.cloud/webhook-test/drafting-agent",
+          "executionMode": "test"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ],
+    "Webhook Variant": [
+      {
+        "json": {
+          "headers": {
+            "host": "n8n.srv1096794.hstgr.cloud",
+            "user-agent": "Mozilla/5.0 (Windows NT; Windows NT 10.0; en-US) WindowsPowerShell/5.1.19041.6216",
+            "content-length": "87",
+            "content-type": "application/json",
+            "x-forwarded-for": "129.74.34.89",
+            "x-forwarded-host": "n8n.srv1096794.hstgr.cloud",
+            "x-forwarded-port": "443",
+            "x-forwarded-proto": "https",
+            "x-forwarded-server": "3913100048b9",
+            "x-real-ip": "129.74.34.89",
+            "accept-encoding": "gzip"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "personId": "Horacio Lopez",
+            "researchBrief": "test",
+            "subject": "yo",
+            "body": "hi"
+          },
+          "webhookUrl": "https://n8n.srv1096794.hstgr.cloud/webhook-test/create variants",
+          "executionMode": "test"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "versionId": "d251b838-e707-485b-b4c8-07557771899e",
+  "activeVersionId": "d251b838-e707-485b-b4c8-07557771899e",
+  "triggerCount": 2,
+  "shared": [
+    {
+      "updatedAt": "2026-01-26T13:04:44.524Z",
+      "createdAt": "2026-01-26T13:04:44.524Z",
+      "role": "workflow:owner",
+      "workflowId": "mqmioBggYLj79t1f",
+      "projectId": "JXFm39uiH4OT7tOz"
+    }
+  ],
+  "activeVersion": {
+    "updatedAt": "2026-02-18T18:03:04.699Z",
+    "createdAt": "2026-02-18T18:03:04.699Z",
+    "versionId": "d251b838-e707-485b-b4c8-07557771899e",
+    "workflowId": "mqmioBggYLj79t1f",
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "drafting-agent",
+          "responseMode": "lastNode",
+          "options": {}
+        },
+        "id": "webhook-trigger",
+        "name": "Webhook Trigger",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          224,
+          432
+        ],
+        "webhookId": "0da7258d-af60-4570-a392-7e75d00e88df"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Get input data\nconst body = $input.first().json.body || $input.first().json;\n\n// Extract and validate fields\nconst personId = body.personId;\nconst researchBrief = body.researchBrief;\nconst requestId = body.requestId;\n\nif (!personId || typeof personId !== 'string') {\n  throw new Error('personId is required and must be a string');\n}\n\nif (!researchBrief || typeof researchBrief !== 'string') {\n  throw new Error('researchBrief is required and must be a string');\n}\n\n// Generate idempotency key if not provided\nconst idempotencyKey = requestId || `draft-${personId}-${Date.now()}`;\n\nreturn {\n  personId,\n  researchBrief,\n  requestId: idempotencyKey,\n  startTime: Date.now(),\n  forceRefresh: body.forceRefresh || false\n};\n"
+        },
+        "id": "validate-input",
+        "name": "Validate Input",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          448,
+          432
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "search",
+          "base": {
+            "__rl": true,
+            "value": "appxRz5Vc87OQmr6N",
+            "mode": "list",
+            "cachedResultName": "Agentic Outbound OS",
+            "cachedResultUrl": "https://airtable.com/appxRz5Vc87OQmr6N"
+          },
+          "table": {
+            "__rl": true,
+            "value": "tblzJITcVfxHSEgpS",
+            "mode": "list",
+            "cachedResultName": "Messages",
+            "cachedResultUrl": "https://airtable.com/appxRz5Vc87OQmr6N/tblzJITcVfxHSEgpS"
+          },
+          "filterByFormula": "={Request ID} = '{{$json.requestId}}'",
+          "options": {}
+        },
+        "id": "check-idempotency",
+        "name": "Check Idempotency",
+        "type": "n8n-nodes-base.airtable",
+        "typeVersion": 2,
+        "position": [
+          224,
+          112
+        ],
+        "alwaysOutputData": true,
+        "credentials": {
+          "airtableTokenApi": {
+            "id": "xj1C47FymD4jCvSB",
+            "name": "Airtable Personal Access Token account 2"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 1
+            },
+            "conditions": [
+              {
+                "id": "dede719a-44f9-4843-b5de-b3b923168b59",
+                "leftValue": "={{ $input.all().length }}",
+                "rightValue": 0,
+                "operator": {
+                  "type": "number",
+                  "operation": "gt"
+                }
+              },
+              {
+                "id": "5ab05fa5-6b2e-45d2-89e9-12dcfcd7bd55",
+                "leftValue": "={{$('Validate Input').item.json.forceRefresh}}",
+                "rightValue": "True",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "check-if-cached",
+        "name": "Check If Cached",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          672,
+          432
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const cachedRecords = $('Check Idempotency').first().json.records;\n\nreturn {\n  success: true,\n  cached: true,\n  requestId: $('Validate Input').first().json.requestId,\n  messages: cachedRecords.map(r => ({\n    id: r.id,\n    variant: r.fields['Variant'],\n    subject: r.fields['Subject'],\n    body: r.fields['Body']\n  }))\n};\n"
+        },
+        "id": "return-cached",
+        "name": "Return Cached Result",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          896,
+          336
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "search",
+          "base": {
+            "__rl": true,
+            "value": "appxRz5Vc87OQmr6N",
+            "mode": "list",
+            "cachedResultName": "Agentic Outbound OS",
+            "cachedResultUrl": "https://airtable.com/appxRz5Vc87OQmr6N"
+          },
+          "table": {
+            "__rl": true,
+            "value": "tblIXoIPR8XsBCYeH",
+            "mode": "list",
+            "cachedResultName": "People",
+            "cachedResultUrl": "https://airtable.com/appxRz5Vc87OQmr6N/tblIXoIPR8XsBCYeH"
+          },
+          "filterByFormula": "=={{ \"{Full Name} = '\" + $node[\"Webhook Trigger\"].json.body.personId + \"'\" }}",
+          "options": {}
+        },
+        "id": "fetch-person",
+        "name": "Fetch Person Record",
+        "type": "n8n-nodes-base.airtable",
+        "typeVersion": 2,
+        "position": [
+          896,
+          528
+        ],
+        "credentials": {
+          "airtableTokenApi": {
+            "id": "xj1C47FymD4jCvSB",
+            "name": "Airtable Personal Access Token account 2"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "// Get data from previous nodes - data is directly on json, not json.fields\nconst person = $('Fetch Person Record1').first().json;\n\nconst input = $('Validate Input1').first().json;\n\n// Format signals for prompt\n\n\nconst userPrompt = `Research Brief: ${input.researchBrief}\n\n\nProspect Context:\n- Name: ${person['Full Name'] || 'Unknown'}\n- Title: ${person['Role Title'] || 'Unknown'}\n- Company: ${person['Company Name'] || person['Account'] || 'Unknown'}\n- Seniority: ${person['Seniority'] || 'Unknown'}`;\n\nreturn {\n  systemPrompt: `You are an expert sales message writer specializing in personalized outbound outreach.\n\nTASK: Generate exactly 3 variations of an outreach message based on research and verified signals.\n\nCONSTRAINTS:\n1. Only reference information from the provided signals - NO assumptions\n2. Maximum 150 words per message body\n3. Include a clear, specific call-to-action\n4. Match tone to prospect seniority\n\nOUTPUT FORMAT (JSON only, no markdown):\n{\n  \"variations\": [\n    {\"type\": \"direct\", \"subject\": \"Subject line\", \"body\": \"Message body\"},\n    {\"type\": \"conversational\", \"subject\": \"Subject line\", \"body\": \"Message body\"},\n    {\"type\": \"formal\", \"subject\": \"Subject line\", \"body\": \"Message body\"}\n  ]\n}`,\n  userPrompt: userPrompt,\n  personId: input.personId,\n  requestId: input.requestId\n};\n"
+        },
+        "id": "prepare-prompt",
+        "name": "Prepare OpenAI Prompt",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1344,
+          944
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const response = $input.first().json;\nconst input = $('Validate Input1').first().json;\n\n// Extract the text from the response\nconst text = response.output[0].content[0].text;\n\n// Parse the JSON (handle potential markdown code blocks)\nlet jsonStr = text;\nif (text.includes('```json')) {\n  jsonStr = text.split('```json')[1].split('```')[0];\n} else if (text.includes('```')) {\n  jsonStr = text.split('```')[1].split('```')[0];\n}\n\nconst parsed = JSON.parse(jsonStr.trim());\n\n// Return each variation as a separate item\nreturn parsed.variations.map(v => ({\n  json: {\n    requestId: input.requestId,\n    personId: input.personId,\n    subject: v.subject,\n    body: v.body,\n    variant: v.type.charAt(0).toUpperCase() + v.type.slice(1)\n  }\n}));\n"
+        },
+        "id": "parse-response",
+        "name": "Parse OpenAI Response",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1920,
+          944
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "create",
+          "base": {
+            "__rl": true,
+            "value": "appxRz5Vc87OQmr6N",
+            "mode": "list",
+            "cachedResultName": "Agentic Outbound OS",
+            "cachedResultUrl": "https://airtable.com/appxRz5Vc87OQmr6N"
+          },
+          "table": {
+            "__rl": true,
+            "value": "tblzJITcVfxHSEgpS",
+            "mode": "list",
+            "cachedResultName": "Messages",
+            "cachedResultUrl": "https://airtable.com/appxRz5Vc87OQmr6N/tblzJITcVfxHSEgpS"
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "Request ID": "={{ $json.requestId }}",
+              "Person": "={{ $json.personId }}",
+              "Subject": "={{ $json.subject }}",
+              "Body": "={{ $json.body }}",
+              "Variant": "={{ $json.variant }}",
+              "QA Status": "Needs QA"
+            },
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "Request ID",
+                "displayName": "Request ID",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": false
+              },
+              {
+                "id": "QA Score",
+                "displayName": "QA Score",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "number",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "QA Notes",
+                "displayName": "QA Notes",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Risk Flags",
+                "displayName": "Risk Flags",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "array",
+                "options": [
+                  {
+                    "name": "Spam Risk",
+                    "value": "Spam Risk"
+                  },
+                  {
+                    "name": "Compliance Issue",
+                    "value": "Compliance Issue"
+                  },
+                  {
+                    "name": "Incomplete Data",
+                    "value": "Incomplete Data"
+                  },
+                  {
+                    "name": "Formatting Error",
+                    "value": "Formatting Error"
+                  },
+                  {
+                    "name": "Potential Bounce",
+                    "value": "Potential Bounce"
+                  },
+                  {
+                    "name": "High Sensitivity",
+                    "value": "High Sensitivity"
+                  },
+                  {
+                    "name": "Language Concern",
+                    "value": "Language Concern"
+                  },
+                  {
+                    "name": "Other",
+                    "value": "Other"
+                  }
+                ],
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "QA Checked At",
+                "displayName": "QA Checked At",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "dateTime",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "QA Execution Time",
+                "displayName": "QA Execution Time",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "number",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Person",
+                "displayName": "Person",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": false
+              },
+              {
+                "id": "Subject",
+                "displayName": "Subject",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": false
+              },
+              {
+                "id": "Body",
+                "displayName": "Body",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": false
+              },
+              {
+                "id": "Variant",
+                "displayName": "Variant",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "options",
+                "options": [
+                  {
+                    "name": "Direct",
+                    "value": "Direct"
+                  },
+                  {
+                    "name": "Conversational",
+                    "value": "Conversational"
+                  },
+                  {
+                    "name": "Formal",
+                    "value": "Formal"
+                  }
+                ],
+                "readOnly": false,
+                "removed": false
+              },
+              {
+                "id": "QA Status",
+                "displayName": "QA Status",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "options",
+                "options": [
+                  {
+                    "name": "Needs QA",
+                    "value": "Needs QA"
+                  },
+                  {
+                    "name": "Passed",
+                    "value": "Passed"
+                  },
+                  {
+                    "name": "Failed",
+                    "value": "Failed"
+                  }
+                ],
+                "readOnly": false,
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "id": "create-messages",
+        "name": "Create Message Records",
+        "type": "n8n-nodes-base.airtable",
+        "typeVersion": 2,
+        "position": [
+          2144,
+          944
+        ],
+        "credentials": {
+          "airtableTokenApi": {
+            "id": "xj1C47FymD4jCvSB",
+            "name": "Airtable Personal Access Token account 2"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "const createdRecords = $input.all();\nconst metadata = $('Parse OpenAI Response').first().json;\n\nreturn {\n  success: true,\n  cached: false,\n  requestId: metadata.requestId,\n  personId: metadata.personId,\n  messagesCreated: createdRecords.length,\n  messages: createdRecords.map(r => ({\n    id: r.json.id,\n    variant: r.json.fields?.['Variant'],\n    subject: r.json.fields?.['Subject'],\n    qaStatus: 'Needs QA'\n  }))\n};\n"
+        },
+        "id": "format-response",
+        "name": "Format Response",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2368,
+          944
+        ]
+      },
+      {
+        "parameters": {
+          "modelId": {
+            "__rl": true,
+            "value": "gpt-4.1-mini",
+            "mode": "list",
+            "cachedResultName": "GPT-4.1-MINI"
+          },
+          "responses": {
+            "values": [
+              {
+                "content": "={{ $json.userPrompt }}"
+              },
+              {
+                "role": "system",
+                "content": "={{ $json.systemPrompt }}"
+              }
+            ]
+          },
+          "simplify": false,
+          "builtInTools": {},
+          "options": {}
+        },
+        "type": "@n8n/n8n-nodes-langchain.openAi",
+        "typeVersion": 2.1,
+        "position": [
+          1568,
+          944
+        ],
+        "id": "31d7e962-a178-4cf5-b70b-47ecb42a9020",
+        "name": "Message a model",
+        "credentials": {
+          "openAiApi": {
+            "id": "lkCgV0rIGVDbl0Jd",
+            "name": "OpenAi account 4"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "// Get input data\nconst body = $input.first().json.body || $input.first().json;\n\n// Extract and validate fields\nconst personId = body.personId;\nconst researchBrief = body.researchBrief;\nconst requestId = body.requestId;\n\nif (!personId || typeof personId !== 'string') {\n  throw new Error('personId is required and must be a string');\n}\n\nif (!researchBrief || typeof researchBrief !== 'string') {\n  throw new Error('researchBrief is required and must be a string');\n}\n\n// Generate idempotency key if not provided\nconst idempotencyKey = requestId || `draft-${personId}-${Date.now()}`;\n\nreturn {\n  personId,\n  researchBrief,\n  requestId: idempotencyKey,\n  startTime: Date.now(),\n  forceRefresh: body.forceRefresh || false\n};\n"
+        },
+        "id": "59ce63b1-02b0-4e88-8de5-d4f6ee617d0b",
+        "name": "Validate Input1",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          448,
+          848
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 1
+            },
+            "conditions": [
+              {
+                "id": "dede719a-44f9-4843-b5de-b3b923168b59",
+                "leftValue": "={{ $input.all().length }}",
+                "rightValue": 0,
+                "operator": {
+                  "type": "number",
+                  "operation": "gt"
+                }
+              },
+              {
+                "id": "5ab05fa5-6b2e-45d2-89e9-12dcfcd7bd55",
+                "leftValue": "={{$('Validate Input1').item.json.forceRefresh}}",
+                "rightValue": "True",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "2b5bdaad-888f-4024-83c1-27b802c70148",
+        "name": "Check If Cached1",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          672,
+          848
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "search",
+          "base": {
+            "__rl": true,
+            "value": "appxRz5Vc87OQmr6N",
+            "mode": "list",
+            "cachedResultName": "Agentic Outbound OS",
+            "cachedResultUrl": "https://airtable.com/appxRz5Vc87OQmr6N"
+          },
+          "table": {
+            "__rl": true,
+            "value": "tblIXoIPR8XsBCYeH",
+            "mode": "list",
+            "cachedResultName": "People",
+            "cachedResultUrl": "https://airtable.com/appxRz5Vc87OQmr6N/tblIXoIPR8XsBCYeH"
+          },
+          "filterByFormula": "=={{ \"{Full Name} = '\" + $node[\"Webhook Variant\"].json.body.personId + \"'\" }}",
+          "options": {}
+        },
+        "id": "6f58041f-91b6-45a2-a176-d8189cf9039d",
+        "name": "Fetch Person Record1",
+        "type": "n8n-nodes-base.airtable",
+        "typeVersion": 2,
+        "position": [
+          896,
+          944
+        ],
+        "credentials": {
+          "airtableTokenApi": {
+            "id": "xj1C47FymD4jCvSB",
+            "name": "Airtable Personal Access Token account 2"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "createvariants",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2.1,
+        "position": [
+          224,
+          848
+        ],
+        "id": "23ab417f-0ae4-4c95-8b6a-2ebf235a4b84",
+        "name": "Webhook Variant",
+        "webhookId": "af9085a4-4318-40e2-9f2a-1c04de264f32"
+      },
+      {
+        "parameters": {
+          "operation": "create",
+          "base": {
+            "__rl": true,
+            "value": "appxRz5Vc87OQmr6N",
+            "mode": "list",
+            "cachedResultName": "Agentic Outbound OS",
+            "cachedResultUrl": "https://airtable.com/appxRz5Vc87OQmr6N"
+          },
+          "table": {
+            "__rl": true,
+            "value": "tblzJITcVfxHSEgpS",
+            "mode": "list",
+            "cachedResultName": "Messages",
+            "cachedResultUrl": "https://airtable.com/appxRz5Vc87OQmr6N/tblzJITcVfxHSEgpS"
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "Person": "={{ $json['Full Name'] }}",
+              "Subject": "={{ $('Webhook Trigger').item.json.body.subject }}",
+              "Body": "={{ $('Webhook Trigger').item.json.body.body }}",
+              "Variant": "Conversational",
+              "QA Status": "Needs QA",
+              "Request ID": "={{ $json.id }}"
+            },
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "Request ID",
+                "displayName": "Request ID",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": false
+              },
+              {
+                "id": "Person",
+                "displayName": "Person",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": false
+              },
+              {
+                "id": "Subject",
+                "displayName": "Subject",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": false
+              },
+              {
+                "id": "Body",
+                "displayName": "Body",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": false
+              },
+              {
+                "id": "Variant",
+                "displayName": "Variant",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "options",
+                "options": [
+                  {
+                    "name": "Direct",
+                    "value": "Direct"
+                  },
+                  {
+                    "name": "Conversational",
+                    "value": "Conversational"
+                  },
+                  {
+                    "name": "Formal",
+                    "value": "Formal"
+                  }
+                ],
+                "readOnly": false,
+                "removed": false
+              },
+              {
+                "id": "QA Status",
+                "displayName": "QA Status",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "options",
+                "options": [
+                  {
+                    "name": "Needs QA",
+                    "value": "Needs QA"
+                  },
+                  {
+                    "name": "Passed",
+                    "value": "Passed"
+                  },
+                  {
+                    "name": "Failed",
+                    "value": "Failed"
+                  }
+                ],
+                "readOnly": false,
+                "removed": false
+              },
+              {
+                "id": "QA Score",
+                "displayName": "QA Score",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "number",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "QA Notes",
+                "displayName": "QA Notes",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Risk Flags",
+                "displayName": "Risk Flags",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "array",
+                "options": [
+                  {
+                    "name": "Spam Risk",
+                    "value": "Spam Risk"
+                  },
+                  {
+                    "name": "Compliance Issue",
+                    "value": "Compliance Issue"
+                  },
+                  {
+                    "name": "Incomplete Data",
+                    "value": "Incomplete Data"
+                  },
+                  {
+                    "name": "Formatting Error",
+                    "value": "Formatting Error"
+                  },
+                  {
+                    "name": "Potential Bounce",
+                    "value": "Potential Bounce"
+                  },
+                  {
+                    "name": "High Sensitivity",
+                    "value": "High Sensitivity"
+                  },
+                  {
+                    "name": "Language Concern",
+                    "value": "Language Concern"
+                  },
+                  {
+                    "name": "Other",
+                    "value": "Other"
+                  }
+                ],
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "QA Checked At",
+                "displayName": "QA Checked At",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "dateTime",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "QA Execution Time",
+                "displayName": "QA Execution Time",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "number",
+                "readOnly": false,
+                "removed": true
+              }
+            ],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "id": "fetch-signals",
+        "name": "Log Outreach Message",
+        "type": "n8n-nodes-base.airtable",
+        "typeVersion": 2,
+        "position": [
+          1120,
+          528
+        ],
+        "alwaysOutputData": true,
+        "credentials": {
+          "airtableTokenApi": {
+            "id": "xj1C47FymD4jCvSB",
+            "name": "Airtable Personal Access Token account 2"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "const cachedRecords = $('Check Idempotency').first().json.records;\n\nreturn {\n  success: true,\n  cached: true,\n  requestId: $('Validate Input').first().json.requestId,\n  messages: cachedRecords.map(r => ({\n    id: r.id,\n    variant: r.fields['Variant'],\n    subject: r.fields['Subject'],\n    body: r.fields['Body']\n  }))\n};\n"
+        },
+        "id": "e95f90b1-9bba-40f0-a2f6-4888864adc24",
+        "name": "Return Cached Result1",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          896,
+          752
+        ]
+      }
+    ],
+    "connections": {
+      "Webhook Trigger": {
+        "main": [
+          [
+            {
+              "node": "Validate Input",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Validate Input": {
+        "main": [
+          [
+            {
+              "node": "Check If Cached",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Check Idempotency": {
+        "main": [
+          []
+        ]
+      },
+      "Check If Cached": {
+        "main": [
+          [
+            {
+              "node": "Return Cached Result",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Fetch Person Record",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Fetch Person Record": {
+        "main": [
+          [
+            {
+              "node": "Log Outreach Message",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prepare OpenAI Prompt": {
+        "main": [
+          [
+            {
+              "node": "Message a model",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Parse OpenAI Response": {
+        "main": [
+          [
+            {
+              "node": "Create Message Records",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Create Message Records": {
+        "main": [
+          [
+            {
+              "node": "Format Response",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Message a model": {
+        "main": [
+          [
+            {
+              "node": "Parse OpenAI Response",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Validate Input1": {
+        "main": [
+          [
+            {
+              "node": "Check If Cached1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Check If Cached1": {
+        "main": [
+          [
+            {
+              "node": "Return Cached Result1",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Fetch Person Record1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Fetch Person Record1": {
+        "main": [
+          [
+            {
+              "node": "Prepare OpenAI Prompt",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Webhook Variant": {
+        "main": [
+          [
+            {
+              "node": "Validate Input1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Log Outreach Message": {
+        "main": [
+          []
+        ]
+      }
+    },
+    "authors": "Brian Joseph",
+    "name": null,
+    "description": null
+  },
+  "tags": [
+    {
+      "updatedAt": "2026-02-18T18:01:20.406Z",
+      "createdAt": "2026-02-18T18:01:20.406Z",
+      "id": "xzq4Tl6kjE4nIlmn",
+      "name": "OutboundOS"
+    }
+  ],
+  "targetRepo": "OutboundOS"
+}

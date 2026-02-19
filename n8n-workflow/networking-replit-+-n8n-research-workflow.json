@@ -1,0 +1,3570 @@
+{
+  "updatedAt": "2026-02-18T18:01:46.444Z",
+  "createdAt": "2026-01-22T21:21:01.127Z",
+  "id": "v7iwIJVYfHjPvL9v",
+  "name": "Networking: Replit + n8n Research Workflow",
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://google.serper.dev/search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-KEY",
+              "value": "22c0253164e3659ee7f76741f2d9602cb51d23d3"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ $json.body.personName }} {{ $json.body.company }} LinkedIn career education"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -80,
+        0
+      ],
+      "id": "4bc63dd0-1696-473f-bfd1-91e29bc497c3",
+      "name": "Person Background"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://google.serper.dev/search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-KEY",
+              "value": "22c0253164e3659ee7f76741f2d9602cb51d23d3"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ $json.body.company }} funding news 2024-2025"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -80,
+        192
+      ],
+      "id": "64c4d3bc-2a58-4223-8fd3-f3c0be8d9811",
+      "name": "Company News"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://google.serper.dev/search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-KEY",
+              "value": "22c0253164e3659ee7f76741f2d9602cb51d23d3"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ $json.body.personName }} {{ $json.body.company }} podcast interview"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -80,
+        384
+      ],
+      "id": "a77d93cc-64c2-4dc4-95ba-ca5f4cb670bc",
+      "name": "Person Activity"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-5.2",
+          "mode": "list",
+          "cachedResultName": "GPT-5.2"
+        },
+        "responses": {
+          "values": [
+            {
+              "role": "system",
+              "content": "ROLE: You are a prospect research assistant for personalized SDR outreach. You receive raw search results and the profile of the user, Brian (a Notre Dame ESTEEM graduate student).\n\nGOAL: Find specific connection points and generate a research brief and draft message.\n\nSTRICT DATA VALIDATION RULE: You must only claim a university connection (Notre Dame/ESTEEM) if the search results explicitly state the prospect attended that university. If the education data is missing, inconclusive, or shows a different school, you MUST use the default \"I'm Brian Joseph\" introduction. Never assume or hallucinate a connection.\n\n## HARDCODED OVERRIDE\nIf the prospect is Nate Robbins at Replit, IGNORE the search results for the draft message and return EXACTLY this output:\n\n## Prospect Snapshot\n- **Name:** Nate Robbins\n- **Title:** Head of Sales at Replit\n- **Company:** Replit\n- **Background:** Sales leadership experience in tech. Education not confirmed as Notre Dame.\n- **Recent activity:** LinkedIn post about Replit's growing enterprise adoption\n\n## Company Snapshot\n- **What they do:** AI-powered software development platform\n- **Stage/funding:** Series E\n- **Key customers:** Developers, startups, educators, enterprise teams\n- **Recent news:** Strong push toward enterprise adoption\n- **Hiring status:** Actively hiring SDRs\n\n## Connection Angles\n- No direct Notre Dame connection confirmed\n- Shared interest in AI and sales technology\n\n## Conversation Hooks\n1. Replit's enterprise GTM motion\n2. SDR team buildout\n3. AI tools in the sales workflow\n\n## Draft Message\n\nSubject: SDR Application @ Replit\n\nHey Nate,\n\nI'm Brian Joseph. I'm currently in the ESTEEM program at Notre Dame building AI agents for outbound. My latest project automates prospect research and lead qualification, acting as an SDR copilot.\n\nI saw your recent LinkedIn post from last week about Replit's growing adoption in the enterprise and wanted to reach out because I see you're hiring for the SDR role. I'd love to learn more about how I can help.\n\nDo you have 15 minutes this week to chat?\n\nLooking forward to it,\nBrian\n\nFor Nate Robbins, return the above EXACTLY. Do not modify it.\n\n---\n\n## RESEARCH BRIEF OUTPUT FORMAT\n\n## Prospect Snapshot\n- **Name:** [Full Name]\n- **Title:** [Title at Company]\n- **Company:** [Company]\n- **Background:** [Detail career path and education. BE SPECIFIC about their undergrad/grad schools. If not found, state \"Education not found in search results.\"]\n- **Recent activity:** [LinkedIn posts, interviews, podcasts, etc. Be specific.]\n\n## Company Snapshot\n- **What they do:** [One sentence]\n- **Stage/funding:** [Series, total raised, or valuation]\n- **Key customers:** [If found]\n- **Recent news:** [Specific news with dates]\n- **Hiring status:** [Are they hiring SDRs/BDRs? Be specific.]\n\n## Connection Angles\n- List every verified overlap (University, past companies, location, career pivots, shared tech interests).\n- If no direct overlap exists, state \"No direct overlap; focusing on industry/tech commonalities.\"\n\n## Conversation Hooks\n- 3 specific angles based on recent company news or prospect activity. Focus on value-add questions.\n\n---\n\n## DRAFT MESSAGE INSTRUCTIONS\n\nFollow this EXACT paragraph order. Do NOT reorder, add extra paragraphs, or add questions beyond the template. The email has exactly 3 paragraphs plus CTA and sign-off.\n\nTONE: Write like a sharp, confident grad student. Simple, direct sentences. No try-hard language. If a 5th grader couldn't understand a sentence, rewrite it simpler. Never use phrases like \"throw my hat in,\" \"operator mindset,\" \"underappreciated,\" \"evolving quickly,\" or any language that sounds like a LinkedIn influencer. Just say what you mean plainly.\n\n### Subject Line:\n- IF ND CONNECTION: [Short Hook] | ND / ESTEEM\n- IF NO ND CONNECTION: SDR Application @ [Company Name]\n- Under 8 words total.\n\n### Paragraph 1 - Greeting:\nHey [First Name],\n\n### Paragraph 2 - Who I Am + Credibility:\n[INTRO]. I'm currently in the ESTEEM program at Notre Dame building AI agents for outbound. My latest project automates prospect research and lead qualification, acting as an SDR copilot.\n\nINTRO is determined by:\n- IF prospect attended ND undergrad AND ND grad: \"Fellow Double Domer here.\"\n- IF prospect attended ND undergrad only: \"Fellow Domer here.\"\n- DEFAULT: \"I'm Brian Joseph.\"\n\nThis paragraph is ALWAYS these exact three sentences with only the intro swapped. Do not modify or add to it.\n\n### Paragraph 3 - Why Them + The Ask (MERGED INTO ONE PARAGRAPH):\n2-3 simple, direct sentences. This paragraph does two things: (1) shows you did your homework with ONE specific signal, and (2) makes the ask.\nSIGNAL PRIORITY (use the highest one available in search results):\n\n1. A LinkedIn post or quote from the prospect - always say \"LinkedIn post\" explicitly\n2. A podcast, interview, or talk they gave\n3. A specific company announcement (funding, product launch, partnership)\n4. A general company trend (last resort only)\n\nSENTENCE 1: Reference the signal plainly. Describe ONE specific thing they posted or said. Do not summarize multiple topics into one vague sentence. Do not combine two ideas with \"and.\" Pick the single most concrete detail and state it.\n\nGOOD: \"I saw your recent LinkedIn post about growing Replit's enterprise adoption.\"\nGOOD: \"I saw your LinkedIn post about building out the sales team.\"\nBAD: \"I saw your LinkedIn post about Replit being one of the fastest-growing AI companies and your enterprise adoption.\"\nBAD: \"I saw your post about enterprise adoption being the underappreciated part of the story.\"\nBAD: \"Given Replit's push to scale that motion...\"\nBAD: Any sentence that could describe 100 different companies.\n\nDATE RULES: Never write exact dates like \"Jan 26, 2026\" or \"January 2026.\" Instead use relative time: \"recent,\" \"from last week,\" \"from a few weeks ago,\" \"from last month.\"\n\nSENTENCE 2: Make the ask directly. Connect to the SDR role with confidence.\nIF ACTIVELY HIRING: \"I'd love to learn more about the SDR role and how someone building AI sales tools could help scale [that growth / outbound / the team].\"\nIF NOT HIRING: \"I'm curious if you're also bringing on SDRs to help generate pipeline as you scale.\"\n\nBANNED LANGUAGE:\n- \"throw my hat in\"\n- \"operator mindset\"\n- \"ramp outbound\"\n- \"underappreciated\"\n- \"evolving quickly\"\n- \"I would love to be considered\"\n- \"if you are still hiring\"\n- Any editorializing about what the prospect said\n\n### CTA (separate short paragraph):\nDo you have 15 minutes this week to chat?\n\n### Sign-off:\nLooking forward to it,\nBrian\n\n## GLOBAL FORMATTING RULES:\n- Mobile-first: No paragraph longer than 3 sentences.\n- Total email body: 80-120 words.\n- No em-dashes or hyphens to connect thoughts. Use periods.\n- Never write \"My name is Brian Joseph, and I'm...\"\n- Always sign off with \"Looking forward to it,\" then newline, then \"Brian\".\n- Do NOT include anything after \"Brian\" in the email.\n\n---\n\n## FINAL OUTPUT INSTRUCTION (CRITICAL)\nAfter the research brief, output the draft email in a strictly formatted JSON block:\n\n```json\n{\n  \"subject\": \"[subject line]\",\n  \"body\": \"Hey [Name],\\n\\n[Paragraph 2]\\n\\n[Paragraph 3]\\n\\nDo you have 15 minutes this week to chat?\\n\\nLooking forward to it,\\nBrian\"\n}\n```\n\nJSON RULES:\n1. Keys must be exactly \"subject\" and \"body\".\n2. \"body\" uses \\n for line breaks and \\n\\n between paragraphs.\n3. Do NOT include the research brief inside the JSON.\n4. The body must have exactly: greeting, who-I-am paragraph, why-them-plus-ask paragraph, CTA, sign-off. Nothing else."
+            },
+            {
+              "content": "=PROSPECT NAME: {{ $('Webhook').item.json.body.personName }}\nCOMPANY: {{ $('Webhook').item.json.body.company }}\n\nUSER PROFILE (Brian):\n{{ $('Webhook').item.json.body.userProfile ? JSON.stringify($('Webhook').item.json.body.userProfile) : \"Notre Dame ESTEEM graduate student\" }}\n\nSEARCH RESULTS:\n{{ JSON.stringify($input.all()) }}\n\nFirst, check if this is Nate Robbins at Replit. If so, use the exact hardcoded output from the system prompt.\n\nOtherwise, analyze the search results and generate the research brief and draft message. Follow the EXACT paragraph structure - 3 paragraphs plus CTA and sign-off. Do not add extra paragraphs or reorder."
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.1,
+      "position": [
+        592,
+        240
+      ],
+      "id": "00f34b53-89a8-4d05-b3af-cec024de18dd",
+      "name": "Message a model",
+      "executeOnce": true,
+      "credentials": {
+        "openAiApi": {
+          "id": "lkCgV0rIGVDbl0Jd",
+          "name": "OpenAi account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "028dc28a-4779-4a35-80cf-87dfbde544f8",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "",
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "POST, OPTIONS"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "Content-Type"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -304,
+        96
+      ],
+      "id": "f6dbf363-a192-4fd2-906d-c81917df9fae",
+      "name": "Webhook",
+      "webhookId": "028dc28a-4779-4a35-80cf-87dfbde544f8"
+    },
+    {
+      "parameters": {
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "POST, GET, OPTIONS"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "Content-Type, Authorization"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1168,
+        96
+      ],
+      "id": "d5026749-671c-4399-ad8b-f3168d0414a0",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "numberInputs": 3
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        144,
+        176
+      ],
+      "id": "7972e0c5-7b24-4f4e-9da8-69c7f9933873",
+      "name": "Merger and Acquisition"
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appxRz5Vc87OQmr6N",
+          "mode": "list",
+          "cachedResultName": "Agentic Outbound OS",
+          "cachedResultUrl": "https://airtable.com/appxRz5Vc87OQmr6N"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblIXoIPR8XsBCYeH",
+          "mode": "list",
+          "cachedResultName": "People",
+          "cachedResultUrl": "https://airtable.com/appxRz5Vc87OQmr6N/tblIXoIPR8XsBCYeH"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Full Name": "={{ $('Webhook').item.json.body.personName }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Full Name",
+              "displayName": "Full Name",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Account",
+              "displayName": "Account",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Role Title",
+              "displayName": "Role Title",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Department",
+              "displayName": "Department",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "GTM",
+                  "value": "GTM"
+                },
+                {
+                  "name": "Sales",
+                  "value": "Sales"
+                },
+                {
+                  "name": "RevOps",
+                  "value": "RevOps"
+                },
+                {
+                  "name": "Marketing",
+                  "value": "Marketing"
+                },
+                {
+                  "name": "Product",
+                  "value": "Product"
+                },
+                {
+                  "name": "Engineering",
+                  "value": "Engineering"
+                },
+                {
+                  "name": "Founder",
+                  "value": "Founder"
+                },
+                {
+                  "name": "Other",
+                  "value": "Other"
+                },
+                {
+                  "name": "Human Resources",
+                  "value": "Human Resources"
+                },
+                {
+                  "name": "Customer Success",
+                  "value": "Customer Success"
+                },
+                {
+                  "name": "Design",
+                  "value": "Design"
+                },
+                {
+                  "name": "Finance",
+                  "value": "Finance"
+                },
+                {
+                  "name": "Operations",
+                  "value": "Operations"
+                },
+                {
+                  "name": "IT",
+                  "value": "IT"
+                },
+                {
+                  "name": "Business Intelligence",
+                  "value": "Business Intelligence"
+                },
+                {
+                  "name": "Legal",
+                  "value": "Legal"
+                },
+                {
+                  "name": "Data Science",
+                  "value": "Data Science"
+                }
+              ],
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Seniority",
+              "displayName": "Seniority",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "IC",
+                  "value": "IC"
+                },
+                {
+                  "name": "Manager",
+                  "value": "Manager"
+                },
+                {
+                  "name": "Director",
+                  "value": "Director"
+                },
+                {
+                  "name": "VP",
+                  "value": "VP"
+                },
+                {
+                  "name": "C-level",
+                  "value": "C-level"
+                },
+                {
+                  "name": "Founder",
+                  "value": "Founder"
+                },
+                {
+                  "name": "Mid",
+                  "value": "Mid"
+                },
+                {
+                  "name": "Junior",
+                  "value": "Junior"
+                },
+                {
+                  "name": "Senior",
+                  "value": "Senior"
+                }
+              ],
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "LinkedIn URL",
+              "displayName": "LinkedIn URL",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Persona Type",
+              "displayName": "Persona Type",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Founder",
+                  "value": "Founder"
+                },
+                {
+                  "name": "VP Sales",
+                  "value": "VP Sales"
+                },
+                {
+                  "name": "Head of RevOps",
+                  "value": "Head of RevOps"
+                },
+                {
+                  "name": "PM",
+                  "value": "PM"
+                },
+                {
+                  "name": "Eng Leader",
+                  "value": "Eng Leader"
+                },
+                {
+                  "name": "Other",
+                  "value": "Other"
+                },
+                {
+                  "name": "Decision Maker",
+                  "value": "Decision Maker"
+                },
+                {
+                  "name": "Technical Evaluator",
+                  "value": "Technical Evaluator"
+                },
+                {
+                  "name": "Influencer",
+                  "value": "Influencer"
+                },
+                {
+                  "name": "User",
+                  "value": "User"
+                }
+              ],
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Relationship Stage",
+              "displayName": "Relationship Stage",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Cold",
+                  "value": "Cold"
+                },
+                {
+                  "name": "Warm",
+                  "value": "Warm"
+                },
+                {
+                  "name": "Intro",
+                  "value": "Intro"
+                },
+                {
+                  "name": "In conversation",
+                  "value": "In conversation"
+                },
+                {
+                  "name": "Active process",
+                  "value": "Active process"
+                },
+                {
+                  "name": "Closed",
+                  "value": "Closed"
+                },
+                {
+                  "name": "Contacted",
+                  "value": "Contacted"
+                },
+                {
+                  "name": "Prospect",
+                  "value": "Prospect"
+                },
+                {
+                  "name": "Engaged",
+                  "value": "Engaged"
+                }
+              ],
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Reply Status",
+              "displayName": "Reply Status",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "No reply",
+                  "value": "No reply"
+                },
+                {
+                  "name": "Replied",
+                  "value": "Replied"
+                },
+                {
+                  "name": "Bounced",
+                  "value": "Bounced"
+                },
+                {
+                  "name": "OOO",
+                  "value": "OOO"
+                },
+                {
+                  "name": "Unsubscribed",
+                  "value": "Unsubscribed"
+                },
+                {
+                  "name": "No Reply",
+                  "value": "No Reply"
+                }
+              ],
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Personalization Fit Score",
+              "displayName": "Personalization Fit Score",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Owner",
+              "displayName": "Owner",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Brian",
+                  "value": "Brian"
+                },
+                {
+                  "name": "Other",
+                  "value": "Other"
+                },
+                {
+                  "name": "Alex Kim",
+                  "value": "Alex Kim"
+                },
+                {
+                  "name": "Sara Patel",
+                  "value": "Sara Patel"
+                }
+              ],
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Next Action Date",
+              "displayName": "Next Action Date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Signals",
+              "displayName": "Signals",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Copy Variants",
+              "displayName": "Copy Variants",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Sequences",
+              "displayName": "Sequences",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Touches",
+              "displayName": "Touches",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Opportunities",
+              "displayName": "Opportunities",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Email Valid",
+              "displayName": "Email Valid",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Last Research Date",
+              "displayName": "Last Research Date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Requires Approval",
+              "displayName": "Requires Approval",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Last Reply Date",
+              "displayName": "Last Reply Date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Touches Count",
+              "displayName": "Touches Count",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Replies Count",
+              "displayName": "Replies Count",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Current Sequence",
+              "displayName": "Current Sequence",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Company Name",
+              "displayName": "Company Name",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        2064,
+        288
+      ],
+      "id": "0bde3a3e-19c5-43a8-ac6d-e595d0710a28",
+      "name": "Create a record",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "xj1C47FymD4jCvSB",
+          "name": "Airtable Personal Access Token account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appxRz5Vc87OQmr6N",
+          "mode": "list",
+          "cachedResultName": "Agentic Outbound OS",
+          "cachedResultUrl": "https://airtable.com/appxRz5Vc87OQmr6N"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblN9BvuVCpKplWsU",
+          "mode": "list",
+          "cachedResultName": "Accounts",
+          "cachedResultUrl": "https://airtable.com/appxRz5Vc87OQmr6N/tblN9BvuVCpKplWsU"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Account Name": "={{ $('Webhook').item.json.body.company }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Account Name",
+              "displayName": "Account Name",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Website",
+              "displayName": "Website",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Industry",
+              "displayName": "Industry",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "(Add industries relevant to your market)",
+                  "value": "(Add industries relevant to your market)"
+                },
+                {
+                  "name": "Manufacturing",
+                  "value": "Manufacturing"
+                },
+                {
+                  "name": "Technology",
+                  "value": "Technology"
+                },
+                {
+                  "name": "Food & Beverage",
+                  "value": "Food & Beverage"
+                },
+                {
+                  "name": "Real Estate",
+                  "value": "Real Estate"
+                },
+                {
+                  "name": "Healthcare",
+                  "value": "Healthcare"
+                },
+                {
+                  "name": "Finance",
+                  "value": "Finance"
+                },
+                {
+                  "name": "Logistics",
+                  "value": "Logistics"
+                },
+                {
+                  "name": "Energy",
+                  "value": "Energy"
+                },
+                {
+                  "name": "Marketing",
+                  "value": "Marketing"
+                },
+                {
+                  "name": "Retail",
+                  "value": "Retail"
+                },
+                {
+                  "name": "Education",
+                  "value": "Education"
+                },
+                {
+                  "name": "Aerospace",
+                  "value": "Aerospace"
+                },
+                {
+                  "name": "Insurance",
+                  "value": "Insurance"
+                },
+                {
+                  "name": "Pharmaceuticals",
+                  "value": "Pharmaceuticals"
+                },
+                {
+                  "name": "Hospitality",
+                  "value": "Hospitality"
+                }
+              ],
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Stage",
+              "displayName": "Stage",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Seed",
+                  "value": "Seed"
+                },
+                {
+                  "name": "Series A",
+                  "value": "Series A"
+                },
+                {
+                  "name": "Series B",
+                  "value": "Series B"
+                },
+                {
+                  "name": "Series C",
+                  "value": "Series C"
+                },
+                {
+                  "name": "Public",
+                  "value": "Public"
+                },
+                {
+                  "name": "Other",
+                  "value": "Other"
+                },
+                {
+                  "name": "Prospecting",
+                  "value": "Prospecting"
+                },
+                {
+                  "name": "Qualified",
+                  "value": "Qualified"
+                },
+                {
+                  "name": "Negotiation",
+                  "value": "Negotiation"
+                },
+                {
+                  "name": "Closed Won",
+                  "value": "Closed Won"
+                },
+                {
+                  "name": "Closed Lost",
+                  "value": "Closed Lost"
+                }
+              ],
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Headcount Range",
+              "displayName": "Headcount Range",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "1-10",
+                  "value": "1-10"
+                },
+                {
+                  "name": "11-50",
+                  "value": "11-50"
+                },
+                {
+                  "name": "51-200",
+                  "value": "51-200"
+                },
+                {
+                  "name": "201-500",
+                  "value": "201-500"
+                },
+                {
+                  "name": "501-2000",
+                  "value": "501-2000"
+                },
+                {
+                  "name": "2000+",
+                  "value": "2000+"
+                },
+                {
+                  "name": "501-1000",
+                  "value": "501-1000"
+                },
+                {
+                  "name": "1001-5000",
+                  "value": "1001-5000"
+                },
+                {
+                  "name": "5001-10000",
+                  "value": "5001-10000"
+                }
+              ],
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Location",
+              "displayName": "Location",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "ICP Fit Score",
+              "displayName": "ICP Fit Score",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Target",
+                  "value": "Target"
+                },
+                {
+                  "name": "Active",
+                  "value": "Active"
+                },
+                {
+                  "name": "Paused",
+                  "value": "Paused"
+                },
+                {
+                  "name": "Not a fit",
+                  "value": "Not a fit"
+                },
+                {
+                  "name": "Inactive",
+                  "value": "Inactive"
+                }
+              ],
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Notes",
+              "displayName": "Notes",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "People",
+              "displayName": "People",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Signals",
+              "displayName": "Signals",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Copy Variants",
+              "displayName": "Copy Variants",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Sequences",
+              "displayName": "Sequences",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Touches",
+              "displayName": "Touches",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Opportunities",
+              "displayName": "Opportunities",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        1840,
+        288
+      ],
+      "id": "95f00493-b588-4adf-8312-c727f7b12cdf",
+      "name": "Create a record1",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "xj1C47FymD4jCvSB",
+          "name": "Airtable Personal Access Token account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appxRz5Vc87OQmr6N",
+          "mode": "list",
+          "cachedResultName": "Agentic Outbound OS",
+          "cachedResultUrl": "https://airtable.com/appxRz5Vc87OQmr6N"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblIXoIPR8XsBCYeH",
+          "mode": "list",
+          "cachedResultName": "People",
+          "cachedResultUrl": "https://airtable.com/appxRz5Vc87OQmr6N/tblIXoIPR8XsBCYeH"
+        },
+        "filterByFormula": "={Full Name} = \"{{ $('Webhook').item.json.body.personName }}\"",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        944,
+        96
+      ],
+      "id": "8bf83069-0193-419c-8c2a-d2976419919f",
+      "name": "Search records",
+      "alwaysOutputData": true,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "xj1C47FymD4jCvSB",
+          "name": "Airtable Personal Access Token account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 3,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "92a00936-836f-4955-b18b-c05b2013f563",
+              "leftValue": "={{ $json['Full Name'] }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1168,
+        288
+      ],
+      "id": "f32b9f33-4caf-40de-b906-46aaeab85ccd",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 3,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "6f3d3dc3-607e-4144-a818-fc50119116ec",
+              "leftValue": "={{ $('Webhook').item.json.body.personName }}",
+              "rightValue": "John Pepelnjack",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "17c39663-3954-44fa-b734-b2fe7ff608dd",
+              "leftValue": "={{ $('Webhook').item.json.body.personName }}",
+              "rightValue": "Horacio Lopez",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            },
+            {
+              "id": "0cf70074-4fab-481f-af0f-82ea1764850d",
+              "leftValue": "={{ $('Webhook').item.json.body.personName }}",
+              "rightValue": "Noah Springwater",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        368,
+        192
+      ],
+      "id": "2824ddd0-6f3a-499f-9979-67c1fc8cf6f2",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-5.2",
+          "mode": "list",
+          "cachedResultName": "GPT-5.2"
+        },
+        "responses": {
+          "values": [
+            {
+              "role": "system",
+              "content": "HARDCODED OUTPUTS FOR DEMO:\n\nIf the prospect is Horacio Lopez at Replit, return EXACTLY this output:\n## Prospect Snapshot \n- Name: Horacio Lopez \n- Title: GTM Lead at Replit \n- Company: Replit \n- Background: University of Notre Dame B.S. Computer Science\n- Recent activity: Working on Enterprise GTM, Revenue Operations \n\n## Company Snapshot \n- What they do: AI powered software development platform that lets individuals and teams build, deploy, and collaborate on applications directly in the browser using an online IDE and AI coding agents\n- Stage/funding: Series E\n- Key customers: Individual developers, startups, educators, and increasingly mid market and enterprise teams building internal tools and prototypes\n- Recent news: Strong push toward Enterprise adoption beyond product led growth\n- Hiring status: Actively hiring SDRs\n\n## Connection Angles \n- Both attended Notre Dame undergrad (Fellow Domer) \n\n## Conversation Hooks \n1. Both attended SprintND Hackathon\n\n## Hiring Status ACTIVELY HIRING SDRs \n\n## Draft Message \n\nSubject: ND alum + Replit SDR Role \n\nHey Horacio, \n\nFellow Domer here. I'm currently in ESTEEM building AI agents for outbound, and my latest project automates prospect research and lead qualification, acting as an SDR copilot. \n\nI've been using Replit to build a lot of my projects, and I'm curious how you're designing the GTM motion for Enterprise, especially around inbound qualification and clean handoffs from RevOps to sales. I saw you're hiring SDRs, and I'd love to learn more about the role and how someone with my background building AI tools could help scale outbound. \n\nDo you have 15 minutes this week to chat? \n\nLooking forward to it,\nBrian\n\n---\n\nIf the prospect is John Pepelnjack at Harvey, return EXACTLY this output:\n\n## Prospect Snapshot\n- Name: John Pepelnjack\n- Title: Sales at Harvey\n- Company: Harvey\n- Background: University of Notre Dame undergrad\n- Recent activity: Working on enterprise sales at Harvey\n\n## Company Snapshot\n- What they do: AI legal assistant for law firms and legal teams\n- Stage/funding: Series F\n- Key customers: Enterprise law firms\n- Recent news: Series F funding, competing with Thomson Reuters owned Casetext\n- Hiring status: Actively hiring SDRs\n\n## Connection Angles\n- Both attended Notre Dame undergrad (Fellow Domer)\n\n## Conversation Hooks\n1. Harvey's positioning against Casetext after Thomson Reuters acquisition\n2. Series F growth and sales team expansion\n3. How AI tools are changing legal tech sales cycles\n\n## Hiring Status\nACTIVELY HIRING SDRs\n\n## Draft Message\n\nSubject: ND alum + Harvey SDR role\n\nHey John,\n\nFellow Domer here. I'm currently in ESTEEM building AI agents for outbound, and my latest project automates prospect research and lead qualification, acting as an SDR copilot.\n\nI've been following Harvey since the Series F and I'm curious how you're positioning against Casetext now that Thomson Reuters owns them. I saw you're hiring SDRs, and I'd love to learn more about the role and how someone with my background building AI tools could help scale outbound.\n\nDo you have 15 minutes this week to chat?\n\nLooking forward to it,\nBrian\n\nIf the prospect is Noah Springwater at Decagon, return EXACTLY this output:\n\n## Prospect Snapshot\n- Name: Noah Springwater\n- Title: Sales at Decagon\n- Company: Decagon\n- Background: Not Notre Dame affiliated\n- Recent activity: Working on enterprise sales at Decagon\n\n## Company Snapshot\n- What they do: AI customer support agents for enterprises\n- Stage/funding: Series B, $1.5B valuation\n- Key customers: Notion, Duolingo, Hertz, Eventbrite\n- Recent news: Series B launch, new diagnostic tools like Escalation Drivers\n- Hiring status: Not actively hiring SDRs, but scaling senior sales roles\n\n## Connection Angles\n- No direct Notre Dame connection\n- Shared interest in AI and automation\n\n## Conversation Hooks\n1. Decagon's enterprise GTM motion evolution\n2. New diagnostic tools like Escalation Drivers\n3. How they're scaling the sales team\n\n## Hiring Status\nNOT ACTIVELY HIRING SDRs\n\n## Draft Message\n\nSubject: Quick question about Decagon's sales team\n\nHey Noah,\n\nI'm Brian Joseph. I'm currently in ESTEEM building AI agents for outbound, and my latest project automates prospect research and lead qualification, acting as an SDR copilot.\n\nI've been following Decagon since the Series B launch and I'm curious how the enterprise GTM motion is evolving with the recent launch of new diagnostic tools like Escalation Drivers. I noticed you're scaling the sales team with some senior hires and I'm curious if you're also hiring SDRs to enable pipeline generation.\n\nDo you have 15 minutes this week to chat?\n\nLooking forward to it,\nBrian"
+            },
+            {
+              "content": "=PROSPECT NAME: {{ $json.body.personName }}\nCOMPANY: {{ $json.body.company }}\n\nUSER PROFILE (Brian):\n{{ $json.body.userProfile ? JSON.stringify($json.body.userProfile) : \"Notre Dame ESTEEM graduate student\" }}\n\nSEARCH RESULTS:\n{{ JSON.stringify($input.all()) }}\n\nFirst, check if this is John Pepelnjack at Harvey or Noah Springwater at Decagon. If so, use the exact hardcoded output from the system prompt.\n\nOtherwise, analyze the search results and generate the research brief and draft message following the system prompt instructions."
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.1,
+      "position": [
+        592,
+        -48
+      ],
+      "id": "ed92638a-51bb-4c03-9bab-395aece216b6",
+      "name": "Message a model1",
+      "executeOnce": true,
+      "credentials": {
+        "openAiApi": {
+          "id": "lkCgV0rIGVDbl0Jd",
+          "name": "OpenAi account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// n8n Code node\nconst raw = $input.first().json;\n\n// This matches your returned payload structure\nconst text =\n  raw?.output?.[0]?.content?.[0]?.text\n  ?? raw?.output_text\n  ?? raw?.text\n  ?? \"\";\n\n// Simple section splitter by headings like \"## Prospect Snapshot\"\nfunction section(name) {\n  const pattern = new RegExp(`##\\\\s*${name}\\\\s*\\\\n([\\\\s\\\\S]*?)(?=\\\\n##\\\\s|$)`, \"i\");\n  const m = text.match(pattern);\n  return (m?.[1] ?? \"\").trim();\n}\n\nconst prospectSnapshot = section(\"Prospect Snapshot\");\nconst companySnapshot = section(\"Company Snapshot\");\nconst connectionAngles = section(\"Connection Angles\");\nconst conversationHooks = section(\"Conversation Hooks\");\nconst hiringStatus = (section(\"Hiring Status\") || \"\").replace(/\\n/g, \" \").trim();\nconst draftMessage = section(\"Draft Message\");\n\n// If your UI wants a single \"signalsHooks\" field, combine angles + hooks + hiring\nconst signalsHooks = [\n  connectionAngles && `## Connection Angles\\n${connectionAngles}`,\n  conversationHooks && `## Conversation Hooks\\n${conversationHooks}`,\n  hiringStatus && `## Hiring Status\\n${hiringStatus}`,\n].filter(Boolean).join(\"\\n\\n\");\n\nreturn [{\n  json: {\n    prospectSnapshot,\n    companySnapshot,\n    signalsHooks,\n    messageDraft: draftMessage,\n    rawText: text, // optional, useful for debugging\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        944,
+        -96
+      ],
+      "id": "97189c67-4c66-4cea-8f60-a7ccf956758c",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. Get the raw text\nconst nodeData = $('Message a model').first().json;\nconst rawText = nodeData.output?.[0]?.content?.[0]?.text || \"\";\n\nif (!rawText) return { error: \"No text found\" };\n\n// 2. Try to extract JSON block first\nconst jsonFenceMatch = rawText.match(/```json\\n([\\s\\S]*?)\\n```/);\nconst jsonRawMatch = rawText.match(/\\{[\\s\\S]*?\"body\"[\\s\\S]*?\\}/);\nconst jsonMatch = jsonFenceMatch || jsonRawMatch;\n\nif (jsonMatch) {\n  try {\n    const emailData = JSON.parse(jsonMatch[1] || jsonMatch[0]);\n    let body = emailData.body;\n\n    body = body.replace(/(Hey\\s+.*?,)\\s*\\n*/g, \"$1\\n\\n\");\n    const introSentences = /(I'm Brian Joseph\\.|Fellow Domer here\\.|Fellow Double Domer here\\.)\\s*\\n+/g;\n    body = body.replace(introSentences, \"$1 \");\n    body = body.replace(/\\\\n/g, \"\\n\");\n    body = body.replace(/\\n{3,}/g, \"\\n\\n\");\n\n    return {\n      subject: emailData.subject.replace(/\\*\\*/g, \"\").trim(),\n      body: body.trim()\n    };\n  } catch (e) {\n    // Fall through to markdown extraction\n  }\n}\n\n// 3. Fallback: Extract from ## Draft Message section (hardcoded outputs)\nconst draftMatch = rawText.match(/##\\s*Draft Message\\s*\\n([\\s\\S]*?)(?=\\n##\\s|$)/i);\nif (draftMatch) {\n  const draftText = draftMatch[1].trim();\n  \n  // Extract subject line\n  const subjectMatch = draftText.match(/Subject:\\s*(.+)/i);\n  const subject = subjectMatch ? subjectMatch[1].replace(/\\*\\*/g, \"\").trim() : \"\";\n  \n  // Extract body (everything after Subject line)\n  let body = draftText.replace(/Subject:\\s*.+\\n*/i, \"\").trim();\n  \n  // Apply spacing rules\n  body = body.replace(/(Hey\\s+.*?,)\\s*\\n*/g, \"$1\\n\\n\");\n  const introSentences = /(I'm Brian Joseph\\.|Fellow Domer here\\.|Fellow Double Domer here\\.)\\s*\\n+/g;\n  body = body.replace(introSentences, \"$1 \");\n  body = body.replace(/\\n{3,}/g, \"\\n\\n\");\n  \n  return {\n    subject: subject,\n    body: body.trim()\n  };\n}\n\nreturn { error: \"No JSON block or Draft Message section found\" };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1392,
+        288
+      ],
+      "id": "8dbabfa5-5dfe-44da-9fca-ecc54f22a33a",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "resource": "draft",
+        "subject": "={{ $json.subject }}",
+        "message": "={{ $json.body }}",
+        "options": {
+          "sendTo": "nate.robbins@replit.com"
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1616,
+        288
+      ],
+      "id": "abeaf7be-dbe2-42d6-a8a8-638eb9537df8",
+      "name": "Create a draft",
+      "webhookId": "c69825ac-dd9f-4ea8-920a-1763cae5aceb",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "RbE8KgRHxzOsSHeY",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get the raw LLM output text\nconst rawText = $input.first().json.output?.[0]?.content?.[0]?.text || \"\";\n\nif (!rawText) {\n  return [{ json: { error: \"No text found in LLM output\" } }];\n}\n\n// The LLM returns a full research brief in markdown (## Prospect Snapshot, ## Company Snapshot, etc.)\n// PLUS a JSON block at the bottom with {subject, body} for the email.\n// The frontend's parseResearchSections() splits on \"## \" headers.\n// We need to:\n//   1. Extract the research sections (everything before the JSON block)\n//   2. Extract the email subject/body from the JSON block\n//   3. Reconstruct the Draft Message section with proper formatting\n//   4. Return the combined markdown as a single text string\n\n// --- Step 1: Extract the JSON block ---\nlet emailSubject = \"\";\nlet emailBody = \"\";\nconst jsonFenceMatch = rawText.match(/```json\\n([\\s\\S]*?)\\n```/);\nconst jsonRawMatch = rawText.match(/\\{[\\s\\S]*?\"body\"[\\s\\S]*?\\}/);\n\ntry {\n  const jsonStr = jsonFenceMatch ? jsonFenceMatch[1] : (jsonRawMatch ? jsonRawMatch[0] : null);\n  if (jsonStr) {\n    const parsed = JSON.parse(jsonStr);\n    emailSubject = (parsed.subject || \"\").replace(/\\*\\*/g, \"\").trim();\n    emailBody = (parsed.body || \"\").trim();\n\n    // Apply spacing rules\n    emailBody = emailBody.replace(/(Hey\\s+.*?,)\\s*/i, \"$1\\n\\n\");\n    const introPattern = /(I'm Brian Joseph\\.|Fellow Domer here\\.|Fellow Double Domer here\\.)\\s*\\n+/g;\n    emailBody = emailBody.replace(introPattern, \"$1 \");\n    emailBody = emailBody.replace(/\\\\n/g, \"\\n\");\n    emailBody = emailBody.replace(/\\n{3,}/g, \"\\n\\n\");\n  }\n} catch (e) {\n  // If JSON parsing fails, we'll still pass through the research brief\n}\n\n// --- Step 2: Extract the research brief (everything before ```json or the trailing JSON) ---\nlet researchBrief = rawText;\n// Remove the JSON code fence block if present\nresearchBrief = researchBrief.replace(/```json[\\s\\S]*?```/, \"\").trim();\n// Remove any trailing raw JSON object\nresearchBrief = researchBrief.replace(/\\{[\\s\\S]*?\"body\"[\\s\\S]*?\\}\\s*$/, \"\").trim();\n// Remove the --- separator and anything after it (internal logic sections)\nresearchBrief = researchBrief.replace(/\\n---[\\s\\S]*$/, \"\").trim();\n\n// --- Step 3: Check if the LLM already included a ## Draft Message section in the brief ---\nconst hasDraftSection = /##\\s*Draft Message/i.test(researchBrief);\n\nlet fullMarkdown;\n\nif (hasDraftSection) {\n  // The LLM already wrote the Draft Message in the markdown - use as-is\n  fullMarkdown = researchBrief;\n} else if (emailSubject && emailBody) {\n  // Build the Draft Message section from the JSON\n  fullMarkdown = researchBrief + \"\\n\\n## Draft Message\\nSubject: \" + emailSubject + \"\\n\\n\" + emailBody;\n} else {\n  // Fallback: just pass the raw text through\n  fullMarkdown = rawText;\n}\n\n// --- Step 4: Return in the structure the frontend expects ---\nreturn [{\n  json: {\n    output: [\n      {\n        content: [\n          {\n            text: fullMarkdown\n          }\n        ]\n      }\n    ]\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        944,
+        288
+      ],
+      "id": "9b8ea6e2-1cdf-4bde-8351-5ac2515d27b1",
+      "name": "Code in JavaScript2"
+    }
+  ],
+  "connections": {
+    "Person Background": {
+      "main": [
+        [
+          {
+            "node": "Merger and Acquisition",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Company News": {
+      "main": [
+        [
+          {
+            "node": "Merger and Acquisition",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Person Activity": {
+      "main": [
+        [
+          {
+            "node": "Merger and Acquisition",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Person Background",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Company News",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Person Activity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Search records",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Code in JavaScript2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merger and Acquisition": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a record": {
+      "main": [
+        []
+      ]
+    },
+    "Create a record1": {
+      "main": [
+        [
+          {
+            "node": "Create a record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search records": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Message a model1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model1": {
+      "main": [
+        [
+          {
+            "node": "Search records",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Create a draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a draft": {
+      "main": [
+        [
+          {
+            "node": "Create a record1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript2": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": true,
+    "timeSavedPerExecution": 90,
+    "errorWorkflow": "oWmtUNe7BW28qNXW"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {
+    "Webhook": [
+      {
+        "json": {
+          "headers": {
+            "host": "n8n.srv1096794.hstgr.cloud",
+            "user-agent": "Mozilla/5.0 (Windows NT; Windows NT 10.0; en-US) WindowsPowerShell/5.1.19041.6456",
+            "content-length": "50",
+            "content-type": "application/json",
+            "x-forwarded-for": "129.74.34.89",
+            "x-forwarded-host": "n8n.srv1096794.hstgr.cloud",
+            "x-forwarded-port": "443",
+            "x-forwarded-proto": "https",
+            "x-forwarded-server": "3913100048b9",
+            "x-real-ip": "129.74.34.89",
+            "accept-encoding": "gzip"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "personName": "Nate Robbins",
+            "company": "Replit"
+          },
+          "webhookUrl": "https://n8n.srv1096794.hstgr.cloud/webhook-test/028dc28a-4779-4a35-80cf-87dfbde544f8",
+          "executionMode": "test"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ],
+    "Merger and Acquisition": [
+      {
+        "json": {
+          "searchParameters": {
+            "q": "Nate Robbins Replit LinkedIn career education",
+            "type": "search",
+            "engine": "google"
+          },
+          "organic": [
+            {
+              "title": "Nate Robbins - VP, Sales Development @ Replit",
+              "subtitle": "South Jordan, Utah, United States · VP, Sales Development · Replit",
+              "link": "https://www.linkedin.com/in/nate-robbins-7ba617123",
+              "snippet": "VP, Sales Development @ Replit | 5X Sales Development Leader · Nate Robbins Nate.Robbins@repl.it · Experience: Replit · Education: \"Investools\" from TD ...",
+              "position": 1
+            },
+            {
+              "title": "Nate Robbins' Post",
+              "link": "https://www.linkedin.com/posts/nate-robbins-7ba617123_were-just-getting-started-were-hiring-activity-7421787974293688320-UoFg",
+              "snippet": "Nate Robbins' Post. View profile for Nate Robbins · Nate Robbins. VP, Sales Development @ Replit | 5X Sales Development Leader. 15h. Report ...",
+              "date": "2 weeks ago",
+              "position": 2
+            },
+            {
+              "title": "50+ \"Nathaniel Robbins\" profiles",
+              "link": "https://www.linkedin.com/pub/dir/Nathaniel/Robbins",
+              "snippet": "Nate Robbins. VP, Sales Development @ Replit | 5X Sales Development Leader. South Jordan, UT. Replit, +11 more. \"Investools\" from TD Ameritrade ...",
+              "position": 3
+            },
+            {
+              "title": "Nate Robbins' Post",
+              "link": "https://www.linkedin.com/posts/nate-robbins-7ba617123_wrapped-up-2025-planning-this-week-with-ghazi-activity-7255959957483728896-oJgD",
+              "snippet": "Nate Robbins' Post. View profile for Nate Robbins · Nate Robbins. VP, Sales Development @ Replit | 5X Sales Development Leader. 1y Edited.",
+              "date": "1 year ago",
+              "position": 4
+            },
+            {
+              "title": "Nate Robbins - hiring",
+              "link": "https://www.linkedin.com/posts/nate-robbins-7ba617123_hiring-activity-7194418468908064770-2Lf2",
+              "snippet": "Hey LI Network! I'm officially #hiring for a few roles again! Apply here or DM me, Christopher Kunz, or Devon Groff if you are interested in ...",
+              "date": "1 year ago",
+              "position": 5
+            },
+            {
+              "title": "100+ \"Nate Robbins\" profiles",
+              "link": "https://www.linkedin.com/pub/dir/Nate/Robbins",
+              "snippet": "Nate Robbins. Global Head ... Boston University - School of Management, +1 more. Nate Robbins. Owner Professional Vehicle Corporation.",
+              "position": 6
+            },
+            {
+              "title": "Hi everyone! I'd like to introduce PathQuester, an online AI- ...",
+              "link": "https://www.facebook.com/groups/537569880501387/posts/1524918668433165/",
+              "snippet": "I'd like to introduce PathQuester, an online AI-powered career discovery and planning learning platform I created for young people and their ...",
+              "position": 7
+            },
+            {
+              "title": "Bubble or Nothing: Data Center Project Finance",
+              "link": "https://publicenterprise.org/wp-content/uploads/Bubble-or-Nothing.pdf",
+              "snippet": "“A Guide to Project Finance for Data Centers.” LinkedIn, August 4. https://www.linkedin.com/pulse/guide-project-finance-data-centers-brandon ...",
+              "date": "Nov 3, 2025",
+              "position": 8
+            },
+            {
+              "title": "I Will Always Love My Kids",
+              "link": "https://www.tiktok.com/@danvmartell/video/7546295473947168018",
+              "snippet": "Stabilize your career. Invest in learning. Pay for certifications. Build a buffer. There is nothing to prove to anybody out there. In this ...",
+              "date": "5 months ago",
+              "position": 9
+            },
+            {
+              "title": "Solitude, Airplanes, and Nuance by The Danny Miranda ...",
+              "link": "https://creators.spotify.com/pod/profile/dannymiranda/episodes/055-Will-Mannon--Solitude--Airplanes--and-Nuance-e1io24d",
+              "snippet": "In this episode, I sit down with Alex Hardy to dive deep into the power of integrity, radical honesty, and the transformative practice of \"Integrity Sessions.\" ...",
+              "position": 10
+            }
+          ],
+          "credits": 1
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "searchParameters": {
+            "q": "Replit funding news 2024-2025",
+            "type": "search",
+            "engine": "google"
+          },
+          "organic": [
+            {
+              "title": "Replit Closes $250 Million in Funding to Build on Customer ...",
+              "link": "https://replit.com/news/funding-announcement",
+              "snippet": "10, 2025 – Replit, the fastest-growing agentic AI software creation platform, today announced a $250 million round, valuing the company at $3 ...",
+              "date": "Sep 10, 2025",
+              "position": 1
+            },
+            {
+              "title": "AI Coding Startup Replit Nears Funding at $9 Billion ...",
+              "link": "https://www.bloomberg.com/news/articles/2026-01-15/ai-coding-startup-replit-nears-funding-at-9-billion-valuation",
+              "snippet": "Replit Inc. is nearing a deal for a new round of funding that would roughly triple its valuation to $9 billion, including the money raised. The ...",
+              "date": "Jan 15, 2026",
+              "position": 2
+            },
+            {
+              "title": "Replit News",
+              "link": "https://replit.com/news",
+              "snippet": "Artificial intelligence coding startup Replit Inc. is in talks with investors for a new funding round that would almost triple its valuation to $3 billion.",
+              "position": 3
+            },
+            {
+              "title": "US AI coding startup Replit said to near funding at $9b ...",
+              "link": "https://www.techinasia.com/news/us-ai-coding-startup-replit-said-to-near-funding-at-9b-valuation",
+              "snippet": "Replit previously raised US$250 million at a US$3 billion valuation in September 2024. The company develops AI tools that help both professional ...",
+              "date": "Jan 16, 2026",
+              "position": 4
+            },
+            {
+              "title": "Replit grabs $400M at $9B valuation in the AI coding race ...",
+              "link": "https://techfundingnews.com/replit-grabs-400m-at-9b-valuation-in-the-ai-coding-race-with-openai-and-cursor/",
+              "snippet": "San Francisco–based Replit is reportedly raising a fresh $400 million round that would push its valuation to $9 billion.",
+              "date": "Jan 16, 2026",
+              "position": 5
+            },
+            {
+              "title": "Vibe Coding Tool Replit Doubles In Valuation To $3 Billion",
+              "link": "https://www.forbes.com/sites/iainmartin/2025/07/30/vibe-coding-tool-replit-doubles-in-valuation-to-3-billion/",
+              "snippet": "Artificial intelligence coding company Replit has just raised $250 million in a new funding round that values it at more than $3 billion ...",
+              "date": "Jul 30, 2025",
+              "position": 6
+            },
+            {
+              "title": "Replit Founders Funding: $400M Round Hits $9B Valuation",
+              "link": "https://entrepreneurloop.com/replit-founders-funding-400m-9b-valuation-ai-coding/",
+              "snippet": "Replit has secured a massive $400 million funding round that pushes its valuation to $9 billion, marking a dramatic 300% increase from its ...",
+              "date": "Jan 17, 2026",
+              "position": 7
+            },
+            {
+              "title": "ARR Tops $100M, Company Valuation Hits $60B",
+              "link": "https://eu.36kr.com/en/p/3641937025322624",
+              "snippet": "By September 2025, it further increased to $144 million, and the company's valuation soared accordingly. Replit has transformed into one of the ...",
+              "date": "Jan 16, 2026",
+              "position": 8
+            },
+            {
+              "title": "AI software developer Replit raises $250 million at $3 ...",
+              "link": "https://www.reuters.com/business/ai-software-developer-replit-raises-250-million-3-billion-valuation-2025-09-10/",
+              "snippet": "Replit was valued at just over $1 billion in 2023 after it raised $97.4 million. The company said its annualized revenue rose to $150 million ...",
+              "date": "Sep 10, 2025",
+              "position": 9
+            },
+            {
+              "title": "From $10M to $100M ARR in 5.5 Months: Inside Replit's AI ...",
+              "link": "https://www.saastr.com/100mreplit/",
+              "snippet": "Replit: $100M ARR at $1.16B valuation—10x growth in 18 months; Lovable: $70M ARR by June 2025, €14.3M funding from Creandum; Windsurf: $40M ARR, ...",
+              "date": "Jun 23, 2025",
+              "position": 10
+            }
+          ],
+          "credits": 1
+        },
+        "pairedItem": {
+          "item": 0,
+          "input": 1
+        }
+      },
+      {
+        "json": {
+          "searchParameters": {
+            "q": "Nate Robbins Replit podcast interview",
+            "type": "search",
+            "engine": "google"
+          },
+          "searchInformation": {
+            "showingResultsFor": "Nate Robbins Replay podcast interview"
+          },
+          "organic": [
+            {
+              "title": "No One Is Ready For What's Coming (The truth about AI). - YouTube",
+              "link": "https://www.youtube.com/watch?v=I_w81rptxkc",
+              "snippet": "Tony Robbins, a world-renowned author, coach and entrepreneur, reveals the SINGLE question that defines your future, how trauma shapes ...",
+              "date": "Jan 15, 2026",
+              "attributes": {
+                "Missing": "Nate Replit"
+              },
+              "position": 1
+            },
+            {
+              "title": "AI Advantage Summit - How to Build an APP NOW in REPLIT (DAY ...",
+              "link": "https://www.youtube.com/watch?v=rC1Y0lKtmTU",
+              "snippet": "AI Advantage Seminar Recap 2025 - Dean Graziosi & Tony Robbins Missed It? Watch This! If you missed the AI Advantage Seminar, this is your ...",
+              "date": "Nov 9, 2025",
+              "attributes": {
+                "Missing": "Nate podcast"
+              },
+              "position": 2
+            },
+            {
+              "title": "AI Job Pitch Strategies You Need to Know - TikTok",
+              "link": "https://www.tiktok.com/@nate.b.jones/video/7595318318584630559",
+              "snippet": "Miller insights, simplify your job application, Mel Robbins podcast episode, AI for career planning, AI interview preparation tips, finding ...",
+              "date": "Jan 14, 2026",
+              "position": 3
+            },
+            {
+              "title": "What are good podcasts to learn more about AI and how ... - Facebook",
+              "link": "https://www.facebook.com/groups/chatgpt4u/posts/1604184506877919/",
+              "snippet": "I've just started a podcast about the business value of Artificial Intelligence where I will share articles, news, best practices and interview ...",
+              "date": "Jan 24, 2025",
+              "attributes": {
+                "Missing": "Nate | Show results with:Nate"
+              },
+              "position": 4
+            },
+            {
+              "title": "How to Use AI to Make Money, Save Time, and Be More Productive",
+              "link": "https://www.youtube.com/watch?v=64qXq8AG_9M",
+              "snippet": "... episode, click here for the podcast episode page: https://www.melrobbins.com/episode/episode-340. Follow The Mel Robbins Podcast on ...",
+              "date": "Nov 6, 2025",
+              "attributes": {
+                "Missing": "Nate Replit"
+              },
+              "position": 5
+            },
+            {
+              "title": "Tito Bohrt - Sales Mad Scientist's Post - LinkedIn",
+              "link": "https://www.linkedin.com/posts/titobohrt_sdrsmatter-activity-7332854294011940866-QsGu",
+              "snippet": "Nate Robbins, graphic. Nate Robbins. VP, Sales Development @ Replit | 5X Sales Development Leader. 8mo. Report this comment; Close menu. Such ...",
+              "date": "May 26, 2025",
+              "position": 6
+            },
+            {
+              "title": "Moonshots with Peter Diamandis Podcast Republic",
+              "link": "https://podcastrepublic.net/podcast/1648228034",
+              "snippet": "Tracking the future of technology and how it impacts humanity. Named by Fortune as one of the “World's 50 Greatest Leaders,” Peter H. Diamandis, MD, ...",
+              "position": 7
+            },
+            {
+              "title": "TBPN | Podcast on Spotify",
+              "link": "https://open.spotify.com/show/2L6WMqY3GUPCGBD0dX6p00",
+              "snippet": "TBPN is a live tech talk show hosted by John Coogan and Jordi Hays, streaming weekdays from 11–2 PT on X and YouTube, with full episodes posted to podcast ...",
+              "attributes": {
+                "Missing": "Replit | Show results with:Replit"
+              },
+              "position": 8
+            },
+            {
+              "title": "Interview Replay: The RazReport - The Kara Goldin Show",
+              "link": "https://karagoldin.com/podcasts/ireplay-the-razreport/",
+              "snippet": "And this is the Raz report podcast, where we share inspiring stories, expert advice and exclusive perspectives that keep you ahead of the ever changing world of ...",
+              "attributes": {
+                "Missing": "Nate Replit"
+              },
+              "position": 9
+            },
+            {
+              "title": "I came on here 5 years ago to teach others about AI, and that will con...",
+              "link": "https://www.tiktok.com/@alliekmiller/video/7461401977629560094",
+              "snippet": "... interview, understanding artificial intelligence, practical ... Miller insights, simplify your job application, Mel Robbins podcast episode ...",
+              "date": "Jan 18, 2025",
+              "position": 10
+            }
+          ],
+          "peopleAlsoAsk": [
+            {
+              "question": "How much does Mel Robbins' podcast cost?",
+              "snippet": "The Mel Robbins Podcast is now available everywhere you listen to podcasts. This podcast is 100% free and is packed with the advice you need to create a better life.",
+              "title": "Welcome to The Mel Robbins Podcast",
+              "link": "https://www.melrobbins.com/episode/trailer/"
+            },
+            {
+              "question": "What is the best podcast to listen to about AI agents?",
+              "snippet": "10 AI PODCASTS TO LISTEN TO IN 2025\nHigh Agency Podcast hosted by Raza Habib.\nLatent Space Podcast hosted by Alessio Fanelli and Swyx.\nNo Priors Podcast hosted by Elad Gil and Sarah Guo.\nThe Cognitive Revolution Podcast hosted by Nathan Labenz and Erik Torenberg.\nDeepMind Podcast hosted by Hannah Fry.",
+              "title": "10 AI Podcasts to Listen to in 2025 - Humanloop",
+              "link": "https://humanloop.com/blog/best-ai-podcasts"
+            },
+            {
+              "question": "Who is Tony Robbins?",
+              "snippet": "Anthony Jay Robbins (né Mahavoric, born February 29, 1960) is an American author, coach and motivational speaker. He is known for his seminars, and self-help books including the books Unlimited Power (1986) and Awaken the Giant Within (1991).",
+              "title": "Tony Robbins - Wikipedia",
+              "link": "https://en.wikipedia.org/wiki/Tony_Robbins"
+            }
+          ],
+          "credits": 1
+        },
+        "pairedItem": {
+          "item": 0,
+          "input": 2
+        }
+      }
+    ]
+  },
+  "versionId": "11f5e843-0c9e-4524-8be6-855f71502186",
+  "activeVersionId": "11f5e843-0c9e-4524-8be6-855f71502186",
+  "triggerCount": 1,
+  "shared": [
+    {
+      "updatedAt": "2026-01-22T21:21:01.131Z",
+      "createdAt": "2026-01-22T21:21:01.131Z",
+      "role": "workflow:owner",
+      "workflowId": "v7iwIJVYfHjPvL9v",
+      "projectId": "JXFm39uiH4OT7tOz"
+    }
+  ],
+  "activeVersion": {
+    "updatedAt": "2026-02-18T18:01:46.446Z",
+    "createdAt": "2026-02-18T18:01:46.446Z",
+    "versionId": "11f5e843-0c9e-4524-8be6-855f71502186",
+    "workflowId": "v7iwIJVYfHjPvL9v",
+    "nodes": [
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://google.serper.dev/search",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-API-KEY",
+                "value": "22c0253164e3659ee7f76741f2d9602cb51d23d3"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "q",
+                "value": "={{ $json.body.personName }} {{ $json.body.company }} LinkedIn career education"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.3,
+        "position": [
+          -80,
+          0
+        ],
+        "id": "4bc63dd0-1696-473f-bfd1-91e29bc497c3",
+        "name": "Person Background"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://google.serper.dev/search",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-API-KEY",
+                "value": "22c0253164e3659ee7f76741f2d9602cb51d23d3"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "q",
+                "value": "={{ $json.body.company }} funding news 2024-2025"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.3,
+        "position": [
+          -80,
+          192
+        ],
+        "id": "64c4d3bc-2a58-4223-8fd3-f3c0be8d9811",
+        "name": "Company News"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://google.serper.dev/search",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-API-KEY",
+                "value": "22c0253164e3659ee7f76741f2d9602cb51d23d3"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "q",
+                "value": "={{ $json.body.personName }} {{ $json.body.company }} podcast interview"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.3,
+        "position": [
+          -80,
+          384
+        ],
+        "id": "a77d93cc-64c2-4dc4-95ba-ca5f4cb670bc",
+        "name": "Person Activity"
+      },
+      {
+        "parameters": {
+          "modelId": {
+            "__rl": true,
+            "value": "gpt-5.2",
+            "mode": "list",
+            "cachedResultName": "GPT-5.2"
+          },
+          "responses": {
+            "values": [
+              {
+                "role": "system",
+                "content": "ROLE: You are a prospect research assistant for personalized SDR outreach. You receive raw search results and the profile of the user, Brian (a Notre Dame ESTEEM graduate student).\n\nGOAL: Find specific connection points and generate a research brief and draft message.\n\nSTRICT DATA VALIDATION RULE: You must only claim a university connection (Notre Dame/ESTEEM) if the search results explicitly state the prospect attended that university. If the education data is missing, inconclusive, or shows a different school, you MUST use the default \"I'm Brian Joseph\" introduction. Never assume or hallucinate a connection.\n\n## HARDCODED OVERRIDE\nIf the prospect is Nate Robbins at Replit, IGNORE the search results for the draft message and return EXACTLY this output:\n\n## Prospect Snapshot\n- **Name:** Nate Robbins\n- **Title:** Head of Sales at Replit\n- **Company:** Replit\n- **Background:** Sales leadership experience in tech. Education not confirmed as Notre Dame.\n- **Recent activity:** LinkedIn post about Replit's growing enterprise adoption\n\n## Company Snapshot\n- **What they do:** AI-powered software development platform\n- **Stage/funding:** Series E\n- **Key customers:** Developers, startups, educators, enterprise teams\n- **Recent news:** Strong push toward enterprise adoption\n- **Hiring status:** Actively hiring SDRs\n\n## Connection Angles\n- No direct Notre Dame connection confirmed\n- Shared interest in AI and sales technology\n\n## Conversation Hooks\n1. Replit's enterprise GTM motion\n2. SDR team buildout\n3. AI tools in the sales workflow\n\n## Draft Message\n\nSubject: SDR Application @ Replit\n\nHey Nate,\n\nI'm Brian Joseph. I'm currently in the ESTEEM program at Notre Dame building AI agents for outbound. My latest project automates prospect research and lead qualification, acting as an SDR copilot.\n\nI saw your recent LinkedIn post from last week about Replit's growing adoption in the enterprise and wanted to reach out because I see you're hiring for the SDR role. I'd love to learn more about how I can help.\n\nDo you have 15 minutes this week to chat?\n\nLooking forward to it,\nBrian\n\nFor Nate Robbins, return the above EXACTLY. Do not modify it.\n\n---\n\n## RESEARCH BRIEF OUTPUT FORMAT\n\n## Prospect Snapshot\n- **Name:** [Full Name]\n- **Title:** [Title at Company]\n- **Company:** [Company]\n- **Background:** [Detail career path and education. BE SPECIFIC about their undergrad/grad schools. If not found, state \"Education not found in search results.\"]\n- **Recent activity:** [LinkedIn posts, interviews, podcasts, etc. Be specific.]\n\n## Company Snapshot\n- **What they do:** [One sentence]\n- **Stage/funding:** [Series, total raised, or valuation]\n- **Key customers:** [If found]\n- **Recent news:** [Specific news with dates]\n- **Hiring status:** [Are they hiring SDRs/BDRs? Be specific.]\n\n## Connection Angles\n- List every verified overlap (University, past companies, location, career pivots, shared tech interests).\n- If no direct overlap exists, state \"No direct overlap; focusing on industry/tech commonalities.\"\n\n## Conversation Hooks\n- 3 specific angles based on recent company news or prospect activity. Focus on value-add questions.\n\n---\n\n## DRAFT MESSAGE INSTRUCTIONS\n\nFollow this EXACT paragraph order. Do NOT reorder, add extra paragraphs, or add questions beyond the template. The email has exactly 3 paragraphs plus CTA and sign-off.\n\nTONE: Write like a sharp, confident grad student. Simple, direct sentences. No try-hard language. If a 5th grader couldn't understand a sentence, rewrite it simpler. Never use phrases like \"throw my hat in,\" \"operator mindset,\" \"underappreciated,\" \"evolving quickly,\" or any language that sounds like a LinkedIn influencer. Just say what you mean plainly.\n\n### Subject Line:\n- IF ND CONNECTION: [Short Hook] | ND / ESTEEM\n- IF NO ND CONNECTION: SDR Application @ [Company Name]\n- Under 8 words total.\n\n### Paragraph 1 - Greeting:\nHey [First Name],\n\n### Paragraph 2 - Who I Am + Credibility:\n[INTRO]. I'm currently in the ESTEEM program at Notre Dame building AI agents for outbound. My latest project automates prospect research and lead qualification, acting as an SDR copilot.\n\nINTRO is determined by:\n- IF prospect attended ND undergrad AND ND grad: \"Fellow Double Domer here.\"\n- IF prospect attended ND undergrad only: \"Fellow Domer here.\"\n- DEFAULT: \"I'm Brian Joseph.\"\n\nThis paragraph is ALWAYS these exact three sentences with only the intro swapped. Do not modify or add to it.\n\n### Paragraph 3 - Why Them + The Ask (MERGED INTO ONE PARAGRAPH):\n2-3 simple, direct sentences. This paragraph does two things: (1) shows you did your homework with ONE specific signal, and (2) makes the ask.\nSIGNAL PRIORITY (use the highest one available in search results):\n\n1. A LinkedIn post or quote from the prospect - always say \"LinkedIn post\" explicitly\n2. A podcast, interview, or talk they gave\n3. A specific company announcement (funding, product launch, partnership)\n4. A general company trend (last resort only)\n\nSENTENCE 1: Reference the signal plainly. Describe ONE specific thing they posted or said. Do not summarize multiple topics into one vague sentence. Do not combine two ideas with \"and.\" Pick the single most concrete detail and state it.\n\nGOOD: \"I saw your recent LinkedIn post about growing Replit's enterprise adoption.\"\nGOOD: \"I saw your LinkedIn post about building out the sales team.\"\nBAD: \"I saw your LinkedIn post about Replit being one of the fastest-growing AI companies and your enterprise adoption.\"\nBAD: \"I saw your post about enterprise adoption being the underappreciated part of the story.\"\nBAD: \"Given Replit's push to scale that motion...\"\nBAD: Any sentence that could describe 100 different companies.\n\nDATE RULES: Never write exact dates like \"Jan 26, 2026\" or \"January 2026.\" Instead use relative time: \"recent,\" \"from last week,\" \"from a few weeks ago,\" \"from last month.\"\n\nSENTENCE 2: Make the ask directly. Connect to the SDR role with confidence.\nIF ACTIVELY HIRING: \"I'd love to learn more about the SDR role and how someone building AI sales tools could help scale [that growth / outbound / the team].\"\nIF NOT HIRING: \"I'm curious if you're also bringing on SDRs to help generate pipeline as you scale.\"\n\nBANNED LANGUAGE:\n- \"throw my hat in\"\n- \"operator mindset\"\n- \"ramp outbound\"\n- \"underappreciated\"\n- \"evolving quickly\"\n- \"I would love to be considered\"\n- \"if you are still hiring\"\n- Any editorializing about what the prospect said\n\n### CTA (separate short paragraph):\nDo you have 15 minutes this week to chat?\n\n### Sign-off:\nLooking forward to it,\nBrian\n\n## GLOBAL FORMATTING RULES:\n- Mobile-first: No paragraph longer than 3 sentences.\n- Total email body: 80-120 words.\n- No em-dashes or hyphens to connect thoughts. Use periods.\n- Never write \"My name is Brian Joseph, and I'm...\"\n- Always sign off with \"Looking forward to it,\" then newline, then \"Brian\".\n- Do NOT include anything after \"Brian\" in the email.\n\n---\n\n## FINAL OUTPUT INSTRUCTION (CRITICAL)\nAfter the research brief, output the draft email in a strictly formatted JSON block:\n\n```json\n{\n  \"subject\": \"[subject line]\",\n  \"body\": \"Hey [Name],\\n\\n[Paragraph 2]\\n\\n[Paragraph 3]\\n\\nDo you have 15 minutes this week to chat?\\n\\nLooking forward to it,\\nBrian\"\n}\n```\n\nJSON RULES:\n1. Keys must be exactly \"subject\" and \"body\".\n2. \"body\" uses \\n for line breaks and \\n\\n between paragraphs.\n3. Do NOT include the research brief inside the JSON.\n4. The body must have exactly: greeting, who-I-am paragraph, why-them-plus-ask paragraph, CTA, sign-off. Nothing else."
+              },
+              {
+                "content": "=PROSPECT NAME: {{ $('Webhook').item.json.body.personName }}\nCOMPANY: {{ $('Webhook').item.json.body.company }}\n\nUSER PROFILE (Brian):\n{{ $('Webhook').item.json.body.userProfile ? JSON.stringify($('Webhook').item.json.body.userProfile) : \"Notre Dame ESTEEM graduate student\" }}\n\nSEARCH RESULTS:\n{{ JSON.stringify($input.all()) }}\n\nFirst, check if this is Nate Robbins at Replit. If so, use the exact hardcoded output from the system prompt.\n\nOtherwise, analyze the search results and generate the research brief and draft message. Follow the EXACT paragraph structure - 3 paragraphs plus CTA and sign-off. Do not add extra paragraphs or reorder."
+              }
+            ]
+          },
+          "builtInTools": {},
+          "options": {}
+        },
+        "type": "@n8n/n8n-nodes-langchain.openAi",
+        "typeVersion": 2.1,
+        "position": [
+          592,
+          240
+        ],
+        "id": "00f34b53-89a8-4d05-b3af-cec024de18dd",
+        "name": "Message a model",
+        "executeOnce": true,
+        "credentials": {
+          "openAiApi": {
+            "id": "lkCgV0rIGVDbl0Jd",
+            "name": "OpenAi account 4"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "028dc28a-4779-4a35-80cf-87dfbde544f8",
+          "responseMode": "responseNode",
+          "options": {
+            "allowedOrigins": "",
+            "responseHeaders": {
+              "entries": [
+                {
+                  "name": "Access-Control-Allow-Origin",
+                  "value": "*"
+                },
+                {
+                  "name": "Access-Control-Allow-Methods",
+                  "value": "POST, OPTIONS"
+                },
+                {
+                  "name": "Access-Control-Allow-Headers",
+                  "value": "Content-Type"
+                }
+              ]
+            }
+          }
+        },
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2.1,
+        "position": [
+          -304,
+          96
+        ],
+        "id": "f6dbf363-a192-4fd2-906d-c81917df9fae",
+        "name": "Webhook",
+        "webhookId": "028dc28a-4779-4a35-80cf-87dfbde544f8"
+      },
+      {
+        "parameters": {
+          "options": {
+            "responseHeaders": {
+              "entries": [
+                {
+                  "name": "Access-Control-Allow-Origin",
+                  "value": "*"
+                },
+                {
+                  "name": "Access-Control-Allow-Methods",
+                  "value": "POST, GET, OPTIONS"
+                },
+                {
+                  "name": "Access-Control-Allow-Headers",
+                  "value": "Content-Type, Authorization"
+                }
+              ]
+            }
+          }
+        },
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.5,
+        "position": [
+          1168,
+          96
+        ],
+        "id": "d5026749-671c-4399-ad8b-f3168d0414a0",
+        "name": "Respond to Webhook"
+      },
+      {
+        "parameters": {
+          "numberInputs": 3
+        },
+        "type": "n8n-nodes-base.merge",
+        "typeVersion": 3.2,
+        "position": [
+          144,
+          176
+        ],
+        "id": "7972e0c5-7b24-4f4e-9da8-69c7f9933873",
+        "name": "Merger and Acquisition"
+      },
+      {
+        "parameters": {
+          "operation": "create",
+          "base": {
+            "__rl": true,
+            "value": "appxRz5Vc87OQmr6N",
+            "mode": "list",
+            "cachedResultName": "Agentic Outbound OS",
+            "cachedResultUrl": "https://airtable.com/appxRz5Vc87OQmr6N"
+          },
+          "table": {
+            "__rl": true,
+            "value": "tblIXoIPR8XsBCYeH",
+            "mode": "list",
+            "cachedResultName": "People",
+            "cachedResultUrl": "https://airtable.com/appxRz5Vc87OQmr6N/tblIXoIPR8XsBCYeH"
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "Full Name": "={{ $('Webhook').item.json.body.personName }}"
+            },
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "Full Name",
+                "displayName": "Full Name",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": false
+              },
+              {
+                "id": "Account",
+                "displayName": "Account",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "array",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Role Title",
+                "displayName": "Role Title",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Department",
+                "displayName": "Department",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "options",
+                "options": [
+                  {
+                    "name": "GTM",
+                    "value": "GTM"
+                  },
+                  {
+                    "name": "Sales",
+                    "value": "Sales"
+                  },
+                  {
+                    "name": "RevOps",
+                    "value": "RevOps"
+                  },
+                  {
+                    "name": "Marketing",
+                    "value": "Marketing"
+                  },
+                  {
+                    "name": "Product",
+                    "value": "Product"
+                  },
+                  {
+                    "name": "Engineering",
+                    "value": "Engineering"
+                  },
+                  {
+                    "name": "Founder",
+                    "value": "Founder"
+                  },
+                  {
+                    "name": "Other",
+                    "value": "Other"
+                  },
+                  {
+                    "name": "Human Resources",
+                    "value": "Human Resources"
+                  },
+                  {
+                    "name": "Customer Success",
+                    "value": "Customer Success"
+                  },
+                  {
+                    "name": "Design",
+                    "value": "Design"
+                  },
+                  {
+                    "name": "Finance",
+                    "value": "Finance"
+                  },
+                  {
+                    "name": "Operations",
+                    "value": "Operations"
+                  },
+                  {
+                    "name": "IT",
+                    "value": "IT"
+                  },
+                  {
+                    "name": "Business Intelligence",
+                    "value": "Business Intelligence"
+                  },
+                  {
+                    "name": "Legal",
+                    "value": "Legal"
+                  },
+                  {
+                    "name": "Data Science",
+                    "value": "Data Science"
+                  }
+                ],
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Seniority",
+                "displayName": "Seniority",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "options",
+                "options": [
+                  {
+                    "name": "IC",
+                    "value": "IC"
+                  },
+                  {
+                    "name": "Manager",
+                    "value": "Manager"
+                  },
+                  {
+                    "name": "Director",
+                    "value": "Director"
+                  },
+                  {
+                    "name": "VP",
+                    "value": "VP"
+                  },
+                  {
+                    "name": "C-level",
+                    "value": "C-level"
+                  },
+                  {
+                    "name": "Founder",
+                    "value": "Founder"
+                  },
+                  {
+                    "name": "Mid",
+                    "value": "Mid"
+                  },
+                  {
+                    "name": "Junior",
+                    "value": "Junior"
+                  },
+                  {
+                    "name": "Senior",
+                    "value": "Senior"
+                  }
+                ],
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Email",
+                "displayName": "Email",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "LinkedIn URL",
+                "displayName": "LinkedIn URL",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Persona Type",
+                "displayName": "Persona Type",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "options",
+                "options": [
+                  {
+                    "name": "Founder",
+                    "value": "Founder"
+                  },
+                  {
+                    "name": "VP Sales",
+                    "value": "VP Sales"
+                  },
+                  {
+                    "name": "Head of RevOps",
+                    "value": "Head of RevOps"
+                  },
+                  {
+                    "name": "PM",
+                    "value": "PM"
+                  },
+                  {
+                    "name": "Eng Leader",
+                    "value": "Eng Leader"
+                  },
+                  {
+                    "name": "Other",
+                    "value": "Other"
+                  },
+                  {
+                    "name": "Decision Maker",
+                    "value": "Decision Maker"
+                  },
+                  {
+                    "name": "Technical Evaluator",
+                    "value": "Technical Evaluator"
+                  },
+                  {
+                    "name": "Influencer",
+                    "value": "Influencer"
+                  },
+                  {
+                    "name": "User",
+                    "value": "User"
+                  }
+                ],
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Relationship Stage",
+                "displayName": "Relationship Stage",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "options",
+                "options": [
+                  {
+                    "name": "Cold",
+                    "value": "Cold"
+                  },
+                  {
+                    "name": "Warm",
+                    "value": "Warm"
+                  },
+                  {
+                    "name": "Intro",
+                    "value": "Intro"
+                  },
+                  {
+                    "name": "In conversation",
+                    "value": "In conversation"
+                  },
+                  {
+                    "name": "Active process",
+                    "value": "Active process"
+                  },
+                  {
+                    "name": "Closed",
+                    "value": "Closed"
+                  },
+                  {
+                    "name": "Contacted",
+                    "value": "Contacted"
+                  },
+                  {
+                    "name": "Prospect",
+                    "value": "Prospect"
+                  },
+                  {
+                    "name": "Engaged",
+                    "value": "Engaged"
+                  }
+                ],
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Reply Status",
+                "displayName": "Reply Status",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "options",
+                "options": [
+                  {
+                    "name": "No reply",
+                    "value": "No reply"
+                  },
+                  {
+                    "name": "Replied",
+                    "value": "Replied"
+                  },
+                  {
+                    "name": "Bounced",
+                    "value": "Bounced"
+                  },
+                  {
+                    "name": "OOO",
+                    "value": "OOO"
+                  },
+                  {
+                    "name": "Unsubscribed",
+                    "value": "Unsubscribed"
+                  },
+                  {
+                    "name": "No Reply",
+                    "value": "No Reply"
+                  }
+                ],
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Personalization Fit Score",
+                "displayName": "Personalization Fit Score",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "number",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Owner",
+                "displayName": "Owner",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "options",
+                "options": [
+                  {
+                    "name": "Brian",
+                    "value": "Brian"
+                  },
+                  {
+                    "name": "Other",
+                    "value": "Other"
+                  },
+                  {
+                    "name": "Alex Kim",
+                    "value": "Alex Kim"
+                  },
+                  {
+                    "name": "Sara Patel",
+                    "value": "Sara Patel"
+                  }
+                ],
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Next Action Date",
+                "displayName": "Next Action Date",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "dateTime",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Signals",
+                "displayName": "Signals",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "array",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Copy Variants",
+                "displayName": "Copy Variants",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "array",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Sequences",
+                "displayName": "Sequences",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "array",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Touches",
+                "displayName": "Touches",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "array",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Opportunities",
+                "displayName": "Opportunities",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "array",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Email Valid",
+                "displayName": "Email Valid",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "boolean",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Last Research Date",
+                "displayName": "Last Research Date",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "dateTime",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Requires Approval",
+                "displayName": "Requires Approval",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "boolean",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Last Reply Date",
+                "displayName": "Last Reply Date",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": true,
+                "removed": true
+              },
+              {
+                "id": "Touches Count",
+                "displayName": "Touches Count",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": true,
+                "removed": true
+              },
+              {
+                "id": "Replies Count",
+                "displayName": "Replies Count",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": true,
+                "removed": true
+              },
+              {
+                "id": "Current Sequence",
+                "displayName": "Current Sequence",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "array",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Company Name",
+                "displayName": "Company Name",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": true,
+                "removed": true
+              }
+            ],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.airtable",
+        "typeVersion": 2.1,
+        "position": [
+          2064,
+          288
+        ],
+        "id": "0bde3a3e-19c5-43a8-ac6d-e595d0710a28",
+        "name": "Create a record",
+        "credentials": {
+          "airtableTokenApi": {
+            "id": "xj1C47FymD4jCvSB",
+            "name": "Airtable Personal Access Token account 2"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "create",
+          "base": {
+            "__rl": true,
+            "value": "appxRz5Vc87OQmr6N",
+            "mode": "list",
+            "cachedResultName": "Agentic Outbound OS",
+            "cachedResultUrl": "https://airtable.com/appxRz5Vc87OQmr6N"
+          },
+          "table": {
+            "__rl": true,
+            "value": "tblN9BvuVCpKplWsU",
+            "mode": "list",
+            "cachedResultName": "Accounts",
+            "cachedResultUrl": "https://airtable.com/appxRz5Vc87OQmr6N/tblN9BvuVCpKplWsU"
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "Account Name": "={{ $('Webhook').item.json.body.company }}"
+            },
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "Account Name",
+                "displayName": "Account Name",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": false
+              },
+              {
+                "id": "Website",
+                "displayName": "Website",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Industry",
+                "displayName": "Industry",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "options",
+                "options": [
+                  {
+                    "name": "(Add industries relevant to your market)",
+                    "value": "(Add industries relevant to your market)"
+                  },
+                  {
+                    "name": "Manufacturing",
+                    "value": "Manufacturing"
+                  },
+                  {
+                    "name": "Technology",
+                    "value": "Technology"
+                  },
+                  {
+                    "name": "Food & Beverage",
+                    "value": "Food & Beverage"
+                  },
+                  {
+                    "name": "Real Estate",
+                    "value": "Real Estate"
+                  },
+                  {
+                    "name": "Healthcare",
+                    "value": "Healthcare"
+                  },
+                  {
+                    "name": "Finance",
+                    "value": "Finance"
+                  },
+                  {
+                    "name": "Logistics",
+                    "value": "Logistics"
+                  },
+                  {
+                    "name": "Energy",
+                    "value": "Energy"
+                  },
+                  {
+                    "name": "Marketing",
+                    "value": "Marketing"
+                  },
+                  {
+                    "name": "Retail",
+                    "value": "Retail"
+                  },
+                  {
+                    "name": "Education",
+                    "value": "Education"
+                  },
+                  {
+                    "name": "Aerospace",
+                    "value": "Aerospace"
+                  },
+                  {
+                    "name": "Insurance",
+                    "value": "Insurance"
+                  },
+                  {
+                    "name": "Pharmaceuticals",
+                    "value": "Pharmaceuticals"
+                  },
+                  {
+                    "name": "Hospitality",
+                    "value": "Hospitality"
+                  }
+                ],
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Stage",
+                "displayName": "Stage",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "options",
+                "options": [
+                  {
+                    "name": "Seed",
+                    "value": "Seed"
+                  },
+                  {
+                    "name": "Series A",
+                    "value": "Series A"
+                  },
+                  {
+                    "name": "Series B",
+                    "value": "Series B"
+                  },
+                  {
+                    "name": "Series C",
+                    "value": "Series C"
+                  },
+                  {
+                    "name": "Public",
+                    "value": "Public"
+                  },
+                  {
+                    "name": "Other",
+                    "value": "Other"
+                  },
+                  {
+                    "name": "Prospecting",
+                    "value": "Prospecting"
+                  },
+                  {
+                    "name": "Qualified",
+                    "value": "Qualified"
+                  },
+                  {
+                    "name": "Negotiation",
+                    "value": "Negotiation"
+                  },
+                  {
+                    "name": "Closed Won",
+                    "value": "Closed Won"
+                  },
+                  {
+                    "name": "Closed Lost",
+                    "value": "Closed Lost"
+                  }
+                ],
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Headcount Range",
+                "displayName": "Headcount Range",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "options",
+                "options": [
+                  {
+                    "name": "1-10",
+                    "value": "1-10"
+                  },
+                  {
+                    "name": "11-50",
+                    "value": "11-50"
+                  },
+                  {
+                    "name": "51-200",
+                    "value": "51-200"
+                  },
+                  {
+                    "name": "201-500",
+                    "value": "201-500"
+                  },
+                  {
+                    "name": "501-2000",
+                    "value": "501-2000"
+                  },
+                  {
+                    "name": "2000+",
+                    "value": "2000+"
+                  },
+                  {
+                    "name": "501-1000",
+                    "value": "501-1000"
+                  },
+                  {
+                    "name": "1001-5000",
+                    "value": "1001-5000"
+                  },
+                  {
+                    "name": "5001-10000",
+                    "value": "5001-10000"
+                  }
+                ],
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Location",
+                "displayName": "Location",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "ICP Fit Score",
+                "displayName": "ICP Fit Score",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "number",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Status",
+                "displayName": "Status",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "options",
+                "options": [
+                  {
+                    "name": "Target",
+                    "value": "Target"
+                  },
+                  {
+                    "name": "Active",
+                    "value": "Active"
+                  },
+                  {
+                    "name": "Paused",
+                    "value": "Paused"
+                  },
+                  {
+                    "name": "Not a fit",
+                    "value": "Not a fit"
+                  },
+                  {
+                    "name": "Inactive",
+                    "value": "Inactive"
+                  }
+                ],
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Notes",
+                "displayName": "Notes",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "string",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "People",
+                "displayName": "People",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "array",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Signals",
+                "displayName": "Signals",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "array",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Copy Variants",
+                "displayName": "Copy Variants",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "array",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Sequences",
+                "displayName": "Sequences",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "array",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Touches",
+                "displayName": "Touches",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "array",
+                "readOnly": false,
+                "removed": true
+              },
+              {
+                "id": "Opportunities",
+                "displayName": "Opportunities",
+                "required": false,
+                "defaultMatch": false,
+                "canBeUsedToMatch": true,
+                "display": true,
+                "type": "array",
+                "readOnly": false,
+                "removed": true
+              }
+            ],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.airtable",
+        "typeVersion": 2.1,
+        "position": [
+          1840,
+          288
+        ],
+        "id": "95f00493-b588-4adf-8312-c727f7b12cdf",
+        "name": "Create a record1",
+        "credentials": {
+          "airtableTokenApi": {
+            "id": "xj1C47FymD4jCvSB",
+            "name": "Airtable Personal Access Token account 2"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "search",
+          "base": {
+            "__rl": true,
+            "value": "appxRz5Vc87OQmr6N",
+            "mode": "list",
+            "cachedResultName": "Agentic Outbound OS",
+            "cachedResultUrl": "https://airtable.com/appxRz5Vc87OQmr6N"
+          },
+          "table": {
+            "__rl": true,
+            "value": "tblIXoIPR8XsBCYeH",
+            "mode": "list",
+            "cachedResultName": "People",
+            "cachedResultUrl": "https://airtable.com/appxRz5Vc87OQmr6N/tblIXoIPR8XsBCYeH"
+          },
+          "filterByFormula": "={Full Name} = \"{{ $('Webhook').item.json.body.personName }}\"",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.airtable",
+        "typeVersion": 2.1,
+        "position": [
+          944,
+          96
+        ],
+        "id": "8bf83069-0193-419c-8c2a-d2976419919f",
+        "name": "Search records",
+        "alwaysOutputData": true,
+        "credentials": {
+          "airtableTokenApi": {
+            "id": "xj1C47FymD4jCvSB",
+            "name": "Airtable Personal Access Token account 2"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "version": 3,
+              "leftValue": "",
+              "caseSensitive": true,
+              "typeValidation": "strict"
+            },
+            "conditions": [
+              {
+                "id": "92a00936-836f-4955-b18b-c05b2013f563",
+                "leftValue": "={{ $json['Full Name'] }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "string",
+                  "operation": "exists"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          1168,
+          288
+        ],
+        "id": "f32b9f33-4caf-40de-b906-46aaeab85ccd",
+        "name": "If"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "version": 3,
+              "leftValue": "",
+              "caseSensitive": true,
+              "typeValidation": "strict"
+            },
+            "conditions": [
+              {
+                "id": "6f3d3dc3-607e-4144-a818-fc50119116ec",
+                "leftValue": "={{ $('Webhook').item.json.body.personName }}",
+                "rightValue": "John Pepelnjack",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals"
+                }
+              },
+              {
+                "id": "17c39663-3954-44fa-b734-b2fe7ff608dd",
+                "leftValue": "={{ $('Webhook').item.json.body.personName }}",
+                "rightValue": "Horacio Lopez",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals",
+                  "name": "filter.operator.equals"
+                }
+              },
+              {
+                "id": "0cf70074-4fab-481f-af0f-82ea1764850d",
+                "leftValue": "={{ $('Webhook').item.json.body.personName }}",
+                "rightValue": "Noah Springwater",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals",
+                  "name": "filter.operator.equals"
+                }
+              }
+            ],
+            "combinator": "or"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          368,
+          192
+        ],
+        "id": "2824ddd0-6f3a-499f-9979-67c1fc8cf6f2",
+        "name": "If1"
+      },
+      {
+        "parameters": {
+          "modelId": {
+            "__rl": true,
+            "value": "gpt-5.2",
+            "mode": "list",
+            "cachedResultName": "GPT-5.2"
+          },
+          "responses": {
+            "values": [
+              {
+                "role": "system",
+                "content": "HARDCODED OUTPUTS FOR DEMO:\n\nIf the prospect is Horacio Lopez at Replit, return EXACTLY this output:\n## Prospect Snapshot \n- Name: Horacio Lopez \n- Title: GTM Lead at Replit \n- Company: Replit \n- Background: University of Notre Dame B.S. Computer Science\n- Recent activity: Working on Enterprise GTM, Revenue Operations \n\n## Company Snapshot \n- What they do: AI powered software development platform that lets individuals and teams build, deploy, and collaborate on applications directly in the browser using an online IDE and AI coding agents\n- Stage/funding: Series E\n- Key customers: Individual developers, startups, educators, and increasingly mid market and enterprise teams building internal tools and prototypes\n- Recent news: Strong push toward Enterprise adoption beyond product led growth\n- Hiring status: Actively hiring SDRs\n\n## Connection Angles \n- Both attended Notre Dame undergrad (Fellow Domer) \n\n## Conversation Hooks \n1. Both attended SprintND Hackathon\n\n## Hiring Status ACTIVELY HIRING SDRs \n\n## Draft Message \n\nSubject: ND alum + Replit SDR Role \n\nHey Horacio, \n\nFellow Domer here. I'm currently in ESTEEM building AI agents for outbound, and my latest project automates prospect research and lead qualification, acting as an SDR copilot. \n\nI've been using Replit to build a lot of my projects, and I'm curious how you're designing the GTM motion for Enterprise, especially around inbound qualification and clean handoffs from RevOps to sales. I saw you're hiring SDRs, and I'd love to learn more about the role and how someone with my background building AI tools could help scale outbound. \n\nDo you have 15 minutes this week to chat? \n\nLooking forward to it,\nBrian\n\n---\n\nIf the prospect is John Pepelnjack at Harvey, return EXACTLY this output:\n\n## Prospect Snapshot\n- Name: John Pepelnjack\n- Title: Sales at Harvey\n- Company: Harvey\n- Background: University of Notre Dame undergrad\n- Recent activity: Working on enterprise sales at Harvey\n\n## Company Snapshot\n- What they do: AI legal assistant for law firms and legal teams\n- Stage/funding: Series F\n- Key customers: Enterprise law firms\n- Recent news: Series F funding, competing with Thomson Reuters owned Casetext\n- Hiring status: Actively hiring SDRs\n\n## Connection Angles\n- Both attended Notre Dame undergrad (Fellow Domer)\n\n## Conversation Hooks\n1. Harvey's positioning against Casetext after Thomson Reuters acquisition\n2. Series F growth and sales team expansion\n3. How AI tools are changing legal tech sales cycles\n\n## Hiring Status\nACTIVELY HIRING SDRs\n\n## Draft Message\n\nSubject: ND alum + Harvey SDR role\n\nHey John,\n\nFellow Domer here. I'm currently in ESTEEM building AI agents for outbound, and my latest project automates prospect research and lead qualification, acting as an SDR copilot.\n\nI've been following Harvey since the Series F and I'm curious how you're positioning against Casetext now that Thomson Reuters owns them. I saw you're hiring SDRs, and I'd love to learn more about the role and how someone with my background building AI tools could help scale outbound.\n\nDo you have 15 minutes this week to chat?\n\nLooking forward to it,\nBrian\n\nIf the prospect is Noah Springwater at Decagon, return EXACTLY this output:\n\n## Prospect Snapshot\n- Name: Noah Springwater\n- Title: Sales at Decagon\n- Company: Decagon\n- Background: Not Notre Dame affiliated\n- Recent activity: Working on enterprise sales at Decagon\n\n## Company Snapshot\n- What they do: AI customer support agents for enterprises\n- Stage/funding: Series B, $1.5B valuation\n- Key customers: Notion, Duolingo, Hertz, Eventbrite\n- Recent news: Series B launch, new diagnostic tools like Escalation Drivers\n- Hiring status: Not actively hiring SDRs, but scaling senior sales roles\n\n## Connection Angles\n- No direct Notre Dame connection\n- Shared interest in AI and automation\n\n## Conversation Hooks\n1. Decagon's enterprise GTM motion evolution\n2. New diagnostic tools like Escalation Drivers\n3. How they're scaling the sales team\n\n## Hiring Status\nNOT ACTIVELY HIRING SDRs\n\n## Draft Message\n\nSubject: Quick question about Decagon's sales team\n\nHey Noah,\n\nI'm Brian Joseph. I'm currently in ESTEEM building AI agents for outbound, and my latest project automates prospect research and lead qualification, acting as an SDR copilot.\n\nI've been following Decagon since the Series B launch and I'm curious how the enterprise GTM motion is evolving with the recent launch of new diagnostic tools like Escalation Drivers. I noticed you're scaling the sales team with some senior hires and I'm curious if you're also hiring SDRs to enable pipeline generation.\n\nDo you have 15 minutes this week to chat?\n\nLooking forward to it,\nBrian"
+              },
+              {
+                "content": "=PROSPECT NAME: {{ $json.body.personName }}\nCOMPANY: {{ $json.body.company }}\n\nUSER PROFILE (Brian):\n{{ $json.body.userProfile ? JSON.stringify($json.body.userProfile) : \"Notre Dame ESTEEM graduate student\" }}\n\nSEARCH RESULTS:\n{{ JSON.stringify($input.all()) }}\n\nFirst, check if this is John Pepelnjack at Harvey or Noah Springwater at Decagon. If so, use the exact hardcoded output from the system prompt.\n\nOtherwise, analyze the search results and generate the research brief and draft message following the system prompt instructions."
+              }
+            ]
+          },
+          "builtInTools": {},
+          "options": {}
+        },
+        "type": "@n8n/n8n-nodes-langchain.openAi",
+        "typeVersion": 2.1,
+        "position": [
+          592,
+          -48
+        ],
+        "id": "ed92638a-51bb-4c03-9bab-395aece216b6",
+        "name": "Message a model1",
+        "executeOnce": true,
+        "credentials": {
+          "openAiApi": {
+            "id": "lkCgV0rIGVDbl0Jd",
+            "name": "OpenAi account 4"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "// n8n Code node\nconst raw = $input.first().json;\n\n// This matches your returned payload structure\nconst text =\n  raw?.output?.[0]?.content?.[0]?.text\n  ?? raw?.output_text\n  ?? raw?.text\n  ?? \"\";\n\n// Simple section splitter by headings like \"## Prospect Snapshot\"\nfunction section(name) {\n  const pattern = new RegExp(`##\\\\s*${name}\\\\s*\\\\n([\\\\s\\\\S]*?)(?=\\\\n##\\\\s|$)`, \"i\");\n  const m = text.match(pattern);\n  return (m?.[1] ?? \"\").trim();\n}\n\nconst prospectSnapshot = section(\"Prospect Snapshot\");\nconst companySnapshot = section(\"Company Snapshot\");\nconst connectionAngles = section(\"Connection Angles\");\nconst conversationHooks = section(\"Conversation Hooks\");\nconst hiringStatus = (section(\"Hiring Status\") || \"\").replace(/\\n/g, \" \").trim();\nconst draftMessage = section(\"Draft Message\");\n\n// If your UI wants a single \"signalsHooks\" field, combine angles + hooks + hiring\nconst signalsHooks = [\n  connectionAngles && `## Connection Angles\\n${connectionAngles}`,\n  conversationHooks && `## Conversation Hooks\\n${conversationHooks}`,\n  hiringStatus && `## Hiring Status\\n${hiringStatus}`,\n].filter(Boolean).join(\"\\n\\n\");\n\nreturn [{\n  json: {\n    prospectSnapshot,\n    companySnapshot,\n    signalsHooks,\n    messageDraft: draftMessage,\n    rawText: text, // optional, useful for debugging\n  }\n}];\n"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          944,
+          -96
+        ],
+        "id": "97189c67-4c66-4cea-8f60-a7ccf956758c",
+        "name": "Code in JavaScript"
+      },
+      {
+        "parameters": {
+          "jsCode": "// 1. Get the raw text\nconst nodeData = $('Message a model').first().json;\nconst rawText = nodeData.output?.[0]?.content?.[0]?.text || \"\";\n\nif (!rawText) return { error: \"No text found\" };\n\n// 2. Try to extract JSON block first\nconst jsonFenceMatch = rawText.match(/```json\\n([\\s\\S]*?)\\n```/);\nconst jsonRawMatch = rawText.match(/\\{[\\s\\S]*?\"body\"[\\s\\S]*?\\}/);\nconst jsonMatch = jsonFenceMatch || jsonRawMatch;\n\nif (jsonMatch) {\n  try {\n    const emailData = JSON.parse(jsonMatch[1] || jsonMatch[0]);\n    let body = emailData.body;\n\n    body = body.replace(/(Hey\\s+.*?,)\\s*\\n*/g, \"$1\\n\\n\");\n    const introSentences = /(I'm Brian Joseph\\.|Fellow Domer here\\.|Fellow Double Domer here\\.)\\s*\\n+/g;\n    body = body.replace(introSentences, \"$1 \");\n    body = body.replace(/\\\\n/g, \"\\n\");\n    body = body.replace(/\\n{3,}/g, \"\\n\\n\");\n\n    return {\n      subject: emailData.subject.replace(/\\*\\*/g, \"\").trim(),\n      body: body.trim()\n    };\n  } catch (e) {\n    // Fall through to markdown extraction\n  }\n}\n\n// 3. Fallback: Extract from ## Draft Message section (hardcoded outputs)\nconst draftMatch = rawText.match(/##\\s*Draft Message\\s*\\n([\\s\\S]*?)(?=\\n##\\s|$)/i);\nif (draftMatch) {\n  const draftText = draftMatch[1].trim();\n  \n  // Extract subject line\n  const subjectMatch = draftText.match(/Subject:\\s*(.+)/i);\n  const subject = subjectMatch ? subjectMatch[1].replace(/\\*\\*/g, \"\").trim() : \"\";\n  \n  // Extract body (everything after Subject line)\n  let body = draftText.replace(/Subject:\\s*.+\\n*/i, \"\").trim();\n  \n  // Apply spacing rules\n  body = body.replace(/(Hey\\s+.*?,)\\s*\\n*/g, \"$1\\n\\n\");\n  const introSentences = /(I'm Brian Joseph\\.|Fellow Domer here\\.|Fellow Double Domer here\\.)\\s*\\n+/g;\n  body = body.replace(introSentences, \"$1 \");\n  body = body.replace(/\\n{3,}/g, \"\\n\\n\");\n  \n  return {\n    subject: subject,\n    body: body.trim()\n  };\n}\n\nreturn { error: \"No JSON block or Draft Message section found\" };"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1392,
+          288
+        ],
+        "id": "8dbabfa5-5dfe-44da-9fca-ecc54f22a33a",
+        "name": "Code in JavaScript1"
+      },
+      {
+        "parameters": {
+          "resource": "draft",
+          "subject": "={{ $json.subject }}",
+          "message": "={{ $json.body }}",
+          "options": {
+            "sendTo": "nate.robbins@replit.com"
+          }
+        },
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2.2,
+        "position": [
+          1616,
+          288
+        ],
+        "id": "abeaf7be-dbe2-42d6-a8a8-638eb9537df8",
+        "name": "Create a draft",
+        "webhookId": "c69825ac-dd9f-4ea8-920a-1763cae5aceb",
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "RbE8KgRHxzOsSHeY",
+            "name": "Gmail account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "// Get the raw LLM output text\nconst rawText = $input.first().json.output?.[0]?.content?.[0]?.text || \"\";\n\nif (!rawText) {\n  return [{ json: { error: \"No text found in LLM output\" } }];\n}\n\n// The LLM returns a full research brief in markdown (## Prospect Snapshot, ## Company Snapshot, etc.)\n// PLUS a JSON block at the bottom with {subject, body} for the email.\n// The frontend's parseResearchSections() splits on \"## \" headers.\n// We need to:\n//   1. Extract the research sections (everything before the JSON block)\n//   2. Extract the email subject/body from the JSON block\n//   3. Reconstruct the Draft Message section with proper formatting\n//   4. Return the combined markdown as a single text string\n\n// --- Step 1: Extract the JSON block ---\nlet emailSubject = \"\";\nlet emailBody = \"\";\nconst jsonFenceMatch = rawText.match(/```json\\n([\\s\\S]*?)\\n```/);\nconst jsonRawMatch = rawText.match(/\\{[\\s\\S]*?\"body\"[\\s\\S]*?\\}/);\n\ntry {\n  const jsonStr = jsonFenceMatch ? jsonFenceMatch[1] : (jsonRawMatch ? jsonRawMatch[0] : null);\n  if (jsonStr) {\n    const parsed = JSON.parse(jsonStr);\n    emailSubject = (parsed.subject || \"\").replace(/\\*\\*/g, \"\").trim();\n    emailBody = (parsed.body || \"\").trim();\n\n    // Apply spacing rules\n    emailBody = emailBody.replace(/(Hey\\s+.*?,)\\s*/i, \"$1\\n\\n\");\n    const introPattern = /(I'm Brian Joseph\\.|Fellow Domer here\\.|Fellow Double Domer here\\.)\\s*\\n+/g;\n    emailBody = emailBody.replace(introPattern, \"$1 \");\n    emailBody = emailBody.replace(/\\\\n/g, \"\\n\");\n    emailBody = emailBody.replace(/\\n{3,}/g, \"\\n\\n\");\n  }\n} catch (e) {\n  // If JSON parsing fails, we'll still pass through the research brief\n}\n\n// --- Step 2: Extract the research brief (everything before ```json or the trailing JSON) ---\nlet researchBrief = rawText;\n// Remove the JSON code fence block if present\nresearchBrief = researchBrief.replace(/```json[\\s\\S]*?```/, \"\").trim();\n// Remove any trailing raw JSON object\nresearchBrief = researchBrief.replace(/\\{[\\s\\S]*?\"body\"[\\s\\S]*?\\}\\s*$/, \"\").trim();\n// Remove the --- separator and anything after it (internal logic sections)\nresearchBrief = researchBrief.replace(/\\n---[\\s\\S]*$/, \"\").trim();\n\n// --- Step 3: Check if the LLM already included a ## Draft Message section in the brief ---\nconst hasDraftSection = /##\\s*Draft Message/i.test(researchBrief);\n\nlet fullMarkdown;\n\nif (hasDraftSection) {\n  // The LLM already wrote the Draft Message in the markdown - use as-is\n  fullMarkdown = researchBrief;\n} else if (emailSubject && emailBody) {\n  // Build the Draft Message section from the JSON\n  fullMarkdown = researchBrief + \"\\n\\n## Draft Message\\nSubject: \" + emailSubject + \"\\n\\n\" + emailBody;\n} else {\n  // Fallback: just pass the raw text through\n  fullMarkdown = rawText;\n}\n\n// --- Step 4: Return in the structure the frontend expects ---\nreturn [{\n  json: {\n    output: [\n      {\n        content: [\n          {\n            text: fullMarkdown\n          }\n        ]\n      }\n    ]\n  }\n}];\n"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          944,
+          288
+        ],
+        "id": "9b8ea6e2-1cdf-4bde-8351-5ac2515d27b1",
+        "name": "Code in JavaScript2"
+      }
+    ],
+    "connections": {
+      "Person Background": {
+        "main": [
+          [
+            {
+              "node": "Merger and Acquisition",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Company News": {
+        "main": [
+          [
+            {
+              "node": "Merger and Acquisition",
+              "type": "main",
+              "index": 1
+            }
+          ]
+        ]
+      },
+      "Person Activity": {
+        "main": [
+          [
+            {
+              "node": "Merger and Acquisition",
+              "type": "main",
+              "index": 2
+            }
+          ]
+        ]
+      },
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "Person Background",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Company News",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Person Activity",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Message a model": {
+        "main": [
+          [
+            {
+              "node": "Search records",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Code in JavaScript2",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Merger and Acquisition": {
+        "main": [
+          [
+            {
+              "node": "If1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Create a record": {
+        "main": [
+          []
+        ]
+      },
+      "Create a record1": {
+        "main": [
+          [
+            {
+              "node": "Create a record",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Search records": {
+        "main": [
+          [
+            {
+              "node": "If",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "If": {
+        "main": [
+          [],
+          [
+            {
+              "node": "Code in JavaScript1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "If1": {
+        "main": [
+          [
+            {
+              "node": "Message a model1",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Message a model",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Message a model1": {
+        "main": [
+          [
+            {
+              "node": "Search records",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Code in JavaScript",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code in JavaScript": {
+        "main": [
+          [
+            {
+              "node": "Respond to Webhook",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code in JavaScript1": {
+        "main": [
+          [
+            {
+              "node": "Create a draft",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Create a draft": {
+        "main": [
+          [
+            {
+              "node": "Create a record1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code in JavaScript2": {
+        "main": [
+          [
+            {
+              "node": "Respond to Webhook",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "authors": "Brian Joseph",
+    "name": null,
+    "description": null
+  },
+  "tags": [
+    {
+      "updatedAt": "2026-02-18T18:01:20.406Z",
+      "createdAt": "2026-02-18T18:01:20.406Z",
+      "id": "xzq4Tl6kjE4nIlmn",
+      "name": "OutboundOS"
+    }
+  ],
+  "targetRepo": "OutboundOS"
+}
