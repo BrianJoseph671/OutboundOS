@@ -519,19 +519,35 @@ export async function registerRoutes(
     }
   });
 
-  // Sync/Refresh contacts from Airtable
-  app.post("/api/airtable/sync", async (req, res) => {
+  // Sync/Refresh contacts from Airtable (config from body = per-browser; else fallback to stored config)
+  app.post("/api/airtable/sync", express.json(), async (req, res) => {
     try {
-      const config = await storage.getAirtableConfig();
-      
+      const bodyConfig = req.body?.baseId && req.body?.tableName && req.body?.personalAccessToken
+        ? {
+            baseId: req.body.baseId,
+            tableName: req.body.tableName,
+            personalAccessToken: req.body.personalAccessToken,
+            viewName: req.body.viewName || "Grid view",
+            fieldMapping: req.body.fieldMapping,
+          }
+        : null;
+
+      const dbConfig = bodyConfig ? null : await storage.getAirtableConfig();
+      const config = bodyConfig || dbConfig;
+
       if (!config) {
         return res.status(400).json({ message: "Airtable not connected" });
       }
 
-      // Build URL with view parameter to preserve Airtable grid order
+      const viewName = config.viewName || "Grid view";
+      const fieldMappingRaw = config.fieldMapping;
+      const fieldMapping = typeof fieldMappingRaw === "string"
+        ? (fieldMappingRaw ? JSON.parse(fieldMappingRaw) : {})
+        : (fieldMappingRaw || {});
+
       const params = new URLSearchParams({
         maxRecords: "1000",
-        view: config.viewName || "Grid view", // Use stored view to preserve user's ordering
+        view: viewName,
       });
 
       const response = await fetch(
@@ -545,8 +561,8 @@ export async function registerRoutes(
 
       if (!response.ok) {
         const error = await response.json();
-        return res.status(response.status).json({ 
-          message: error.error?.message || "Failed to fetch from Airtable" 
+        return res.status(response.status).json({
+          message: error.error?.message || "Failed to fetch from Airtable",
         });
       }
 
@@ -554,10 +570,9 @@ export async function registerRoutes(
       const records = data.records || [];
 
       if (records.length === 0) {
-        return res.json({ synced: 0, created: 0, updated: 0, message: "No records found" });
+        return res.json({ synced: 0, contacts: [], lastSyncAt: new Date().toISOString(), message: "No records found" });
       }
 
-      const fieldMapping = config.fieldMapping ? JSON.parse(config.fieldMapping) : {};
       const contacts: Array<Record<string, string>> = [];
 
       for (const record of records) {
@@ -574,9 +589,9 @@ export async function registerRoutes(
         }
       }
 
-      await storage.updateAirtableConfig(config.id, {
-        lastSyncAt: new Date(),
-      });
+      if (dbConfig?.id) {
+        await storage.updateAirtableConfig(dbConfig.id, { lastSyncAt: new Date() });
+      }
 
       res.json({
         synced: records.length,

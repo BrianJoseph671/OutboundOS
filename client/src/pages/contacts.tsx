@@ -3,6 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useContacts } from "@/hooks/useContacts";
+import { useAirtableConfig } from "@/hooks/useAirtableConfig";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1429,16 +1430,23 @@ export default function Contacts() {
     return map;
   }, [packetsData?.packets]);
 
-  const { data: airtableConfig, refetch: refetchAirtableConfig } = useQuery<AirtableConfig>({
-    queryKey: ["/api/airtable/config"],
-  });
+  const { config: airtableConfig, clearConfig: clearAirtableConfig, updateLastSync } = useAirtableConfig();
 
   const syncAirtableMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("POST", "/api/airtable/sync");
+      if (!airtableConfig?.personalAccessToken) {
+        throw new Error("Connect Airtable first");
+      }
+      const response = await apiRequest("POST", "/api/airtable/sync", {
+        baseId: airtableConfig.baseId,
+        tableName: airtableConfig.tableName,
+        personalAccessToken: airtableConfig.personalAccessToken,
+        viewName: airtableConfig.viewName ?? "Grid view",
+        fieldMapping: airtableConfig.fieldMapping ?? undefined,
+      });
       const data = await response.json();
       const incoming = data.contacts ?? [];
-      if (incoming.length === 0) return { created: 0, updated: 0 };
+      if (incoming.length === 0) return { created: 0, updated: 0, lastSyncAt: data.lastSyncAt };
       const toCreate: Array<Omit<Contact, "id" | "createdAt">> = [];
       let updated = 0;
       for (const c of incoming) {
@@ -1486,11 +1494,11 @@ export default function Contacts() {
         }
       }
       if (toCreate.length > 0) await bulkCreate(toCreate);
-      return { created: toCreate.length, updated };
+      return { created: toCreate.length, updated, lastSyncAt: data.lastSyncAt };
     },
     onSuccess: (data) => {
       invalidate();
-      refetchAirtableConfig();
+      if (data.lastSyncAt) updateLastSync(data.lastSyncAt);
       toast({
         title: "Airtable synced",
         description: `${data.created} new, ${data.updated} updated`,
@@ -1502,9 +1510,11 @@ export default function Contacts() {
   });
 
   const disconnectAirtableMutation = useMutation({
-    mutationFn: () => apiRequest("DELETE", "/api/airtable/config"),
+    mutationFn: async () => {
+      clearAirtableConfig();
+      await apiRequest("DELETE", "/api/airtable/config");
+    },
     onSuccess: () => {
-      refetchAirtableConfig();
       toast({ title: "Airtable disconnected" });
     },
     onError: () => {

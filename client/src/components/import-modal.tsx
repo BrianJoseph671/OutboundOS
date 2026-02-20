@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useContacts } from "@/hooks/useContacts";
+import { setAirtableConfig } from "@/lib/airtableConfigStorage";
 import {
   Dialog,
   DialogContent,
@@ -171,6 +172,14 @@ export function ImportModal({ open, onOpenChange, onSuccess }: ImportModalProps)
       setAirtableData(data);
       setAirtableConnected(true);
       autoMapFields(data.headers, true);
+      setAirtableConfig({
+        connected: true,
+        baseId: airtableBaseId,
+        tableName: airtableTableName,
+        personalAccessToken: airtableToken,
+        viewName: "Grid view",
+        fieldMapping: {},
+      });
       toast({ title: "Connected to Airtable" });
     },
     onError: (error: Error) => {
@@ -319,14 +328,14 @@ export function ImportModal({ open, onOpenChange, onSuccess }: ImportModalProps)
 
     setIsImporting(true);
     try {
-      const configToSave = {
+      setAirtableConfig({
+        connected: true,
         baseId: airtableBaseId,
         tableName: airtableTableName,
         personalAccessToken: airtableToken,
-        fieldMapping: airtableFieldMapping,
         viewName: "Grid view",
-      };
-      await apiRequest("POST", "/api/airtable/config", configToSave);
+        fieldMapping: airtableFieldMapping,
+      });
     } catch {
       toast({ title: "Warning", description: "Could not save Airtable connection, importing contacts anyway", variant: "destructive" });
     }
