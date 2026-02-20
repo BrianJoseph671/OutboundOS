@@ -792,10 +792,10 @@ export default function OutreachLog() {
   const handleExport = async () => {
     try {
       const contactIds = contacts.map((c) => c.id).join(",");
-      const url = contactIds
+      const exportUrl = contactIds
         ? `/api/export/outreach-attempts?contactIds=${encodeURIComponent(contactIds)}`
         : "/api/export/outreach-attempts";
-      const response = await fetch(url);
+      const response = await fetch(exportUrl);
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
