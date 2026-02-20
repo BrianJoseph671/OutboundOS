@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { useContacts } from "@/hooks/useContacts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, ArrowLeft, User, Building2, Zap, MessageSquare, Loader2, Copy, Check, AlertCircle } from "lucide-react";
@@ -34,9 +35,7 @@ export default function ResearchQueue() {
     return idParam ? idParam.split(",").map((id) => id.trim()).filter(Boolean) : [];
   }, [location]);
 
-  const { data: contacts = [], isLoading: contactsLoading } = useQuery<Contact[]>({
-    queryKey: ["/api/contacts"],
-  });
+  const { contacts, isLoading: contactsLoading } = useContacts();
 
   const { data: packetsData, isLoading: packetsLoading } = useQuery<{ packets: ApiResearchPacket[] }>({
     queryKey: ["/api/research-packets", ids.join(",")],

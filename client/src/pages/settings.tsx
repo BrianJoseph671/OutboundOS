@@ -30,6 +30,7 @@ import {
 import type { Settings as SettingsType } from "@shared/schema";
 import { format } from "date-fns";
 import { getStoredProfile, clearStoredProfile, type UserProfile } from "@/components/profile-setup";
+import { getContacts } from "@/lib/contactsStorage";
 
 export default function Settings() {
   const { toast } = useToast();
@@ -86,10 +87,26 @@ export default function Settings() {
     toast({ title: "Settings reset to defaults" });
   };
 
-  const handleExportContacts = async () => {
+  const handleExportContacts = () => {
     try {
-      const response = await fetch("/api/export/contacts");
-      const blob = await response.blob();
+      const contacts = getContacts();
+      const headers = ["Name", "Company", "Role", "Email", "LinkedIn URL", "Location", "Tags"];
+      const rows = contacts.map((c) => [
+        c.name || "",
+        c.company || "",
+        c.role || "",
+        c.email || "",
+        c.linkedinUrl || "",
+        c.location || "",
+        c.tags || "",
+      ]);
+      const csv = [
+        headers.join(","),
+        ...rows.map((row) =>
+          row.map((cell) => `"${(cell || "").replace(/"/g, '""')}"`).join(",")
+        ),
+      ].join("\n");
+      const blob = new Blob([csv], { type: "text/csv" });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;

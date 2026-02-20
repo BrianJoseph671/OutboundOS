@@ -37,6 +37,7 @@ import {
   Webhook,
 } from "lucide-react";
 import type { OutreachAttempt, Contact, Experiment, InsertOutreachAttempt } from "@shared/schema";
+import { useContacts } from "@/hooks/useContacts";
 import { format } from "date-fns";
 import { useLocation } from "wouter";
 
@@ -741,9 +742,7 @@ export default function OutreachLog() {
     setLastSelectedIndex(index);
   };
 
-  const { data: contacts = [] } = useQuery<Contact[]>({
-    queryKey: ["/api/contacts"],
-  });
+  const { contacts } = useContacts();
 
   const { data: experiments = [] } = useQuery<Experiment[]>({
     queryKey: ["/api/experiments"],
@@ -792,7 +791,11 @@ export default function OutreachLog() {
 
   const handleExport = async () => {
     try {
-      const response = await fetch("/api/export/outreach-attempts");
+      const contactIds = contacts.map((c) => c.id).join(",");
+      const url = contactIds
+        ? `/api/export/outreach-attempts?contactIds=${encodeURIComponent(contactIds)}`
+        : "/api/export/outreach-attempts";
+      const response = await fetch(url);
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");

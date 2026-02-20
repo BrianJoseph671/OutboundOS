@@ -85,6 +85,58 @@ export class DatabaseStorage implements IStorage {
     return results.filter(r => r.length > 0).length;
   }
 
+  async upsertContact(contact: Contact): Promise<Contact> {
+    const existing = await this.getContact(contact.id);
+    if (existing) {
+      const [updated] = await db
+        .update(contacts)
+        .set({
+          name: contact.name,
+          company: contact.company,
+          role: contact.role,
+          linkedinUrl: contact.linkedinUrl,
+          email: contact.email,
+          headline: contact.headline,
+          about: contact.about,
+          location: contact.location,
+          experience: contact.experience,
+          education: contact.education,
+          skills: contact.skills,
+          keywords: contact.keywords,
+          notes: contact.notes,
+          tags: contact.tags,
+          researchStatus: contact.researchStatus,
+          researchData: contact.researchData,
+        })
+        .where(eq(contacts.id, contact.id))
+        .returning();
+      return updated!;
+    }
+    const [created] = await db
+      .insert(contacts)
+      .values({
+        id: contact.id,
+        name: contact.name,
+        company: contact.company,
+        role: contact.role,
+        linkedinUrl: contact.linkedinUrl,
+        email: contact.email,
+        headline: contact.headline,
+        about: contact.about,
+        location: contact.location,
+        experience: contact.experience,
+        education: contact.education,
+        skills: contact.skills,
+        keywords: contact.keywords,
+        notes: contact.notes,
+        tags: contact.tags,
+        researchStatus: contact.researchStatus,
+        researchData: contact.researchData,
+      })
+      .returning();
+    return created!;
+  }
+
   // Outreach Attempts
   async getOutreachAttempts(): Promise<OutreachAttempt[]> {
     return await db.select().from(outreachAttempts).orderBy(desc(outreachAttempts.dateSent));

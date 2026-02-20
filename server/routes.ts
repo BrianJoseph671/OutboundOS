@@ -225,7 +225,21 @@ export async function registerRoutes(
 
 
   
-  // Contacts
+  // Contacts - sync endpoint for localStorage shadow (FK integrity)
+  app.post("/api/contacts/sync", express.json(), async (req, res) => {
+    try {
+      const contact = req.body;
+      if (!contact?.id || !contact?.name) {
+        return res.status(400).json({ error: "id and name are required" });
+      }
+      const upserted = await storage.upsertContact(contact);
+      res.json(upserted);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to sync contact" });
+    }
+  });
+
+  // Contacts (legacy - client uses localStorage; kept for backward compatibility)
   app.get("/api/contacts", async (req, res) => {
     try {
       const contacts = await storage.getContacts();
@@ -544,42 +558,19 @@ export async function registerRoutes(
       }
 
       const fieldMapping = config.fieldMapping ? JSON.parse(config.fieldMapping) : {};
-      let created = 0;
-      let updated = 0;
+      const contacts: Array<Record<string, string>> = [];
 
-      // Process records in sequential order to preserve Airtable's sequence
       for (const record of records) {
         const fields = record.fields || {};
-        
         const contact: Record<string, string> = {};
-        
         for (const [airtableField, appField] of Object.entries(fieldMapping)) {
           if (appField && fields[airtableField]) {
             contact[appField as string] = String(fields[airtableField]).trim();
           }
         }
-
-        if (!contact.name) continue;
-
-        const existingContacts = await storage.getContacts();
-        const existing = existingContacts.find(c => 
-          c.name.toLowerCase() === contact.name.toLowerCase() && 
-          (c.company?.toLowerCase() === contact.company?.toLowerCase() || (!c.company && !contact.company))
-        );
-
-        if (existing) {
-          await storage.updateContact(existing.id, {
-            ...contact,
-            tags: existing.tags?.includes("airtable-sync") ? existing.tags : `${existing.tags || ""},airtable-sync`,
-          });
-          updated++;
-        } else {
-          // Important: createContact is awaited to ensure sequential database insertion
-          await storage.createContact({
-            ...contact,
-            tags: "airtable-sync",
-          } as any);
-          created++;
+        if (contact.name) {
+          contact.tags = (contact.tags ? `${contact.tags},` : "") + "airtable-sync";
+          contacts.push(contact);
         }
       }
 
@@ -587,10 +578,9 @@ export async function registerRoutes(
         lastSyncAt: new Date(),
       });
 
-      res.json({ 
-        synced: records.length, 
-        created, 
-        updated,
+      res.json({
+        synced: records.length,
+        contacts,
         lastSyncAt: new Date().toISOString(),
       });
     } catch (error) {
@@ -1393,7 +1383,17 @@ export async function registerRoutes(
 
   app.get("/api/export/outreach-attempts", async (req, res) => {
     try {
-      const attempts = await storage.getOutreachAttempts();
+      const contactIdsParam = req.query.contactIds as string | undefined;
+      const contactIds = contactIdsParam
+        ? contactIdsParam.split(",").map((id) => id.trim()).filter(Boolean)
+        : null;
+
+      let attempts = await storage.getOutreachAttempts();
+      if (contactIds && contactIds.length > 0) {
+        const idSet = new Set(contactIds);
+        attempts = attempts.filter((a) => idSet.has(a.contactId));
+      }
+
       const contacts = await storage.getContacts();
       const contactMap = new Map(contacts.map((c) => [c.id, c]));
 
@@ -1652,10 +1652,25 @@ export async function registerRoutes(
   }
 
   app.post("/api/research/bulk", async (req, res) => {
-    const { contactIds } = req.body as { contactIds?: string[] };
+    const { contactIds, contacts: contactsPayload } = req.body as {
+      contactIds?: string[];
+      contacts?: Array<{ id: string; name: string; company?: string }>;
+    };
 
-    if (!Array.isArray(contactIds) || contactIds.length === 0) {
-      return res.status(400).json({ error: "contactIds array is required" });
+    // Support both: contacts array (from localStorage) or contactIds (legacy)
+    let contacts: Array<{ id: string; name: string; company?: string } | null>;
+    let contactIdsList: string[];
+
+    if (Array.isArray(contactsPayload) && contactsPayload.length > 0) {
+      contacts = contactsPayload;
+      contactIdsList = contactsPayload.map((c) => c.id);
+    } else if (Array.isArray(contactIds) && contactIds.length > 0) {
+      contactIdsList = contactIds;
+      contacts = await Promise.all(
+        contactIds.map((id) => storage.getContact(id))
+      );
+    } else {
+      return res.status(400).json({ error: "contacts or contactIds array is required" });
     }
 
     const CONCURRENCY = 3;
@@ -1666,10 +1681,6 @@ export async function registerRoutes(
       "https://n8n.srv1096794.hstgr.cloud/webhook/028dc28a-4779-4a35-80cf-87dfbde544f8";
 
     const batchId = `bulk-${Date.now()}`;
-
-    const contacts = await Promise.all(
-      contactIds.map((id) => storage.getContact(id))
-    );
 
     res.writeHead(200, {
       "Content-Type": "text/event-stream",
@@ -1766,7 +1777,7 @@ export async function registerRoutes(
       return result;
     }
 
-    for (const id of contactIds!) {
+    for (const id of contactIdsList) {
       send("status", { contactId: id, status: "queued" });
       await storage.upsertResearchPacket(id, { status: "queued" });
     }
@@ -1779,7 +1790,7 @@ export async function registerRoutes(
     }
 
     const queue: QueueTask[] = contacts.map((contact, idx) => {
-      const id = contactIds![idx];
+      const id = contactIdsList[idx];
       const name = contact?.name || "Unknown";
       const comp = contact?.company || "";
 
@@ -1845,7 +1856,7 @@ export async function registerRoutes(
       next();
     });
 
-    send("done", { total: contactIds.length, results });
+    send("done", { total: contactIdsList.length, results });
     res.end();
   });
 
