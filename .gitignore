@@ -5,3 +5,6 @@ server/public
 vite.config.ts.*
 *.tar.gz
 .mcp.json
+
+# Cursor/Claude worktrees and state (duplicate repo copies, not source of truth)
+.claude
