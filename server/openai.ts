@@ -3,11 +3,10 @@ console.log("openai service loaded");
 import OpenAI from "openai";
 
 const apiKey = process.env.OPENAI_API_KEY;
-if (!apiKey) throw new Error("Missing OPENAI_API_KEY");
-
-export const openai = new OpenAI({ apiKey });
+export const openai = apiKey ? new OpenAI({ apiKey }) : null;
 
 export async function parseLinkedInTextToJson(text: string) {
+  if (!openai) throw new Error("OPENAI_API_KEY is not set");
   const completion = await openai.chat.completions.create({
     model: "gpt-4-turbo",
     max_tokens: 1024,
@@ -52,6 +51,7 @@ ${text.slice(0, 15000)}`,
 }
 
 export async function generateDraft(prompt: string) {
+  if (!openai) throw new Error("OPENAI_API_KEY is not set");
   const res = await openai.chat.completions.create({
     model: "gpt-4o-mini",
     max_tokens: 400,

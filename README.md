@@ -120,6 +120,36 @@ Generates multiple outreach message options tailored to different angles and com
 
 ---
 
+## Database setup (persist research)
+
+Research results are stored in PostgreSQL. Without a database, the app still runs and shows research from the current session (streamed from n8n and cached in the browser); to **persist** research so you can view it after closing the page or coming back later:
+
+1. **Install and start PostgreSQL** (if you don’t have it):
+   - **Windows:** [PostgreSQL installer](https://www.postgresql.org/download/windows/) or `winget install PostgreSQL.PostgreSQL`
+   - **macOS:** `brew install postgresql@16 && brew services start postgresql@16`
+   - **Linux:** `sudo apt install postgresql` (or your distro’s package)
+
+2. **Create a database** (e.g. in `psql` or pgAdmin):
+   ```sql
+   CREATE DATABASE outboundos;
+   ```
+
+3. **Set `DATABASE_URL` in `.env`** (copy from `.env.example` if needed):
+   ```env
+   DATABASE_URL=postgresql://USER:PASSWORD@localhost:5432/outboundos
+   ```
+   Replace `USER` and `PASSWORD` with your Postgres user and password.
+
+4. **Create tables** (from the project root):
+   ```bash
+   npm run db:push
+   ```
+   This syncs the schema (including the `research_packets` table) to your database.
+
+5. **Restart the app** and run research again. New research will be saved to the database, and “View results” will load from the DB so it persists across sessions.
+
+---
+
 ## What I Learned
 
 - **Speed matters more than perfection** - 80% accuracy in 30 seconds beats 95% accuracy in 20 minutes

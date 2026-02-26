@@ -11,11 +11,18 @@ import {
   insertSettingsSchema,
 } from "@shared/schema";
 import batchRouter from "./routes/batch";
+import { appendResearchedTag } from "./utils/contactTags";
 
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
 });
+
+// Pending prospect research: n8n calls back to /api/webhooks/prospect-research-result with the result
+const pendingProspectResearch = new Map<
+  string,
+  { resolve: (data: unknown) => void; reject: (err: Error) => void; timeoutId: ReturnType<typeof setTimeout> }
+>();
 
 // const openai = new OpenAI({
 //   apiKey: process.env.OPENAI_API_KEY,
@@ -225,7 +232,21 @@ export async function registerRoutes(
 
 
   
-  // Contacts
+  // Contacts - sync endpoint for localStorage shadow (FK integrity)
+  app.post("/api/contacts/sync", express.json(), async (req, res) => {
+    try {
+      const contact = req.body;
+      if (!contact?.id || !contact?.name) {
+        return res.status(400).json({ error: "id and name are required" });
+      }
+      const upserted = await storage.upsertContact(contact);
+      res.json(upserted);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to sync contact" });
+    }
+  });
+
+  // Contacts (legacy - client uses localStorage; kept for backward compatibility)
   app.get("/api/contacts", async (req, res) => {
     try {
       const contacts = await storage.getContacts();
@@ -505,19 +526,35 @@ export async function registerRoutes(
     }
   });
 
-  // Sync/Refresh contacts from Airtable
-  app.post("/api/airtable/sync", async (req, res) => {
+  // Sync/Refresh contacts from Airtable (config from body = per-browser; else fallback to stored config)
+  app.post("/api/airtable/sync", express.json(), async (req, res) => {
     try {
-      const config = await storage.getAirtableConfig();
-      
+      const bodyConfig = req.body?.baseId && req.body?.tableName && req.body?.personalAccessToken
+        ? {
+            baseId: req.body.baseId,
+            tableName: req.body.tableName,
+            personalAccessToken: req.body.personalAccessToken,
+            viewName: req.body.viewName || "Grid view",
+            fieldMapping: req.body.fieldMapping,
+          }
+        : null;
+
+      const dbConfig = bodyConfig ? null : await storage.getAirtableConfig();
+      const config = bodyConfig || dbConfig;
+
       if (!config) {
         return res.status(400).json({ message: "Airtable not connected" });
       }
 
-      // Build URL with view parameter to preserve Airtable grid order
+      const viewName = config.viewName || "Grid view";
+      const fieldMappingRaw = config.fieldMapping;
+      const fieldMapping = typeof fieldMappingRaw === "string"
+        ? (fieldMappingRaw ? JSON.parse(fieldMappingRaw) : {})
+        : (fieldMappingRaw || {});
+
       const params = new URLSearchParams({
         maxRecords: "1000",
-        view: config.viewName || "Grid view", // Use stored view to preserve user's ordering
+        view: viewName,
       });
 
       const response = await fetch(
@@ -531,8 +568,8 @@ export async function registerRoutes(
 
       if (!response.ok) {
         const error = await response.json();
-        return res.status(response.status).json({ 
-          message: error.error?.message || "Failed to fetch from Airtable" 
+        return res.status(response.status).json({
+          message: error.error?.message || "Failed to fetch from Airtable",
         });
       }
 
@@ -540,57 +577,32 @@ export async function registerRoutes(
       const records = data.records || [];
 
       if (records.length === 0) {
-        return res.json({ synced: 0, created: 0, updated: 0, message: "No records found" });
+        return res.json({ synced: 0, contacts: [], lastSyncAt: new Date().toISOString(), message: "No records found" });
       }
 
-      const fieldMapping = config.fieldMapping ? JSON.parse(config.fieldMapping) : {};
-      let created = 0;
-      let updated = 0;
+      const contacts: Array<Record<string, string>> = [];
 
-      // Process records in sequential order to preserve Airtable's sequence
       for (const record of records) {
         const fields = record.fields || {};
-        
         const contact: Record<string, string> = {};
-        
         for (const [airtableField, appField] of Object.entries(fieldMapping)) {
           if (appField && fields[airtableField]) {
             contact[appField as string] = String(fields[airtableField]).trim();
           }
         }
-
-        if (!contact.name) continue;
-
-        const existingContacts = await storage.getContacts();
-        const existing = existingContacts.find(c => 
-          c.name.toLowerCase() === contact.name.toLowerCase() && 
-          (c.company?.toLowerCase() === contact.company?.toLowerCase() || (!c.company && !contact.company))
-        );
-
-        if (existing) {
-          await storage.updateContact(existing.id, {
-            ...contact,
-            tags: existing.tags?.includes("airtable-sync") ? existing.tags : `${existing.tags || ""},airtable-sync`,
-          });
-          updated++;
-        } else {
-          // Important: createContact is awaited to ensure sequential database insertion
-          await storage.createContact({
-            ...contact,
-            tags: "airtable-sync",
-          } as any);
-          created++;
+        if (contact.name) {
+          contact.tags = (contact.tags ? `${contact.tags},` : "") + "airtable-sync";
+          contacts.push(contact);
         }
       }
 
-      await storage.updateAirtableConfig(config.id, {
-        lastSyncAt: new Date(),
-      });
+      if (dbConfig?.id) {
+        await storage.updateAirtableConfig(dbConfig.id, { lastSyncAt: new Date() });
+      }
 
-      res.json({ 
-        synced: records.length, 
-        created, 
-        updated,
+      res.json({
+        synced: records.length,
+        contacts,
         lastSyncAt: new Date().toISOString(),
       });
     } catch (error) {
@@ -727,6 +739,44 @@ export async function registerRoutes(
       console.error("[Outreach Webhook] Fatal error:", error);
       res.status(500).json({ error: error.message || "Failed to process outreach logs" });
     }
+  });
+
+  // n8n callback: prospect research result (n8n POSTs the result here when workflow finishes)
+  app.post("/api/webhooks/prospect-research-result", express.json(), (req, res) => {
+    const body = req.body;
+    let result: unknown = null;
+    let requestId: string | null = null;
+
+    if (body && typeof body === "object" && body.requestId != null) {
+      requestId = String(body.requestId);
+      result = body.result ?? body.data ?? body;
+    } else if (Array.isArray(body)) {
+      result = body;
+    } else if (body && typeof body === "object") {
+      result = body;
+    }
+
+    if (result != null && requestId) {
+      const pending = pendingProspectResearch.get(requestId);
+      if (pending) {
+        clearTimeout(pending.timeoutId);
+        pendingProspectResearch.delete(requestId);
+        pending.resolve(result);
+      }
+    } else if (result != null && pendingProspectResearch.size > 0) {
+      // No requestId: resolve the first pending (single in-flight)
+      const firstKey = pendingProspectResearch.keys().next().value;
+      if (firstKey) {
+        const pending = pendingProspectResearch.get(firstKey);
+        if (pending) {
+          clearTimeout(pending.timeoutId);
+          pendingProspectResearch.delete(firstKey);
+          pending.resolve(result);
+        }
+      }
+    }
+
+    res.status(200).json({ received: true });
   });
 
   // Bulk Create Contacts - Create multiple contacts at once
@@ -1061,10 +1111,20 @@ export async function registerRoutes(
   // Outreach Attempts
   app.get("/api/outreach-attempts", async (req, res) => {
     try {
-      const attempts = await storage.getOutreachAttempts();
+      let attempts = await storage.getOutreachAttempts();
+      const contactIdsRaw = req.query.contactIds;
+      if (contactIdsRaw !== undefined) {
+        const contactIds = typeof contactIdsRaw === "string"
+          ? contactIdsRaw.split(",").filter(Boolean)
+          : [];
+        const idSet = new Set(contactIds);
+        attempts = attempts.filter((a) => idSet.has(a.contactId));
+      }
       res.json(attempts);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch outreach attempts" });
+    } catch (error: any) {
+      const msg = error?.message ?? error?.detail ?? error?.code ?? String(error);
+      console.error("[outreach-attempts] Error:", msg, error);
+      res.json([]);
     }
   });
 
@@ -1266,8 +1326,10 @@ export async function registerRoutes(
     try {
       const experiments = await storage.getExperiments();
       res.json(experiments);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch experiments" });
+    } catch (error: any) {
+      const msg = error?.message ?? error?.detail ?? error?.code ?? String(error);
+      console.error("[experiments] Error:", msg, error);
+      res.json([]);
     }
   });
 
@@ -1393,7 +1455,17 @@ export async function registerRoutes(
 
   app.get("/api/export/outreach-attempts", async (req, res) => {
     try {
-      const attempts = await storage.getOutreachAttempts();
+      const contactIdsParam = req.query.contactIds as string | undefined;
+      const contactIds = contactIdsParam
+        ? contactIdsParam.split(",").map((id) => id.trim()).filter(Boolean)
+        : null;
+
+      let attempts = await storage.getOutreachAttempts();
+      if (contactIds && contactIds.length > 0) {
+        const idSet = new Set(contactIds);
+        attempts = attempts.filter((a) => idSet.has(a.contactId));
+      }
+
       const contacts = await storage.getContacts();
       const contactMap = new Map(contacts.map((c) => [c.id, c]));
 
@@ -1469,7 +1541,8 @@ export async function registerRoutes(
       res.status(500).json({ error: error.message || "Failed to generate outreach" });
     }
   });
-  // Proxy endpoint for n8n prospect research workflow
+  // Prospect research: trigger n8n. If n8n responds with result in same request, use it; else wait for
+  // n8n to POST result to /api/webhooks/prospect-research-result (for async workflows on Replit).
   app.post("/api/prospect-research", async (req, res) => {
     try {
       const { personName, company } = req.body;
@@ -1478,21 +1551,68 @@ export async function registerRoutes(
         return res.status(400).json({ error: "personName and company are required" });
       }
 
+      const requestId = crypto.randomUUID();
+      const resultPromise = new Promise<unknown>((resolve, reject) => {
+        const timeoutId = setTimeout(() => {
+          if (pendingProspectResearch.delete(requestId)) {
+            reject(new Error("Research timed out (120s). Ensure n8n either responds in the same request or calls POST /api/webhooks/prospect-research-result with the result."));
+          }
+        }, 120_000);
+        pendingProspectResearch.set(requestId, { resolve, reject, timeoutId });
+      });
+
       const response = await fetch("https://n8n.srv1096794.hstgr.cloud/webhook/028dc28a-4779-4a35-80cf-87dfbde544f8", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ personName, company }),
+        body: JSON.stringify({ personName, company, requestId }),
       });
 
       if (!response.ok) {
+        const err = pendingProspectResearch.get(requestId);
+        if (err) {
+          clearTimeout(err.timeoutId);
+          pendingProspectResearch.delete(requestId);
+        }
         const errorText = await response.text();
+        console.error("Prospect research n8n non-OK:", response.status, errorText);
         return res.status(response.status).json({ error: errorText || `HTTP ${response.status}` });
       }
 
-      const result = await response.json();
-      res.json(result);
+      const contentType = response.headers.get("content-type") || "";
+      const hasJson = contentType.includes("application/json");
+      let result: unknown = null;
+      if (hasJson) {
+        try {
+          result = await response.json();
+        } catch {
+          // ignore
+        }
+      }
+      const hasResult = result != null && (
+        (Array.isArray(result) && result.length > 0) ||
+        (typeof result === "object" && (
+          Array.isArray((result as any).output) ||
+          (result as any).result != null ||
+          (result as any).prospectSnapshot != null ||
+          (result as any).rawText != null
+        ))
+      );
+      if (hasResult) {
+        const err = pendingProspectResearch.get(requestId);
+        if (err) {
+          clearTimeout(err.timeoutId);
+          pendingProspectResearch.delete(requestId);
+        }
+        return res.json(result);
+      }
+
+      const callbackResult = await resultPromise;
+      res.json(callbackResult);
     } catch (error: any) {
-      console.error("Prospect research webhook error:", error);
+      if (error?.message?.includes("timed out")) {
+        return res.status(504).json({ error: error.message });
+      }
+      console.error("Prospect research error:", error);
       res.status(500).json({ error: error.message || "Failed to research prospect" });
     }
   });
@@ -1556,18 +1676,35 @@ export async function registerRoutes(
     }
   });
 
-  // GET /api/research-packets — Fetch research packets by contact IDs
+  // GET /api/research-packets — Fetch research packets by contact IDs (required for per-browser)
   app.get("/api/research-packets", async (req, res) => {
     try {
       const contactIdsParam = req.query.contactIds as string | undefined;
       const contactIds = contactIdsParam
         ? contactIdsParam.split(",").map((id) => id.trim()).filter(Boolean)
         : [];
-      const packets = contactIds.length > 0
-        ? await storage.getResearchPacketsByContactIds(contactIds)
-        : await storage.getAllResearchPackets();
+      if (contactIds.length === 0) {
+        return res.json({ packets: [] });
+      }
+      const packets = await storage.getResearchPacketsByContactIds(contactIds);
       res.json({ packets });
-    } catch (error) {
+    } catch (error: unknown) {
+      const err = error as Record<string, unknown> | null;
+      const code = err?.code ?? (err?.cause as Record<string, unknown> | undefined)?.code;
+      const message = typeof err?.message === "string" ? err.message : String(err ?? "");
+      const isMissingTable =
+        code === "42P01" ||
+        /relation ["']?research_packets["']? does not exist/i.test(message) ||
+        /relation ["'].*["'] does not exist/i.test(message);
+      const isConnectionError = code === "ECONNREFUSED" || /ECONNREFUSED|ECONNRESET/i.test(message);
+      if (isMissingTable) {
+        console.warn("[research-packets] Table research_packets not found. Run migrations (e.g. npm run db:push). Returning empty packets.");
+        return res.json({ packets: [] });
+      }
+      if (isConnectionError) {
+        console.warn("[research-packets] Database unreachable. Returning empty packets so client can use streamed/cached research.");
+        return res.json({ packets: [] });
+      }
       console.error("[research-packets] Error:", error);
       res.status(500).json({ error: "Failed to fetch research packets" });
     }
@@ -1585,6 +1722,12 @@ export async function registerRoutes(
   // This endpoint uses Server-Sent Events (SSE) to stream per-contact status
   // updates to the client as each webhook call starts, succeeds, or fails.
   // ---------------------------------------------------------------------------
+  // Expected n8n webhook response (JSON): top-level or under .data, any of these field names:
+  // - prospectSnapshot / prospect_snapshot / profileInsight / profile_insight
+  // - companySnapshot / company_snapshot / companyInsight / company_insight
+  // - messageDraft / message_draft / draft / message
+  // - signalsHooks / signals_hooks / signals / hooks (array or newline-separated string)
+  // Fallback: .research / .output / .result / .text or first long string value.
   function extractResearchData(
     raw: any,
     personName: string,
@@ -1604,7 +1747,8 @@ export async function registerRoutes(
 
     if (!raw || typeof raw !== "object") return result;
 
-    const data = raw.data && typeof raw.data === "object" ? raw.data : raw;
+    let data: any = raw.data && typeof raw.data === "object" ? raw.data : raw;
+    if (Array.isArray(data) && data.length > 0 && typeof data[0] === "object") data = data[0];
 
     if (typeof data.prospectSnapshot === "string") result.prospectSnapshot = data.prospectSnapshot;
     else if (typeof data.prospect_snapshot === "string") result.prospectSnapshot = data.prospect_snapshot;
@@ -1651,12 +1795,29 @@ export async function registerRoutes(
     return result;
   }
 
-  app.post("/api/research/bulk", async (req, res) => {
-    const { contactIds } = req.body as { contactIds?: string[] };
+  app.post("/api/research/bulk", express.json(), async (req, res) => {
+    try {
+    const body = req.body as Record<string, unknown> | undefined;
+    const contactIds = body?.contactIds as string[] | undefined;
+    const contactsPayload = body?.contacts as Array<{ id: string; name: string; company?: string }> | undefined;
 
-    if (!Array.isArray(contactIds) || contactIds.length === 0) {
-      return res.status(400).json({ error: "contactIds array is required" });
+    // Support both: contacts array (from localStorage) or contactIds (legacy)
+    let contacts: Array<{ id: string; name: string; company?: string } | null>;
+    let contactIdsList: string[];
+
+    if (Array.isArray(contactsPayload) && contactsPayload.length > 0) {
+      contacts = contactsPayload;
+      contactIdsList = contactsPayload.map((c) => c.id);
+    } else if (Array.isArray(contactIds) && contactIds.length > 0) {
+      contactIdsList = contactIds;
+      contacts = await Promise.all(
+        contactIds.map((id) => storage.getContact(id))
+      );
+    } else {
+      return res.status(400).json({ error: "contacts or contactIds array is required" });
     }
+
+    console.log("[BulkResearch] Started with", contactIdsList.length, "contacts");
 
     const CONCURRENCY = 3;
     const MAX_RETRIES = 1;
@@ -1667,9 +1828,18 @@ export async function registerRoutes(
 
     const batchId = `bulk-${Date.now()}`;
 
-    const contacts = await Promise.all(
-      contactIds.map((id) => storage.getContact(id))
-    );
+    // Ensure all contacts exist in DB (research_packets.contactId FK). Contacts may be localStorage-only.
+    for (const c of contacts) {
+      if (c) {
+        try {
+          const minimal = { id: c.id, name: c.name, company: c.company ?? null } as any;
+          await storage.upsertContact(minimal);
+        } catch (syncErr: any) {
+          const msg = syncErr?.message ?? (typeof syncErr === "string" ? syncErr : String(syncErr));
+          console.warn(`[BulkResearch] Could not upsert contact ${c.id} (continuing):`, msg || "(no message)");
+        }
+      }
+    }
 
     res.writeHead(200, {
       "Content-Type": "text/event-stream",
@@ -1698,7 +1868,11 @@ export async function registerRoutes(
     ): Promise<BulkResult> {
       const idempotencyKey = `${contactId}:${batchId}`;
 
-      await storage.upsertResearchPacket(contactId, { status: "researching" });
+      try {
+        await storage.upsertResearchPacket(contactId, { status: "researching" });
+      } catch (e: any) {
+        console.warn(`[BulkResearch] Could not set researching for ${contactId}:`, e?.message ?? e);
+      }
       send("status", { contactId, status: "running" });
 
       for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
@@ -1726,8 +1900,20 @@ export async function registerRoutes(
           const responseData = await response.json();
           console.log(`[BulkResearch] Webhook response for ${personName}:`, JSON.stringify(responseData).substring(0, 500));
 
+          const researchPayload = extractResearchData(responseData, personName, company);
+          // Always stream the research payload to the client so the UI can show it even when DB is unavailable
+          send("research", {
+            contactId,
+            personName,
+            company,
+            status: "complete",
+            prospectSnapshot: researchPayload.prospectSnapshot || null,
+            companySnapshot: researchPayload.companySnapshot || null,
+            signalsHooks: researchPayload.signalsHooks || [],
+            personalizedMessage: researchPayload.messageDraft || null,
+          });
+
           try {
-            const researchPayload = extractResearchData(responseData, personName, company);
             await storage.upsertResearchPacket(contactId, {
               status: "complete",
               prospectSnapshot: researchPayload.prospectSnapshot || null,
@@ -1737,11 +1923,20 @@ export async function registerRoutes(
               variants: [],
             });
           } catch (storeErr: any) {
-            console.error(`[BulkResearch] Failed to store research for ${personName}:`, storeErr.message);
-            await storage.upsertResearchPacket(contactId, { status: "failed" });
-            const result: BulkResult = { contactId, personName, company, status: "failed", error: "Research received but failed to save" };
-            send("status", { contactId, status: "failed", error: result.error });
-            return result;
+            console.warn(`[BulkResearch] Could not store research for ${personName} (n8n succeeded):`, storeErr?.message ?? storeErr);
+            try {
+              await storage.upsertResearchPacket(contactId, { status: "failed" });
+            } catch (_) {}
+          }
+
+          try {
+            const contact = await storage.getContact(contactId);
+            if (contact) {
+              const newTags = appendResearchedTag(contact.tags);
+              await storage.updateContact(contactId, { tags: newTags });
+            }
+          } catch (tagErr: any) {
+            console.warn(`[BulkResearch] Could not add researched tag for ${contactId}:`, tagErr?.message ?? tagErr);
           }
 
           const result: BulkResult = { contactId, personName, company, status: "success" };
@@ -1753,22 +1948,30 @@ export async function registerRoutes(
             continue;
           }
           const errorMsg = err.message || "Unknown error";
-          await storage.upsertResearchPacket(contactId, { status: "failed" });
+          try {
+            await storage.upsertResearchPacket(contactId, { status: "failed" });
+          } catch (_) {}
           const result: BulkResult = { contactId, personName, company, status: "failed", error: errorMsg };
           send("status", { contactId, status: "failed", error: errorMsg });
           return result;
         }
       }
 
-      await storage.upsertResearchPacket(contactId, { status: "failed" });
+      try {
+        await storage.upsertResearchPacket(contactId, { status: "failed" });
+      } catch (_) {}
       const result: BulkResult = { contactId, personName, company, status: "failed", error: "Exhausted retries" };
       send("status", { contactId, status: "failed", error: "Exhausted retries" });
       return result;
     }
 
-    for (const id of contactIds!) {
+    for (const id of contactIdsList) {
       send("status", { contactId: id, status: "queued" });
-      await storage.upsertResearchPacket(id, { status: "queued" });
+      try {
+        await storage.upsertResearchPacket(id, { status: "queued" });
+      } catch (queueErr: any) {
+        console.error(`[BulkResearch] Failed to set queued for ${id}:`, queueErr?.message);
+      }
     }
 
     interface QueueTask {
@@ -1779,7 +1982,7 @@ export async function registerRoutes(
     }
 
     const queue: QueueTask[] = contacts.map((contact, idx) => {
-      const id = contactIds![idx];
+      const id = contactIdsList[idx];
       const name = contact?.name || "Unknown";
       const comp = contact?.company || "";
 
@@ -1845,8 +2048,19 @@ export async function registerRoutes(
       next();
     });
 
-    send("done", { total: contactIds.length, results });
+    send("done", { total: contactIdsList.length, results });
     res.end();
+    } catch (err: any) {
+      console.error("[BulkResearch] Fatal error:", err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: err?.message || "Bulk research failed" });
+      } else {
+        try {
+          res.write(`event: error\ndata: ${JSON.stringify({ error: err?.message || "Bulk research failed" })}\n\n`);
+        } catch (_) {}
+        res.end();
+      }
+    }
   });
 
   return httpServer;

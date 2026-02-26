@@ -2,26 +2,36 @@ import { Router } from "express";
 import { batchProcessor } from "../services/batchProcessor";
 import { n8nClient } from "../services/n8nClient";
 import { storage } from "../storage";
+import { appendResearchedTag } from "../utils/contactTags";
 
 const router = Router();
 
 router.post("/research", async (req, res) => {
   try {
-    const { contactIds } = req.body;
+    const { contactIds, contacts: contactsPayload } = req.body;
 
-    if (!Array.isArray(contactIds) || contactIds.length === 0) {
-      return res.status(400).json({ error: "contactIds array is required" });
-    }
+    let contacts: Array<{ id: string; name: string; company?: string; linkedinUrl?: string }>;
 
-    const allContacts = await storage.getContacts();
-    const contacts = allContacts
-      .filter((c) => contactIds.includes(c.id))
-      .map((c) => ({
+    if (Array.isArray(contactsPayload) && contactsPayload.length > 0) {
+      contacts = contactsPayload.map((c: { id: string; name: string; company?: string; linkedinUrl?: string }) => ({
         id: c.id,
         name: c.name,
         company: c.company || "",
-        linkedinUrl: c.linkedinUrl || undefined,
+        linkedinUrl: c.linkedinUrl,
       }));
+    } else if (Array.isArray(contactIds) && contactIds.length > 0) {
+      const allContacts = await storage.getContacts();
+      contacts = allContacts
+        .filter((c) => contactIds.includes(c.id))
+        .map((c) => ({
+          id: c.id,
+          name: c.name,
+          company: c.company || "",
+          linkedinUrl: c.linkedinUrl || undefined,
+        }));
+    } else {
+      return res.status(400).json({ error: "contacts or contactIds array is required" });
+    }
 
     if (contacts.length === 0) {
       return res.status(404).json({ error: "No matching contacts found" });
@@ -135,8 +145,10 @@ router.post("/:jobId/retry/:contactId", async (req, res) => {
 
     const research = researchResult.research || researchResult.profileInsight || "";
 
+    const newTags = appendResearchedTag(contact.tags);
     await storage.updateContact(contactId, {
       notes: research ? `[AI Research]\n${research}` : undefined,
+      tags: newTags,
     });
 
     res.json({

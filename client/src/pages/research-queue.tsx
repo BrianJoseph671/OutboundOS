@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { useContacts } from "@/hooks/useContacts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, ArrowLeft, User, Building2, Zap, MessageSquare, Loader2, Copy, Check, AlertCircle } from "lucide-react";
@@ -34,16 +35,18 @@ export default function ResearchQueue() {
     return idParam ? idParam.split(",").map((id) => id.trim()).filter(Boolean) : [];
   }, [location]);
 
-  const { data: contacts = [], isLoading: contactsLoading } = useQuery<Contact[]>({
-    queryKey: ["/api/contacts"],
-  });
+  const { contacts, isLoading: contactsLoading } = useContacts();
 
   const { data: packetsData, isLoading: packetsLoading } = useQuery<{ packets: ApiResearchPacket[] }>({
     queryKey: ["/api/research-packets", ids.join(",")],
     queryFn: async () => {
       if (ids.length === 0) return { packets: [] };
-      const res = await apiRequest("GET", `/api/research-packets?contactIds=${encodeURIComponent(ids.join(","))}`);
-      return res.json();
+      try {
+        const res = await apiRequest("GET", `/api/research-packets?contactIds=${encodeURIComponent(ids.join(","))}`);
+        return res.json();
+      } catch {
+        return { packets: [] };
+      }
     },
     enabled: ids.length > 0,
   });
@@ -53,8 +56,26 @@ export default function ResearchQueue() {
     for (const p of packetsData?.packets ?? []) {
       map.set(p.contactId, p);
     }
+    try {
+      const raw = sessionStorage.getItem("outbound_research_cache");
+      const cache = raw ? (JSON.parse(raw) as Record<string, ApiResearchPacket>) : {};
+      for (const id of ids) {
+        const cached = cache[id];
+        if (cached && (cached.prospectSnapshot != null || cached.companySnapshot != null || cached.personalizedMessage != null)) {
+          map.set(id, {
+            contactId: id,
+            status: cached.status ?? "complete",
+            prospectSnapshot: cached.prospectSnapshot ?? null,
+            companySnapshot: cached.companySnapshot ?? null,
+            signalsHooks: Array.isArray(cached.signalsHooks) ? cached.signalsHooks : [],
+            personalizedMessage: cached.personalizedMessage ?? null,
+            variants: Array.isArray(cached.variants) ? cached.variants : [],
+          });
+        }
+      }
+    } catch (_) {}
     return map;
-  }, [packetsData?.packets]);
+  }, [packetsData?.packets, ids]);
 
   const queueContacts = useMemo(() => {
     if (ids.length === 0) return [];
