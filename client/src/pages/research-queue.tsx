@@ -41,8 +41,12 @@ export default function ResearchQueue() {
     queryKey: ["/api/research-packets", ids.join(",")],
     queryFn: async () => {
       if (ids.length === 0) return { packets: [] };
-      const res = await apiRequest("GET", `/api/research-packets?contactIds=${encodeURIComponent(ids.join(","))}`);
-      return res.json();
+      try {
+        const res = await apiRequest("GET", `/api/research-packets?contactIds=${encodeURIComponent(ids.join(","))}`);
+        return res.json();
+      } catch {
+        return { packets: [] };
+      }
     },
     enabled: ids.length > 0,
   });
@@ -52,8 +56,26 @@ export default function ResearchQueue() {
     for (const p of packetsData?.packets ?? []) {
       map.set(p.contactId, p);
     }
+    try {
+      const raw = sessionStorage.getItem("outbound_research_cache");
+      const cache = raw ? (JSON.parse(raw) as Record<string, ApiResearchPacket>) : {};
+      for (const id of ids) {
+        const cached = cache[id];
+        if (cached && (cached.prospectSnapshot != null || cached.companySnapshot != null || cached.personalizedMessage != null)) {
+          map.set(id, {
+            contactId: id,
+            status: cached.status ?? "complete",
+            prospectSnapshot: cached.prospectSnapshot ?? null,
+            companySnapshot: cached.companySnapshot ?? null,
+            signalsHooks: Array.isArray(cached.signalsHooks) ? cached.signalsHooks : [],
+            personalizedMessage: cached.personalizedMessage ?? null,
+            variants: Array.isArray(cached.variants) ? cached.variants : [],
+          });
+        }
+      }
+    } catch (_) {}
     return map;
-  }, [packetsData?.packets]);
+  }, [packetsData?.packets, ids]);
 
   const queueContacts = useMemo(() => {
     if (ids.length === 0) return [];

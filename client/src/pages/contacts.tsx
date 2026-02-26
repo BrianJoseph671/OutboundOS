@@ -46,6 +46,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { useBatchProgress } from "@/hooks/useBatchProgress";
+import { getContact, updateContact as updateContactStorage } from "@/lib/contactsStorage";
 import type { Contact, InsertContact, OutreachAttempt } from "@shared/schema";
 
 type ContactResearchStatus = "pending" | "processing" | "completed" | "failed";
@@ -271,9 +272,11 @@ function ContactCard({
     .toUpperCase()
     .slice(0, 2);
 
-  const tags = (contact.tags?.split(",").filter(Boolean) || []).filter(
+  const allTags = (contact.tags?.split(",").filter(Boolean) || []).filter(
     (tag) => tag.trim() !== "demo-import",
   );
+  const hasResearched = allTags.some((t) => t.trim().toLowerCase() === "researched");
+  const otherTags = allTags.filter((t) => t.trim().toLowerCase() !== "researched");
 
   return (
     <Card
@@ -298,6 +301,11 @@ function ContactCard({
                     onRetry={onRetry}
                   />
                 )}
+                {hasResearched && (
+                  <Badge variant="secondary" className="text-xs bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200 border-0">
+                    Researched
+                  </Badge>
+                )}
                 <ChevronRight className="w-4 h-4 text-muted-foreground" />
               </div>
             </div>
@@ -312,16 +320,16 @@ function ContactCard({
                 {contact.company}
               </p>
             )}
-            {tags.length > 0 && (
+            {otherTags.length > 0 && (
               <div className="flex items-center gap-1 mt-2 flex-wrap">
-                {tags.slice(0, 3).map((tag) => (
+                {otherTags.slice(0, 3).map((tag) => (
                   <Badge key={tag} variant="secondary" className="text-xs">
                     {tag.trim()}
                   </Badge>
                 ))}
-                {tags.length > 3 && (
+                {otherTags.length > 3 && (
                   <span className="text-xs text-muted-foreground">
-                    +{tags.length - 3}
+                    +{otherTags.length - 3}
                   </span>
                 )}
               </div>
@@ -1414,22 +1422,6 @@ export default function Contacts() {
   const [bulkCompleted, setBulkCompleted] = useState(0);
   const [bulkTotal, setBulkTotal] = useState(0);
 
-  const { data: packetsData } = useQuery<{ packets: Array<{ contactId: string; status: string }> }>({
-    queryKey: ["/api/research-packets"],
-    queryFn: async () => {
-      const res = await apiRequest("GET", "/api/research-packets");
-      return res.json();
-    },
-  });
-
-  const packetsByContactId = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const p of packetsData?.packets ?? []) {
-      map.set(p.contactId, p.status);
-    }
-    return map;
-  }, [packetsData?.packets]);
-
   const { config: airtableConfig, clearConfig: clearAirtableConfig, updateLastSync } = useAirtableConfig();
 
   const syncAirtableMutation = useMutation({
@@ -1540,12 +1532,23 @@ export default function Contacts() {
         [c.contactId]: { status: "failed", error: c.error },
       }));
     });
-  }, [completedContacts, failedContacts, activeJobId]);
+
+    completedContacts.forEach((c) => {
+      const contact = getContact(c.contactId);
+      if (contact) {
+        const parts = (contact.tags ?? "").split(",").map((t: string) => t.trim()).filter(Boolean);
+        if (!parts.some((t: string) => t.toLowerCase() === "researched")) {
+          parts.push("researched");
+          updateContactStorage(contact.id, { tags: parts.join(", ") });
+        }
+      }
+    });
+    if (completedContacts.length > 0) invalidate();
+  }, [completedContacts, failedContacts, activeJobId, invalidate]);
 
   useEffect(() => {
     if (isComplete && activeJobId) {
       invalidate();
-      queryClient.invalidateQueries({ queryKey: ["/api/research-packets"] });
       toast({
         title: "Research complete",
         description: `${progress?.completed || 0} contacts researched successfully`,
@@ -1669,12 +1672,38 @@ export default function Contacts() {
                   : e
               )
             );
+          } else if (eventType === "research") {
+            try {
+              const key = "outbound_research_cache";
+              const raw = sessionStorage.getItem(key);
+              const cache: Record<string, unknown> = raw ? JSON.parse(raw) : {};
+              if (data.contactId && (data.prospectSnapshot != null || data.companySnapshot != null || data.personalizedMessage != null)) {
+                cache[data.contactId] = {
+                  contactId: data.contactId,
+                  status: "complete",
+                  prospectSnapshot: data.prospectSnapshot ?? null,
+                  companySnapshot: data.companySnapshot ?? null,
+                  signalsHooks: data.signalsHooks ?? [],
+                  personalizedMessage: data.personalizedMessage ?? null,
+                  variants: [],
+                };
+                sessionStorage.setItem(key, JSON.stringify(cache));
+              }
+              const contact = getContact(data.contactId);
+              if (contact) {
+                const parts = (contact.tags ?? "").split(",").map((t: string) => t.trim()).filter(Boolean);
+                if (!parts.some((t: string) => t.toLowerCase() === "researched")) {
+                  parts.push("researched");
+                  updateContactStorage(contact.id, { tags: parts.join(", ") });
+                  invalidate();
+                }
+              }
+            } catch (_) {}
           } else if (eventType === "progress") {
             setBulkCompleted(data.completed);
           } else if (eventType === "done") {
             setBulkCompleted(data.total);
             invalidate();
-            queryClient.invalidateQueries({ queryKey: ["/api/research-packets"] });
           }
         } catch {
           // skip malformed SSE data
@@ -1946,15 +1975,7 @@ export default function Contacts() {
                   <ContactCard
                     contact={contact}
                     onClick={() => setSelectedContact(contact)}
-                    researchStatus={(() => {
-                    const live = contactStatuses[contact.id]?.status;
-                    if (live) return live;
-                    const s = packetsByContactId.get(contact.id);
-                    if (s === "complete") return "completed";
-                    if (s === "failed") return "failed";
-                    if (s === "queued" || s === "researching") return "processing";
-                    return undefined;
-                  })()}
+                    researchStatus={contactStatuses[contact.id]?.status}
                     onRetry={() => handleRetryContact(contact.id)}
                   />
                 </div>

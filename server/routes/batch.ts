@@ -2,6 +2,7 @@ import { Router } from "express";
 import { batchProcessor } from "../services/batchProcessor";
 import { n8nClient } from "../services/n8nClient";
 import { storage } from "../storage";
+import { appendResearchedTag } from "../utils/contactTags";
 
 const router = Router();
 
@@ -144,8 +145,10 @@ router.post("/:jobId/retry/:contactId", async (req, res) => {
 
     const research = researchResult.research || researchResult.profileInsight || "";
 
+    const newTags = appendResearchedTag(contact.tags);
     await storage.updateContact(contactId, {
       notes: research ? `[AI Research]\n${research}` : undefined,
+      tags: newTags,
     });
 
     res.json({

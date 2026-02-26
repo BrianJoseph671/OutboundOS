@@ -703,8 +703,22 @@ export default function OutreachLog() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
 
+  const { contacts } = useContacts();
+  const contactIds = useMemo(() => contacts.map((c) => c.id), [contacts]);
+
   const { data: attempts = [], isLoading } = useQuery<OutreachAttempt[]>({
-    queryKey: ["/api/outreach-attempts"],
+    queryKey: ["/api/outreach-attempts", contactIds.join(",")],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.set("contactIds", contactIds.join(","));
+      const url = `/api/outreach-attempts?${params.toString()}`;
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) {
+        const text = (await res.text()) || res.statusText;
+        throw new Error(`${res.status}: ${text}`);
+      }
+      return res.json();
+    },
   });
 
   const bulkDeleteMutation = useMutation({
@@ -742,15 +756,15 @@ export default function OutreachLog() {
     setLastSelectedIndex(index);
   };
 
-  const { contacts } = useContacts();
-
   const { data: experiments = [] } = useQuery<Experiment[]>({
     queryKey: ["/api/experiments"],
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, ...data }: { id: string } & Partial<OutreachAttempt>) =>
-      apiRequest("PATCH", `/api/outreach-attempts/${id}`, data),
+    mutationFn: ({ id, ...data }: { id: string } & Partial<OutreachAttempt>) => {
+      const idStr = typeof id === "string" ? id : (id as any)?.id ?? String(id);
+      return apiRequest("PATCH", `/api/outreach-attempts/${idStr}`, data);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/outreach-attempts"] });
     },

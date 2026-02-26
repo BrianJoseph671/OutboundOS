@@ -18,9 +18,12 @@ interface ParsedSection {
 }
 
 interface ResearchResponse {
-  output: Array<{
+  output?: Array<{
     content: Array<{ text: string }>;
   }>;
+  /** n8n may return an array of result objects directly */
+  length?: number;
+  [key: string]: unknown;
 }
 
 export default function ProspectResearch() {
@@ -63,7 +66,17 @@ export default function ProspectResearch() {
       return response.json() as Promise<ResearchResponse>;
     },
     onSuccess: (data) => {
-      const text = data?.output?.[0]?.content?.[0]?.text || "";
+      let text = data?.output?.[0]?.content?.[0]?.text || "";
+      if (!text && Array.isArray(data) && data[0]) {
+        const first = data[0] as Record<string, unknown>;
+        text = (first.rawText as string) || (first.prospectSnapshot as string) || "";
+        if (!text && first.companySnapshot) text = [first.prospectSnapshot, first.companySnapshot, first.signalsHooks, first.messageDraft].filter(Boolean).join("\n\n");
+      }
+      if (!text && data && typeof data === "object" && !Array.isArray(data)) {
+        const obj = data as Record<string, unknown>;
+        text = (obj.rawText as string) || (obj.prospectSnapshot as string) || "";
+        if (!text && obj.companySnapshot) text = [obj.prospectSnapshot, obj.companySnapshot, obj.signalsHooks, obj.messageDraft].filter(Boolean).join("\n\n");
+      }
       setResearchResult(text);
       if (text) {
         toast({ title: "Research complete" });
