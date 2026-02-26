@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useContacts } from "@/hooks/useContacts";
+import { useAirtableConfig } from "@/hooks/useAirtableConfig";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,6 +46,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { useBatchProgress } from "@/hooks/useBatchProgress";
+import { getContact, updateContact as updateContactStorage } from "@/lib/contactsStorage";
 import type { Contact, InsertContact, OutreachAttempt } from "@shared/schema";
 
 type ContactResearchStatus = "pending" | "processing" | "completed" | "failed";
@@ -269,9 +272,11 @@ function ContactCard({
     .toUpperCase()
     .slice(0, 2);
 
-  const tags = (contact.tags?.split(",").filter(Boolean) || []).filter(
+  const allTags = (contact.tags?.split(",").filter(Boolean) || []).filter(
     (tag) => tag.trim() !== "demo-import",
   );
+  const hasResearched = allTags.some((t) => t.trim().toLowerCase() === "researched");
+  const otherTags = allTags.filter((t) => t.trim().toLowerCase() !== "researched");
 
   return (
     <Card
@@ -296,6 +301,11 @@ function ContactCard({
                     onRetry={onRetry}
                   />
                 )}
+                {hasResearched && (
+                  <Badge variant="secondary" className="text-xs bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200 border-0">
+                    Researched
+                  </Badge>
+                )}
                 <ChevronRight className="w-4 h-4 text-muted-foreground" />
               </div>
             </div>
@@ -310,16 +320,16 @@ function ContactCard({
                 {contact.company}
               </p>
             )}
-            {tags.length > 0 && (
+            {otherTags.length > 0 && (
               <div className="flex items-center gap-1 mt-2 flex-wrap">
-                {tags.slice(0, 3).map((tag) => (
+                {otherTags.slice(0, 3).map((tag) => (
                   <Badge key={tag} variant="secondary" className="text-xs">
                     {tag.trim()}
                   </Badge>
                 ))}
-                {tags.length > 3 && (
+                {otherTags.length > 3 && (
                   <span className="text-xs text-muted-foreground">
-                    +{tags.length - 3}
+                    +{otherTags.length - 3}
                   </span>
                 )}
               </div>
@@ -334,32 +344,35 @@ function ContactCard({
 function ContactDetail({
   contact,
   onClose,
+  onDelete,
 }: {
   contact: Contact;
   onClose: () => void;
+  onDelete: (id: string) => Promise<boolean>;
 }) {
   const { toast } = useToast();
+  const [isDeleting, setIsDeleting] = useState(false);
   const { data: attempts = [] } = useQuery<OutreachAttempt[]>({
     queryKey: ["/api/outreach-attempts", { contactId: contact.id }],
   });
 
   const contactAttempts = attempts.filter((a) => a.contactId === contact.id);
 
-  const deleteMutation = useMutation({
-    mutationFn: () => apiRequest("DELETE", `/api/contacts/${contact.id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
-      toast({ title: "Contact deleted successfully" });
-      onClose();
-    },
-    onError: () => {
+  const handleDelete = async () => {
+    if (!confirm("Are you sure you want to delete this contact?")) return;
+    setIsDeleting(true);
+    try {
+      const ok = await onDelete(contact.id);
+      if (ok) {
+        toast({ title: "Contact deleted successfully" });
+        onClose();
+      } else {
+        toast({ title: "Failed to delete contact", variant: "destructive" });
+      }
+    } catch {
       toast({ title: "Failed to delete contact", variant: "destructive" });
-    },
-  });
-
-  const handleDelete = () => {
-    if (confirm("Are you sure you want to delete this contact?")) {
-      deleteMutation.mutate();
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -423,7 +436,7 @@ function ContactDetail({
             variant="ghost"
             size="icon"
             onClick={handleDelete}
-            disabled={deleteMutation.isPending}
+            disabled={isDeleting}
             data-testid="button-delete-contact"
           >
             <Trash2 className="w-4 h-4" />
@@ -589,6 +602,7 @@ function AddContactModal({
   onOpenChange: (open: boolean) => void;
 }) {
   const { toast } = useToast();
+  const { createContact, bulkCreate } = useContacts();
 
   const [activeTab, setActiveTab] = useState("manual");
   const [formData, setFormData] = useState<Partial<InsertContact>>({
@@ -623,19 +637,7 @@ function AddContactModal({
   const [batchProgress, setBatchProgress] = useState(0);
   const [isSavingBatch, setIsSavingBatch] = useState(false);
 
-  const createMutation = useMutation({
-    mutationFn: (data: InsertContact) =>
-      apiRequest("POST", "/api/contacts", data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
-      toast({ title: "Contact created successfully" });
-      onOpenChange(false);
-      resetForm();
-    },
-    onError: () => {
-      toast({ title: "Failed to create contact", variant: "destructive" });
-    },
-  });
+  const [isCreating, setIsCreating] = useState(false);
 
   const resetForm = () => {
     setFormData({
@@ -728,21 +730,14 @@ function AddContactModal({
     }
 
     setIsSavingBatch(true);
-    let savedCount = 0;
-
     try {
-      for (const contact of selectedContacts) {
-        await apiRequest("POST", "/api/contacts", contact);
-        savedCount++;
-      }
-
-      queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
-      toast({ title: `Saved ${savedCount} contacts successfully` });
+      await bulkCreate(selectedContacts);
+      toast({ title: `Saved ${selectedContacts.length} contacts successfully` });
       onOpenChange(false);
       resetForm();
-    } catch (error) {
+    } catch {
       toast({
-        title: `Saved ${savedCount} contacts, but some failed`,
+        title: "Failed to save contacts",
         variant: "destructive",
       });
     } finally {
@@ -750,14 +745,24 @@ function AddContactModal({
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const dataToSubmit = activeTab === "pdf" && pdfData ? pdfData : formData;
     if (!dataToSubmit.name?.trim()) {
       toast({ title: "Name is required", variant: "destructive" });
       return;
     }
-    createMutation.mutate(dataToSubmit as InsertContact);
+    setIsCreating(true);
+    try {
+      await createContact(dataToSubmit as InsertContact);
+      toast({ title: "Contact created successfully" });
+      onOpenChange(false);
+      resetForm();
+    } catch {
+      toast({ title: "Failed to create contact", variant: "destructive" });
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1202,10 +1207,10 @@ function AddContactModal({
                 </Button>
                 <Button
                   type="submit"
-                  disabled={createMutation.isPending}
+                  disabled={isCreating}
                   data-testid="button-save-contact"
                 >
-                  {createMutation.isPending ? "Saving..." : "Save Contact"}
+                  {isCreating ? "Saving..." : "Save Contact"}
                 </Button>
               </div>
             </form>
@@ -1221,10 +1226,10 @@ function AddContactModal({
           </Button>
           <Button
             onClick={handleSubmit}
-            disabled={createMutation.isPending}
+            disabled={isCreating}
             data-testid="button-save-contact"
           >
-            {createMutation.isPending ? "Saving..." : "Save Contact"}
+            {isCreating ? "Saving..." : "Save Contact"}
           </Button>
         </div>
       </DialogContent>
@@ -1404,6 +1409,7 @@ function AirtableCard({
 export default function Contacts() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
+  const { contacts, isLoading, deleteContact, deleteContacts, bulkCreate, updateContact, invalidate } = useContacts();
   const [search, setSearch] = useState("");
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [addModalOpen, setAddModalOpen] = useState(false);
@@ -1416,38 +1422,75 @@ export default function Contacts() {
   const [bulkCompleted, setBulkCompleted] = useState(0);
   const [bulkTotal, setBulkTotal] = useState(0);
 
-  const { data: contacts = [], isLoading } = useQuery<Contact[]>({
-    queryKey: ["/api/contacts"],
-  });
-
-  const { data: packetsData } = useQuery<{ packets: Array<{ contactId: string; status: string }> }>({
-    queryKey: ["/api/research-packets"],
-    queryFn: async () => {
-      const res = await apiRequest("GET", "/api/research-packets");
-      return res.json();
-    },
-  });
-
-  const packetsByContactId = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const p of packetsData?.packets ?? []) {
-      map.set(p.contactId, p.status);
-    }
-    return map;
-  }, [packetsData?.packets]);
-
-  const { data: airtableConfig, refetch: refetchAirtableConfig } = useQuery<AirtableConfig>({
-    queryKey: ["/api/airtable/config"],
-  });
+  const { config: airtableConfig, clearConfig: clearAirtableConfig, updateLastSync } = useAirtableConfig();
 
   const syncAirtableMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("POST", "/api/airtable/sync");
-      return response.json();
+      if (!airtableConfig?.personalAccessToken) {
+        throw new Error("Connect Airtable first");
+      }
+      const response = await apiRequest("POST", "/api/airtable/sync", {
+        baseId: airtableConfig.baseId,
+        tableName: airtableConfig.tableName,
+        personalAccessToken: airtableConfig.personalAccessToken,
+        viewName: airtableConfig.viewName ?? "Grid view",
+        fieldMapping: airtableConfig.fieldMapping ?? undefined,
+      });
+      const data = await response.json();
+      const incoming = data.contacts ?? [];
+      if (incoming.length === 0) return { created: 0, updated: 0, lastSyncAt: data.lastSyncAt };
+      const toCreate: Array<Omit<Contact, "id" | "createdAt">> = [];
+      let updated = 0;
+      for (const c of incoming) {
+        const existing = contacts.find(
+          (x) =>
+            x.name.toLowerCase() === (c.name || "").toLowerCase() &&
+            (x.company?.toLowerCase() ?? "") === (c.company ?? "").toLowerCase()
+        );
+        if (existing) {
+          await updateContact(existing.id, {
+            company: c.company ?? null,
+            role: c.role ?? null,
+            linkedinUrl: c.linkedinUrl ?? null,
+            email: c.email ?? null,
+            headline: c.headline ?? null,
+            about: c.about ?? null,
+            location: c.location ?? null,
+            experience: c.experience ?? null,
+            education: c.education ?? null,
+            skills: c.skills ?? null,
+            keywords: c.keywords ?? null,
+            notes: c.notes ?? null,
+            tags: existing.tags?.includes("airtable-sync") ? existing.tags : `${existing.tags || ""},airtable-sync`,
+          });
+          updated++;
+        } else {
+          toCreate.push({
+            name: c.name || "",
+            company: c.company ?? null,
+            role: c.role ?? null,
+            linkedinUrl: c.linkedinUrl ?? null,
+            email: c.email ?? null,
+            headline: c.headline ?? null,
+            about: c.about ?? null,
+            location: c.location ?? null,
+            experience: c.experience ?? null,
+            education: c.education ?? null,
+            skills: c.skills ?? null,
+            keywords: c.keywords ?? null,
+            notes: c.notes ?? null,
+            tags: c.tags ?? null,
+            researchStatus: null,
+            researchData: null,
+          });
+        }
+      }
+      if (toCreate.length > 0) await bulkCreate(toCreate);
+      return { created: toCreate.length, updated, lastSyncAt: data.lastSyncAt };
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
-      refetchAirtableConfig();
+      invalidate();
+      if (data.lastSyncAt) updateLastSync(data.lastSyncAt);
       toast({
         title: "Airtable synced",
         description: `${data.created} new, ${data.updated} updated`,
@@ -1459,9 +1502,11 @@ export default function Contacts() {
   });
 
   const disconnectAirtableMutation = useMutation({
-    mutationFn: () => apiRequest("DELETE", "/api/airtable/config"),
+    mutationFn: async () => {
+      clearAirtableConfig();
+      await apiRequest("DELETE", "/api/airtable/config");
+    },
     onSuccess: () => {
-      refetchAirtableConfig();
       toast({ title: "Airtable disconnected" });
     },
     onError: () => {
@@ -1487,23 +1532,35 @@ export default function Contacts() {
         [c.contactId]: { status: "failed", error: c.error },
       }));
     });
-  }, [completedContacts, failedContacts, activeJobId]);
+
+    completedContacts.forEach((c) => {
+      const contact = getContact(c.contactId);
+      if (contact) {
+        const parts = (contact.tags ?? "").split(",").map((t: string) => t.trim()).filter(Boolean);
+        if (!parts.some((t: string) => t.toLowerCase() === "researched")) {
+          parts.push("researched");
+          updateContactStorage(contact.id, { tags: parts.join(", ") });
+        }
+      }
+    });
+    if (completedContacts.length > 0) invalidate();
+  }, [completedContacts, failedContacts, activeJobId, invalidate]);
 
   useEffect(() => {
     if (isComplete && activeJobId) {
-      queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
+      invalidate();
       toast({
         title: "Research complete",
         description: `${progress?.completed || 0} contacts researched successfully`,
       });
     }
-  }, [isComplete, activeJobId, progress?.completed, toast]);
+  }, [isComplete, activeJobId, progress?.completed, toast, invalidate]);
 
   const bulkDeleteMutation = useMutation({
-    mutationFn: (ids: string[]) =>
-      apiRequest("POST", "/api/contacts/bulk-delete", { ids }),
+    mutationFn: async (ids: string[]) => {
+      await deleteContacts(ids);
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
       toast({ title: `Successfully deleted selected contacts` });
       setSelectedIds(new Set());
     },
@@ -1513,8 +1570,8 @@ export default function Contacts() {
   });
 
   const batchResearchMutation = useMutation({
-    mutationFn: async (contactIds: string[]) => {
-      const response = await apiRequest("POST", "/api/batch/research", { contactIds });
+    mutationFn: async (contactsPayload: Array<{ id: string; name: string; company?: string; linkedinUrl?: string }>) => {
+      const response = await apiRequest("POST", "/api/batch/research", { contacts: contactsPayload });
       return (await response.json()) as { jobId: string };
     },
     onSuccess: (data) => {
@@ -1572,10 +1629,14 @@ export default function Contacts() {
     setBulkResearchPending(true);
 
     try {
+      const contactsToSend = ids
+        .map((id) => contacts.find((c) => c.id === id))
+        .filter((c): c is Contact => c != null)
+        .map((c) => ({ id: c.id, name: c.name, company: c.company ?? "" }));
       const response = await fetch("/api/research/bulk", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contactIds: ids }),
+        body: JSON.stringify({ contacts: contactsToSend }),
       });
 
       if (!response.ok || !response.body) {
@@ -1611,12 +1672,38 @@ export default function Contacts() {
                   : e
               )
             );
+          } else if (eventType === "research") {
+            try {
+              const key = "outbound_research_cache";
+              const raw = sessionStorage.getItem(key);
+              const cache: Record<string, unknown> = raw ? JSON.parse(raw) : {};
+              if (data.contactId && (data.prospectSnapshot != null || data.companySnapshot != null || data.personalizedMessage != null)) {
+                cache[data.contactId] = {
+                  contactId: data.contactId,
+                  status: "complete",
+                  prospectSnapshot: data.prospectSnapshot ?? null,
+                  companySnapshot: data.companySnapshot ?? null,
+                  signalsHooks: data.signalsHooks ?? [],
+                  personalizedMessage: data.personalizedMessage ?? null,
+                  variants: [],
+                };
+                sessionStorage.setItem(key, JSON.stringify(cache));
+              }
+              const contact = getContact(data.contactId);
+              if (contact) {
+                const parts = (contact.tags ?? "").split(",").map((t: string) => t.trim()).filter(Boolean);
+                if (!parts.some((t: string) => t.toLowerCase() === "researched")) {
+                  parts.push("researched");
+                  updateContactStorage(contact.id, { tags: parts.join(", ") });
+                  invalidate();
+                }
+              }
+            } catch (_) {}
           } else if (eventType === "progress") {
             setBulkCompleted(data.completed);
           } else if (eventType === "done") {
             setBulkCompleted(data.total);
-            queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
-            queryClient.invalidateQueries({ queryKey: ["/api/research-packets"] });
+            invalidate();
           }
         } catch {
           // skip malformed SSE data
@@ -1659,7 +1746,13 @@ export default function Contacts() {
     }
     const allIds = contacts.map((c) => c.id);
     setSelectedIds(new Set(allIds));
-    batchResearchMutation.mutate(allIds);
+    const contactsToSend = contacts.map((c) => ({
+      id: c.id,
+      name: c.name,
+      company: c.company ?? "",
+      linkedinUrl: c.linkedinUrl ?? undefined,
+    }));
+    batchResearchMutation.mutate(contactsToSend);
   };
 
   const handleRetryContact = (contactId: string) => {
@@ -1882,15 +1975,7 @@ export default function Contacts() {
                   <ContactCard
                     contact={contact}
                     onClick={() => setSelectedContact(contact)}
-                    researchStatus={(() => {
-                    const live = contactStatuses[contact.id]?.status;
-                    if (live) return live;
-                    const s = packetsByContactId.get(contact.id);
-                    if (s === "complete") return "completed";
-                    if (s === "failed") return "failed";
-                    if (s === "queued" || s === "researching") return "processing";
-                    return undefined;
-                  })()}
+                    researchStatus={contactStatuses[contact.id]?.status}
                     onRetry={() => handleRetryContact(contact.id)}
                   />
                 </div>
@@ -1906,6 +1991,7 @@ export default function Contacts() {
             <ContactDetail
               contact={selectedContact}
               onClose={() => setSelectedContact(null)}
+              onDelete={deleteContact}
             />
           </CardContent>
         </Card>

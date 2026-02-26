@@ -1,6 +1,8 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { useContacts } from "@/hooks/useContacts";
+import { setAirtableConfig } from "@/lib/airtableConfigStorage";
 import {
   Dialog,
   DialogContent,
@@ -56,7 +58,7 @@ const EXPECTED_FIELDS = [
 
 export function ImportModal({ open, onOpenChange, onSuccess }: ImportModalProps) {
   const { toast } = useToast();
-  const queryClient = useQueryClient();
+  const { bulkCreate } = useContacts();
   const dialogRef = useRef<HTMLDivElement>(null);
   const [modalSize, setModalSize] = useState({ width: 0, height: 0 });
   const [isResizing, setIsResizing] = useState(false);
@@ -130,16 +132,20 @@ export function ImportModal({ open, onOpenChange, onSuccess }: ImportModalProps)
   }, [isResizing]);
 
   const parseExcelMutation = useMutation({
-    mutationFn: async (formData: FormData) => {
-      const response = await fetch("/api/contacts/import/excel", {
-        method: "POST",
-        body: formData,
-      });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || "Failed to parse file");
-      }
-      return response.json();
+    mutationFn: async (file: File) => {
+      const xlsx = await import("xlsx");
+      const data = await file.arrayBuffer();
+      const workbook = xlsx.read(data, { type: "array" });
+      const sheetName = workbook.SheetNames[0];
+      const sheet = workbook.Sheets[sheetName];
+      const jsonData = xlsx.utils.sheet_to_json(sheet, { header: 1 }) as string[][];
+      if (jsonData.length === 0) throw new Error("Empty spreadsheet");
+      const headers = jsonData[0].map((h) => String(h || "").trim());
+      const rows = jsonData
+        .slice(1)
+        .filter((row) => row.some((cell) => cell !== null && cell !== undefined && String(cell).trim() !== ""))
+        .map((row) => headers.map((_, i) => String(row[i] || "").trim()));
+      return { headers, rows, totalRows: rows.length };
     },
     onSuccess: (data) => {
       setParsedData(data);
@@ -166,6 +172,14 @@ export function ImportModal({ open, onOpenChange, onSuccess }: ImportModalProps)
       setAirtableData(data);
       setAirtableConnected(true);
       autoMapFields(data.headers, true);
+      setAirtableConfig({
+        connected: true,
+        baseId: airtableBaseId,
+        tableName: airtableTableName,
+        personalAccessToken: airtableToken,
+        viewName: "Grid view",
+        fieldMapping: {},
+      });
       toast({ title: "Connected to Airtable" });
     },
     onError: (error: Error) => {
@@ -175,21 +189,32 @@ export function ImportModal({ open, onOpenChange, onSuccess }: ImportModalProps)
     },
   });
 
-  const bulkCreateMutation = useMutation({
-    mutationFn: async (contacts: object[]) => {
-      const response = await apiRequest("POST", "/api/contacts/bulk-create", { contacts });
-      return response.json();
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
-      toast({ title: `${data.created} contacts imported successfully` });
-      resetState();
-      onSuccess();
-    },
-    onError: (error: Error) => {
-      toast({ title: "Import failed", description: error.message, variant: "destructive" });
-    },
-  });
+  const [isImporting, setIsImporting] = useState(false);
+
+  const runBulkCreate = async (contactsToImport: Record<string, string>[]) => {
+    const mapped = contactsToImport.map((c) => ({
+      name: c.name || "",
+      company: c.company ?? null,
+      role: c.role ?? null,
+      email: c.email ?? null,
+      linkedinUrl: c.linkedinUrl ?? null,
+      headline: null,
+      about: null,
+      location: null,
+      experience: null,
+      education: null,
+      skills: null,
+      keywords: null,
+      notes: c.notes ?? null,
+      tags: null,
+      researchStatus: null,
+      researchData: null,
+    }));
+    await bulkCreate(mapped);
+    toast({ title: `${mapped.length} contacts imported successfully` });
+    resetState();
+    onSuccess();
+  };
 
   const autoMapFields = (headers: string[], isAirtable = false) => {
     const mapping: FieldMapping = {};
@@ -236,9 +261,7 @@ export function ImportModal({ open, onOpenChange, onSuccess }: ImportModalProps)
       }
       setFile(selectedFile);
       setParseError(null);
-      const formData = new FormData();
-      formData.append("file", selectedFile);
-      parseExcelMutation.mutate(formData);
+      parseExcelMutation.mutate(selectedFile);
     }
   }, []);
 
@@ -255,10 +278,10 @@ export function ImportModal({ open, onOpenChange, onSuccess }: ImportModalProps)
     }
   }, [handleFileChange]);
 
-  const handleImportExcel = () => {
+  const handleImportExcel = async () => {
     if (!parsedData) return;
     
-    const contacts = parsedData.rows.map(row => {
+    const contactsToImport = parsedData.rows.map(row => {
       const contact: Record<string, string> = {};
       parsedData.headers.forEach((header, index) => {
         const mappedField = fieldMapping[header];
@@ -269,25 +292,25 @@ export function ImportModal({ open, onOpenChange, onSuccess }: ImportModalProps)
       return contact;
     }).filter(c => c.name);
 
-    if (contacts.length === 0) {
+    if (contactsToImport.length === 0) {
       toast({ title: "No valid contacts found", description: "Make sure the Name field is mapped", variant: "destructive" });
       return;
     }
 
-    bulkCreateMutation.mutate(contacts);
+    setIsImporting(true);
+    try {
+      await runBulkCreate(contactsToImport);
+    } catch (error) {
+      toast({ title: "Import failed", description: (error as Error).message, variant: "destructive" });
+    } finally {
+      setIsImporting(false);
+    }
   };
 
-  const saveAirtableConfigMutation = useMutation({
-    mutationFn: async (config: { baseId: string; tableName: string; personalAccessToken: string; fieldMapping: FieldMapping }) => {
-      const response = await apiRequest("POST", "/api/airtable/config", config);
-      return response.json();
-    },
-  });
-
-  const handleImportAirtable = () => {
+  const handleImportAirtable = async () => {
     if (!airtableData || !airtableConnected) return;
     
-    const contacts = airtableData.rows.map(row => {
+    const contactsToImport = airtableData.rows.map(row => {
       const contact: Record<string, string> = {};
       airtableData.headers.forEach((header, index) => {
         const mappedField = airtableFieldMapping[header];
@@ -298,29 +321,31 @@ export function ImportModal({ open, onOpenChange, onSuccess }: ImportModalProps)
       return contact;
     }).filter(c => c.name);
 
-    if (contacts.length === 0) {
+    if (contactsToImport.length === 0) {
       toast({ title: "No valid contacts found", description: "Make sure the Name field is mapped", variant: "destructive" });
       return;
     }
 
-    const configToSave = {
-      baseId: airtableBaseId,
-      tableName: airtableTableName,
-      personalAccessToken: airtableToken,
-      fieldMapping: airtableFieldMapping,
-      viewName: "Grid view",
-    };
-
-    saveAirtableConfigMutation.mutate(configToSave, {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: ["/api/airtable/config"] });
-        bulkCreateMutation.mutate(contacts);
-      },
-      onError: () => {
-        toast({ title: "Warning", description: "Could not save Airtable connection, importing contacts anyway", variant: "destructive" });
-        bulkCreateMutation.mutate(contacts);
-      }
-    });
+    setIsImporting(true);
+    try {
+      setAirtableConfig({
+        connected: true,
+        baseId: airtableBaseId,
+        tableName: airtableTableName,
+        personalAccessToken: airtableToken,
+        viewName: "Grid view",
+        fieldMapping: airtableFieldMapping,
+      });
+    } catch {
+      toast({ title: "Warning", description: "Could not save Airtable connection, importing contacts anyway", variant: "destructive" });
+    }
+    try {
+      await runBulkCreate(contactsToImport);
+    } catch (error) {
+      toast({ title: "Import failed", description: (error as Error).message, variant: "destructive" });
+    } finally {
+      setIsImporting(false);
+    }
   };
 
   const resetState = () => {
@@ -614,10 +639,10 @@ export function ImportModal({ open, onOpenChange, onSuccess }: ImportModalProps)
               className="w-full"
               size="lg"
               onClick={activeTab === "excel" ? handleImportExcel : handleImportAirtable}
-              disabled={bulkCreateMutation.isPending}
+              disabled={isImporting}
               data-testid={activeTab === "excel" ? "button-confirm-import-excel" : "button-confirm-import-airtable"}
             >
-              {bulkCreateMutation.isPending ? (
+              {isImporting ? (
                 <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Importing...</>
               ) : (
                 `Import ${(activeTab === "excel" ? parsedData?.totalRows : airtableData?.totalRows) || 0} contacts`

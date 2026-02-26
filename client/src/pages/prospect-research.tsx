@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { useContacts } from "@/hooks/useContacts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,14 +18,17 @@ interface ParsedSection {
 }
 
 interface ResearchResponse {
-  output: Array<{
+  output?: Array<{
     content: Array<{ text: string }>;
   }>;
+  /** n8n may return an array of result objects directly */
+  length?: number;
+  [key: string]: unknown;
 }
 
 export default function ProspectResearch() {
   const { toast } = useToast();
-  const queryClient = useQueryClient();
+  const { contacts, createContact } = useContacts();
   
   // Initialize from localStorage
   const [personName, setPersonName] = useState(() => 
@@ -62,7 +66,17 @@ export default function ProspectResearch() {
       return response.json() as Promise<ResearchResponse>;
     },
     onSuccess: (data) => {
-      const text = data?.output?.[0]?.content?.[0]?.text || "";
+      let text = data?.output?.[0]?.content?.[0]?.text || "";
+      if (!text && Array.isArray(data) && data[0]) {
+        const first = data[0] as Record<string, unknown>;
+        text = (first.rawText as string) || (first.prospectSnapshot as string) || "";
+        if (!text && first.companySnapshot) text = [first.prospectSnapshot, first.companySnapshot, first.signalsHooks, first.messageDraft].filter(Boolean).join("\n\n");
+      }
+      if (!text && data && typeof data === "object" && !Array.isArray(data)) {
+        const obj = data as Record<string, unknown>;
+        text = (obj.rawText as string) || (obj.prospectSnapshot as string) || "";
+        if (!text && obj.companySnapshot) text = [obj.prospectSnapshot, obj.companySnapshot, obj.signalsHooks, obj.messageDraft].filter(Boolean).join("\n\n");
+      }
       setResearchResult(text);
       if (text) {
         toast({ title: "Research complete" });
@@ -82,7 +96,6 @@ export default function ProspectResearch() {
       const sections = parseResearchSections(researchResult);
       const snapshot = sections.find(s => s.title.includes("Prospect Snapshot"))?.content || "";
       
-      // Extract details using basic regex from the snapshot
       const titleMatch = snapshot.match(/Title:\s*([^\n]+)/i);
       const headlineMatch = snapshot.match(/Headline:\s*([^\n]+)/i);
       const aboutMatch = snapshot.match(/About:\s*([^\n]+)/i);
@@ -102,16 +115,15 @@ export default function ProspectResearch() {
         tags: "research-import"
       };
 
-      return apiRequest("POST", "/api/contacts", contactData);
+      return createContact(contactData);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
       toast({ 
         title: "Contact added", 
         description: `${personName} from ${company} has been added to your contacts.` 
       });
     },
-    onError: (error) => {
+    onError: () => {
       toast({ 
         title: "Failed to add contact", 
         description: "There was an error adding this prospect to your contacts.",
@@ -304,27 +316,17 @@ export default function ProspectResearch() {
     
     // Try to find or create the contact before navigating
     try {
-      // Check if contact exists using apiRequest
-      const response = await apiRequest("GET", "/api/contacts");
-      if (!response.ok) {
-        throw new Error("Failed to fetch contacts");
-      }
-      const contacts = await response.json();
-      
-      // Match on both name AND company (case-insensitive) for accuracy
       const normalizedName = personName.toLowerCase().trim();
       const normalizedCompany = company.toLowerCase().trim();
       
-      const existingContact = contacts.find((c: { name: string; company?: string }) => 
+      const existingContact = contacts.find((c) => 
         c.name.toLowerCase().trim() === normalizedName && 
-        c.company?.toLowerCase().trim() === normalizedCompany
+        (c.company?.toLowerCase().trim() ?? "") === normalizedCompany
       );
       
       if (existingContact) {
-        // Contact exists, store the ID
         localStorage.setItem("composer-draft-contact-id", existingContact.id);
       } else {
-        // Create the contact first
         const sections = parseResearchSections(researchResult);
         const snapshot = sections.find(s => s.title.includes("Prospect Snapshot"))?.content || "";
         
@@ -347,20 +349,12 @@ export default function ProspectResearch() {
           tags: "research-import"
         };
 
-        const createResponse = await apiRequest("POST", "/api/contacts", contactData);
-        if (!createResponse.ok) {
-          throw new Error("Failed to create contact");
-        }
-        const newContact = await createResponse.json();
-        
-        if (newContact.id) {
-          localStorage.setItem("composer-draft-contact-id", newContact.id);
-          queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
-          toast({ 
-            title: "Contact created", 
-            description: `${personName} added to contacts` 
-          });
-        }
+        const newContact = await createContact(contactData);
+        localStorage.setItem("composer-draft-contact-id", newContact.id);
+        toast({ 
+          title: "Contact created", 
+          description: `${personName} added to contacts` 
+        });
       }
     } catch (error) {
       console.error("Error finding/creating contact:", error);

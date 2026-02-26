@@ -2,6 +2,7 @@ import { EventEmitter } from "events";
 import { randomUUID } from "crypto";
 import { n8nClient, type ResearchResponse } from "./n8nClient";
 import { storage } from "../storage";
+import { appendResearchedTag } from "../utils/contactTags";
 
 export type JobStatus = "pending" | "processing" | "completed" | "failed";
 export type ContactStatus = "pending" | "processing" | "completed" | "failed";
@@ -173,8 +174,11 @@ class BatchProcessor extends EventEmitter {
 
       const research = researchResult.research || researchResult.profileInsight || "";
 
+      const existing = await storage.getContact(contact.id);
+      const newTags = existing ? appendResearchedTag(existing.tags) : "researched";
       await storage.updateContact(contact.id, {
         notes: research ? `[AI Research]\n${research}` : undefined,
+        tags: newTags,
       });
 
       if (this.airtableConfig && research) {

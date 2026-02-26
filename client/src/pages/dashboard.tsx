@@ -17,9 +17,10 @@ import {
   RefreshCw,
   Clock,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { OutreachAttempt, Experiment } from "@shared/schema";
+import { useContacts } from "@/hooks/useContacts";
 
 interface DashboardMetrics {
   totalSent: number;
@@ -357,8 +358,22 @@ export default function Dashboard() {
   const [outreachType, setOutreachType] = useState("all");
   const [campaign, setCampaign] = useState("all");
 
+  const { contacts } = useContacts();
+  const contactIds = useMemo(() => contacts.map((c) => c.id), [contacts]);
+
   const { data: attempts = [] } = useQuery<OutreachAttempt[]>({
-    queryKey: ["/api/outreach-attempts"],
+    queryKey: ["/api/outreach-attempts", contactIds.join(",")],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.set("contactIds", contactIds.join(","));
+      const url = `/api/outreach-attempts?${params.toString()}`;
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) {
+        const text = (await res.text()) || res.statusText;
+        throw new Error(`${res.status}: ${text}`);
+      }
+      return res.json();
+    },
   });
 
   const { data: experiments = [] } = useQuery<Experiment[]>({
