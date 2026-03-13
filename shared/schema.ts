@@ -136,6 +136,67 @@ export const insertAirtableConfigSchema = createInsertSchema(airtableConfig).omi
 export type InsertAirtableConfig = z.infer<typeof insertAirtableConfigSchema>;
 export type AirtableConfig = typeof airtableConfig.$inferSelect;
 
+// Integration providers
+export const integrationProviders = ["google", "granola"] as const;
+export type IntegrationProvider = typeof integrationProviders[number];
+
+// Meeting sources
+export const meetingSources = ["google_calendar", "granola"] as const;
+export type MeetingSource = typeof meetingSources[number];
+
+// Contact-meeting match methods
+export const matchMethods = ["email", "name", "manual"] as const;
+export type MatchMethod = typeof matchMethods[number];
+
+export const integrationConnections = pgTable("integration_connections", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  provider: text("provider").notNull(),
+  accessToken: text("access_token").notNull(),
+  refreshToken: text("refresh_token"),
+  tokenExpiresAt: timestamp("token_expires_at"),
+  scopes: text("scopes"),
+  providerAccountId: text("provider_account_id"),
+  isConnected: boolean("is_connected").default(true),
+  metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertIntegrationConnectionSchema = createInsertSchema(integrationConnections).omit({ id: true });
+export type InsertIntegrationConnection = z.infer<typeof insertIntegrationConnectionSchema>;
+export type IntegrationConnection = typeof integrationConnections.$inferSelect;
+
+export const meetings = pgTable("meetings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  source: text("source").notNull(),
+  externalId: text("external_id"),
+  title: text("title"),
+  startTime: timestamp("start_time"),
+  endTime: timestamp("end_time"),
+  attendees: jsonb("attendees").$type<Array<{ email?: string; name?: string; self?: boolean }>>().default([]),
+  notes: text("notes"),
+  transcript: text("transcript"),
+  summary: text("summary"),
+  actionItems: jsonb("action_items").$type<string[]>().default([]),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertMeetingSchema = createInsertSchema(meetings).omit({ id: true });
+export type InsertMeeting = z.infer<typeof insertMeetingSchema>;
+export type Meeting = typeof meetings.$inferSelect;
+
+export const contactMeetings = pgTable("contact_meetings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  contactId: varchar("contact_id").notNull().references(() => contacts.id, { onDelete: "cascade" }),
+  meetingId: varchar("meeting_id").notNull().references(() => meetings.id, { onDelete: "cascade" }),
+  matchedBy: text("matched_by").notNull().default("email"),
+});
+
+export const insertContactMeetingSchema = createInsertSchema(contactMeetings).omit({ id: true });
+export type InsertContactMeeting = z.infer<typeof insertContactMeetingSchema>;
+export type ContactMeeting = typeof contactMeetings.$inferSelect;
+
 export const researchPacketStatuses = ["not_started", "queued", "researching", "complete", "failed"] as const;
 export type ResearchPacketStatus = typeof researchPacketStatuses[number];
 

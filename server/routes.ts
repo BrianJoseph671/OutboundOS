@@ -11,6 +11,7 @@ import {
   insertSettingsSchema,
 } from "@shared/schema";
 import batchRouter from "./routes/batch";
+import integrationsRouter from "./routes/integrations";
 import { appendResearchedTag } from "./utils/contactTags";
 
 const upload = multer({
@@ -111,6 +112,9 @@ export async function registerRoutes(
 ): Promise<Server> {
   // Batch processing routes
   app.use("/api/batch", batchRouter);
+
+  // Integration routes (OAuth, meetings)
+  app.use("/api/integrations", integrationsRouter);
 
   // =========================
   // CERT: Level 3 proof (simple, deterministic)

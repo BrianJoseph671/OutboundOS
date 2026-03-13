@@ -26,11 +26,26 @@ import {
   Briefcase,
   Trash2,
   RefreshCw,
+  Calendar,
+  FileText,
+  Plug,
 } from "lucide-react";
 import type { Settings as SettingsType } from "@shared/schema";
 import { format } from "date-fns";
 import { getStoredProfile, clearStoredProfile, type UserProfile } from "@/components/profile-setup";
 import { getContacts } from "@/lib/contactsStorage";
+import { IntegrationCard } from "@/components/integration-card";
+import { useIntegrations } from "@/hooks/useIntegrations";
+import { GoogleIcon } from "@/components/icons/google-icon";
+import { GranolaIcon } from "@/components/icons/granola-icon";
+
+interface IntegrationStatus {
+  provider: string;
+  connected?: boolean;
+  isConnected?: boolean;
+  providerAccountId?: string | null;
+  scopes?: string | null;
+}
 
 export default function Settings() {
   const { toast } = useToast();
@@ -39,6 +54,34 @@ export default function Settings() {
   const { data: settings, isLoading } = useQuery<SettingsType>({
     queryKey: ["/api/settings"],
   });
+
+  const { data: integrations = [] } = useQuery<IntegrationStatus[]>({
+    queryKey: ["/api/integrations"],
+  });
+
+  const {
+    isConnected,
+    syncGoogle,
+    syncGranola,
+    isSyncingGoogle,
+    isSyncingGranola,
+  } = useIntegrations();
+
+  // Handle OAuth redirect results
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const success = params.get("integration_success");
+    const error = params.get("integration_error");
+    if (success) {
+      toast({ title: `${success.charAt(0).toUpperCase() + success.slice(1)} connected successfully` });
+      queryClient.invalidateQueries({ queryKey: ["/api/integrations"] });
+      window.history.replaceState({}, "", "/settings");
+    }
+    if (error) {
+      toast({ title: "Integration connection failed", description: error, variant: "destructive" });
+      window.history.replaceState({}, "", "/settings");
+    }
+  }, []);
 
   const [formData, setFormData] = useState<Partial<SettingsType>>({
     defaultTone: "professional",
@@ -296,6 +339,42 @@ export default function Settings() {
               data-testid="input-settings-signature"
             />
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Plug className="w-5 h-5" />
+            Integrations
+          </CardTitle>
+          <CardDescription>
+            Connect external services to enrich your outreach with meeting context
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <IntegrationCard
+            provider="google"
+            name="Google"
+            description="Sync Calendar events and Gmail for meeting context"
+            icon={<GoogleIcon className="h-5 w-5" />}
+            connected={isConnected("google")}
+            accountId={integrations.find((i) => i.provider === "google")?.providerAccountId}
+            onStatusChange={() => queryClient.invalidateQueries({ queryKey: ["/api/integrations"] })}
+            onSync={() => syncGoogle()}
+            isSyncing={isSyncingGoogle}
+          />
+          <IntegrationCard
+            provider="granola"
+            name="Granola"
+            description="Pull meeting notes and transcripts via MCP"
+            icon={<GranolaIcon className="h-5 w-5" />}
+            connected={isConnected("granola")}
+            accountId={integrations.find((i) => i.provider === "granola")?.providerAccountId}
+            onStatusChange={() => queryClient.invalidateQueries({ queryKey: ["/api/integrations"] })}
+            onSync={() => syncGranola()}
+            isSyncing={isSyncingGranola}
+          />
         </CardContent>
       </Card>
 

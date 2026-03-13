@@ -4,10 +4,13 @@ import {
   experiments, type Experiment, type InsertExperiment,
   settings, type Settings, type InsertSettings,
   airtableConfig, type AirtableConfig, type InsertAirtableConfig,
-  researchPackets, type ResearchPacket, type InsertResearchPacket
+  researchPackets, type ResearchPacket, type InsertResearchPacket,
+  integrationConnections, type IntegrationConnection, type InsertIntegrationConnection,
+  meetings, type Meeting, type InsertMeeting,
+  contactMeetings, type ContactMeeting, type InsertContactMeeting
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, inArray } from "drizzle-orm";
+import { eq, desc, inArray, and } from "drizzle-orm";
 
 export interface IStorage {
   // Contacts
@@ -50,6 +53,26 @@ export interface IStorage {
   getResearchPacketsByContactIds(contactIds: string[]): Promise<ResearchPacket[]>;
   getAllResearchPackets(): Promise<ResearchPacket[]>;
   upsertResearchPacket(contactId: string, data: Partial<Omit<InsertResearchPacket, "contactId">>): Promise<ResearchPacket>;
+
+  // Integration Connections
+  getIntegrationConnection(provider: string): Promise<IntegrationConnection | undefined>;
+  getAllIntegrationConnections(): Promise<IntegrationConnection[]>;
+  upsertIntegrationConnection(provider: string, data: Partial<Omit<InsertIntegrationConnection, "provider">>): Promise<IntegrationConnection>;
+  deleteIntegrationConnection(provider: string): Promise<boolean>;
+
+  // Meetings
+  getMeetings(): Promise<Meeting[]>;
+  getMeeting(id: string): Promise<Meeting | undefined>;
+  getMeetingByExternalId(source: string, externalId: string): Promise<Meeting | undefined>;
+  createMeeting(meeting: InsertMeeting): Promise<Meeting>;
+  updateMeeting(id: string, meeting: Partial<InsertMeeting>): Promise<Meeting | undefined>;
+  upsertMeetingByExternalId(source: string, externalId: string, data: Partial<InsertMeeting>): Promise<Meeting>;
+
+  // Contact-Meeting Links
+  getContactMeetings(contactId: string): Promise<(ContactMeeting & { meeting: Meeting })[]>;
+  getMeetingContacts(meetingId: string): Promise<ContactMeeting[]>;
+  linkContactToMeeting(data: InsertContactMeeting): Promise<ContactMeeting>;
+  unlinkContactFromMeeting(contactId: string, meetingId: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -283,6 +306,164 @@ export class DatabaseStorage implements IStorage {
       })
       .returning();
     return packet!;
+  }
+
+  // Integration Connections
+  async getIntegrationConnection(provider: string): Promise<IntegrationConnection | undefined> {
+    const [conn] = await db.select().from(integrationConnections).where(eq(integrationConnections.provider, provider));
+    return conn;
+  }
+
+  async getAllIntegrationConnections(): Promise<IntegrationConnection[]> {
+    return await db.select().from(integrationConnections);
+  }
+
+  async upsertIntegrationConnection(provider: string, data: Partial<Omit<InsertIntegrationConnection, "provider">>): Promise<IntegrationConnection> {
+    const now = new Date();
+    const existing = await this.getIntegrationConnection(provider);
+    if (existing) {
+      const [updated] = await db
+        .update(integrationConnections)
+        .set({ ...data, updatedAt: now })
+        .where(eq(integrationConnections.provider, provider))
+        .returning();
+      return updated;
+    }
+    const [created] = await db
+      .insert(integrationConnections)
+      .values({
+        provider,
+        accessToken: data.accessToken ?? "",
+        refreshToken: data.refreshToken,
+        tokenExpiresAt: data.tokenExpiresAt,
+        scopes: data.scopes,
+        providerAccountId: data.providerAccountId,
+        isConnected: data.isConnected ?? true,
+        metadata: data.metadata ?? {},
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning();
+    return created;
+  }
+
+  async deleteIntegrationConnection(provider: string): Promise<boolean> {
+    const result = await db.delete(integrationConnections).where(eq(integrationConnections.provider, provider)).returning();
+    return result.length > 0;
+  }
+
+  // Meetings
+  async getMeetings(): Promise<Meeting[]> {
+    return await db.select().from(meetings).orderBy(desc(meetings.startTime));
+  }
+
+  async getMeeting(id: string): Promise<Meeting | undefined> {
+    const [meeting] = await db.select().from(meetings).where(eq(meetings.id, id));
+    return meeting;
+  }
+
+  async getMeetingByExternalId(source: string, externalId: string): Promise<Meeting | undefined> {
+    const [meeting] = await db.select().from(meetings)
+      .where(and(eq(meetings.source, source), eq(meetings.externalId, externalId)));
+    return meeting;
+  }
+
+  async createMeeting(meeting: InsertMeeting): Promise<Meeting> {
+    const values = {
+      ...meeting,
+      attendees: meeting.attendees ? [...meeting.attendees] as Array<{ email?: string; name?: string; self?: boolean }> : [],
+      actionItems: meeting.actionItems ? [...meeting.actionItems] as string[] : [],
+    };
+    const [created] = await db.insert(meetings).values(values).returning();
+    return created;
+  }
+
+  async updateMeeting(id: string, meeting: Partial<InsertMeeting>): Promise<Meeting | undefined> {
+    const now = new Date();
+    const updatePayload: Record<string, unknown> = { updatedAt: now };
+    if (meeting.title !== undefined) updatePayload.title = meeting.title;
+    if (meeting.startTime !== undefined) updatePayload.startTime = meeting.startTime;
+    if (meeting.endTime !== undefined) updatePayload.endTime = meeting.endTime;
+    if (meeting.notes !== undefined) updatePayload.notes = meeting.notes;
+    if (meeting.transcript !== undefined) updatePayload.transcript = meeting.transcript;
+    if (meeting.summary !== undefined) updatePayload.summary = meeting.summary;
+    if (meeting.attendees !== undefined) updatePayload.attendees = meeting.attendees ? Array.from(meeting.attendees) as Array<{ email?: string; name?: string; self?: boolean }> : [];
+    if (meeting.actionItems !== undefined) updatePayload.actionItems = meeting.actionItems ? Array.from(meeting.actionItems) as string[] : [];
+    const [updated] = await db.update(meetings).set(updatePayload).where(eq(meetings.id, id)).returning();
+    return updated;
+  }
+
+  async upsertMeetingByExternalId(source: string, externalId: string, data: Partial<InsertMeeting>): Promise<Meeting> {
+    const now = new Date();
+    const attendeesArr = data.attendees ? [...data.attendees] as Array<{ email?: string; name?: string; self?: boolean }> : [];
+    const actionItemsArr = data.actionItems ? [...data.actionItems] as string[] : [];
+    const existing = await this.getMeetingByExternalId(source, externalId);
+    if (existing) {
+      const updatePayload: Record<string, unknown> = { updatedAt: now };
+      if (data.title !== undefined) updatePayload.title = data.title;
+      if (data.startTime !== undefined) updatePayload.startTime = data.startTime;
+      if (data.endTime !== undefined) updatePayload.endTime = data.endTime;
+      if (data.attendees !== undefined) updatePayload.attendees = attendeesArr;
+      if (data.notes !== undefined) updatePayload.notes = data.notes;
+      if (data.transcript !== undefined) updatePayload.transcript = data.transcript;
+      if (data.summary !== undefined) updatePayload.summary = data.summary;
+      if (data.actionItems !== undefined) updatePayload.actionItems = actionItemsArr;
+      const [updated] = await db
+        .update(meetings)
+        .set(updatePayload)
+        .where(eq(meetings.id, existing.id))
+        .returning();
+      return updated;
+    }
+    const [created] = await db
+      .insert(meetings)
+      .values({
+        source,
+        externalId,
+        title: data.title ?? null,
+        startTime: data.startTime ?? null,
+        endTime: data.endTime ?? null,
+        attendees: attendeesArr,
+        notes: data.notes ?? null,
+        transcript: data.transcript ?? null,
+        summary: data.summary ?? null,
+        actionItems: actionItemsArr,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning();
+    return created;
+  }
+
+  // Contact-Meeting Links
+  async getContactMeetings(contactId: string): Promise<(ContactMeeting & { meeting: Meeting })[]> {
+    const links = await db.select().from(contactMeetings).where(eq(contactMeetings.contactId, contactId));
+    if (links.length === 0) return [];
+    const meetingIds = links.map(l => l.meetingId);
+    const meetingRows = await db.select().from(meetings).where(inArray(meetings.id, meetingIds));
+    const meetingMap = new Map(meetingRows.map(m => [m.id, m]));
+    return links
+      .filter(l => meetingMap.has(l.meetingId))
+      .map(l => ({ ...l, meeting: meetingMap.get(l.meetingId)! }));
+  }
+
+  async getMeetingContacts(meetingId: string): Promise<ContactMeeting[]> {
+    return await db.select().from(contactMeetings).where(eq(contactMeetings.meetingId, meetingId));
+  }
+
+  async linkContactToMeeting(data: InsertContactMeeting): Promise<ContactMeeting> {
+    const existing = await db.select().from(contactMeetings)
+      .where(and(eq(contactMeetings.contactId, data.contactId), eq(contactMeetings.meetingId, data.meetingId)));
+    if (existing.length > 0) return existing[0];
+    const [created] = await db.insert(contactMeetings).values(data).returning();
+    return created;
+  }
+
+  async unlinkContactFromMeeting(contactId: string, meetingId: string): Promise<boolean> {
+    const result = await db.delete(contactMeetings)
+      .where(and(eq(contactMeetings.contactId, contactId), eq(contactMeetings.meetingId, meetingId)))
+      .returning();
+    return result.length > 0;
   }
 }
 
