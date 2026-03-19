@@ -29,6 +29,7 @@ import {
   Calendar,
   FileText,
   Plug,
+  Info,
 } from "lucide-react";
 import type { Settings as SettingsType } from "@shared/schema";
 import { format } from "date-fns";
@@ -353,6 +354,18 @@ export default function Settings() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
+          {!isConnected("google") && (
+            <div className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950/30 p-3 text-sm">
+              <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
+              <div className="text-blue-800 dark:text-blue-300">
+                <span className="font-medium">One-time setup required:</span> Add{" "}
+                <code className="font-mono text-xs bg-blue-100 dark:bg-blue-900 px-1 rounded">GOOGLE_CLIENT_ID</code>{" "}
+                and{" "}
+                <code className="font-mono text-xs bg-blue-100 dark:bg-blue-900 px-1 rounded">GOOGLE_CLIENT_SECRET</code>{" "}
+                as Replit secrets to enable Google auth. Users then connect with one click.
+              </div>
+            </div>
+          )}
           <IntegrationCard
             provider="google"
             name="Google"
@@ -367,12 +380,13 @@ export default function Settings() {
           <IntegrationCard
             provider="granola"
             name="Granola"
-            description="Pull meeting notes and transcripts via MCP"
+            description="Pull meeting notes and transcripts via MCP — uses your Google connection"
             icon={<GranolaIcon className="h-5 w-5" />}
-            connected={isConnected("granola")}
-            accountId={integrations.find((i) => i.provider === "granola")?.providerAccountId}
+            connected={isConnected("granola") || isConnected("google")}
+            viaGoogle={isConnected("google")}
+            accountId={integrations.find((i) => i.provider === "google")?.providerAccountId}
             onStatusChange={() => queryClient.invalidateQueries({ queryKey: ["/api/integrations"] })}
-            onSync={() => syncGranola()}
+            onSync={isConnected("google") ? () => syncGranola() : undefined}
             isSyncing={isSyncingGranola}
           />
         </CardContent>

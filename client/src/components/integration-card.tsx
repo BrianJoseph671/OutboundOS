@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, ExternalLink, Unplug, RefreshCw } from "lucide-react";
+import { Loader2, ExternalLink, Unplug, RefreshCw, AlertCircle } from "lucide-react";
 
 interface IntegrationCardProps {
   provider: string;
@@ -15,6 +15,7 @@ interface IntegrationCardProps {
   connected: boolean;
   accountId?: string | null;
   scopes?: string | null;
+  viaGoogle?: boolean;
   onStatusChange?: () => void;
   onSync?: () => void;
   isSyncing?: boolean;
@@ -27,6 +28,7 @@ export function IntegrationCard({
   icon,
   connected,
   accountId,
+  viaGoogle,
   onStatusChange,
   onSync,
   isSyncing,
@@ -38,12 +40,25 @@ export function IntegrationCard({
   const connectMutation = useMutation({
     mutationFn: async () => {
       setConnecting(true);
-      const res = await apiRequest("POST", `/api/integrations/${provider}/connect`);
+      const res = await fetch(`/api/integrations/${provider}/connect`, {
+        method: "POST",
+        credentials: "include",
+      });
       const data = await res.json();
-      return data.authorizationUrl;
+      if (!res.ok) {
+        throw new Error(data.error || `Failed to connect ${name}`);
+      }
+      return data;
     },
-    onSuccess: (authUrl: string) => {
-      window.location.href = authUrl;
+    onSuccess: (data) => {
+      if (data.authorizationUrl) {
+        window.location.href = data.authorizationUrl;
+      } else if (data.connected) {
+        queryClient.invalidateQueries({ queryKey: ["/api/integrations"] });
+        toast({ title: `${name} connected` });
+        onStatusChange?.();
+        setConnecting(false);
+      }
     },
     onError: (error: Error) => {
       setConnecting(false);
@@ -86,6 +101,9 @@ export function IntegrationCard({
               {connected && (
                 <Badge variant="secondary" className="text-xs">Connected</Badge>
               )}
+              {viaGoogle && connected && (
+                <Badge variant="outline" className="text-xs text-muted-foreground">via Google</Badge>
+              )}
             </div>
             <p className="text-sm text-muted-foreground">{description}</p>
             {connected && accountId && (
@@ -102,6 +120,7 @@ export function IntegrationCard({
                   size="sm"
                   onClick={onSync}
                   disabled={isSyncing}
+                  data-testid={`button-sync-${provider}`}
                 >
                   {isSyncing ? (
                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
@@ -111,28 +130,32 @@ export function IntegrationCard({
                   Sync
                 </Button>
               )}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => disconnectMutation.mutate()}
-                disabled={disconnectMutation.isPending}
-                className="text-destructive hover:text-destructive"
-              >
-                {disconnectMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                ) : (
-                  <Unplug className="h-4 w-4 mr-2" />
-                )}
-                Disconnect
-              </Button>
+              {!viaGoogle && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => disconnectMutation.mutate()}
+                  disabled={disconnectMutation.isPending}
+                  className="text-destructive hover:text-destructive"
+                  data-testid={`button-disconnect-${provider}`}
+                >
+                  {disconnectMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  ) : (
+                    <Unplug className="h-4 w-4 mr-2" />
+                  )}
+                  Disconnect
+                </Button>
+              )}
             </>
           ) : (
             <Button
               size="sm"
               onClick={() => connectMutation.mutate()}
               disabled={connecting || connectMutation.isPending}
+              data-testid={`button-connect-${provider}`}
             >
-              {connecting ? (
+              {connecting || connectMutation.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
               ) : (
                 <ExternalLink className="h-4 w-4 mr-2" />

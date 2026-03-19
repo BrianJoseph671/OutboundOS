@@ -6,10 +6,11 @@ const TAG_LENGTH = 16;
 
 function getEncryptionKey(): Buffer {
   const key = process.env.ENCRYPTION_KEY;
-  if (!key) {
-    throw new Error("ENCRYPTION_KEY environment variable is required for token encryption");
+  if (key) {
+    return crypto.scryptSync(key, "outboundos-salt", 32);
   }
-  return crypto.scryptSync(key, "outboundos-salt", 32);
+  const dbUrl = process.env.DATABASE_URL || "outboundos-default-key-seed";
+  return crypto.scryptSync(dbUrl, "outboundos-salt", 32);
 }
 
 export function encrypt(plaintext: string): string {

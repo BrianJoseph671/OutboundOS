@@ -31,14 +31,24 @@ setInterval(() => {
   }
 }, 60_000);
 
+function getBaseUrl(): string {
+  if (process.env.APP_BASE_URL) return process.env.APP_BASE_URL;
+  const replitDomains = process.env.REPLIT_DOMAINS;
+  if (replitDomains) {
+    const domain = replitDomains.split(",")[0].trim();
+    return `https://${domain}`;
+  }
+  return "http://localhost:5000";
+}
+
 export function getProviderConfig(provider: string): OAuthProviderConfig {
-  const baseUrl = process.env.APP_BASE_URL || "http://localhost:5000";
+  const baseUrl = getBaseUrl();
 
   if (provider === "google") {
     const clientId = process.env.GOOGLE_CLIENT_ID;
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
     if (!clientId || !clientSecret) {
-      throw new Error("GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are required");
+      throw new Error("GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are required. Add them as secrets in your Replit project.");
     }
     return {
       provider: "google",
@@ -50,25 +60,9 @@ export function getProviderConfig(provider: string): OAuthProviderConfig {
         "https://www.googleapis.com/auth/calendar.readonly",
         "https://www.googleapis.com/auth/gmail.readonly",
         "https://www.googleapis.com/auth/userinfo.email",
+        "https://www.googleapis.com/auth/userinfo.profile",
       ],
       redirectUri: `${baseUrl}/api/integrations/callback/google`,
-    };
-  }
-
-  if (provider === "granola") {
-    const clientId = process.env.GRANOLA_CLIENT_ID;
-    const clientSecret = process.env.GRANOLA_CLIENT_SECRET;
-    if (!clientId || !clientSecret) {
-      throw new Error("GRANOLA_CLIENT_ID and GRANOLA_CLIENT_SECRET are required");
-    }
-    return {
-      provider: "granola",
-      clientId,
-      clientSecret,
-      authorizationUrl: "https://app.granola.ai/oauth/authorize",
-      tokenUrl: "https://app.granola.ai/oauth/token",
-      scopes: ["meetings:read"],
-      redirectUri: `${baseUrl}/api/integrations/callback/granola`,
     };
   }
 
@@ -185,7 +179,7 @@ export async function saveTokens(provider: string, tokens: OAuthTokens): Promise
 
 export async function getValidAccessToken(provider: string): Promise<string | null> {
   const connection = await storage.getIntegrationConnection(provider);
-  if (!connection?.isConnected) return null;
+  if (!connection?.isConnected || !connection.accessToken) return null;
 
   if (connection.tokenExpiresAt && connection.tokenExpiresAt < new Date()) {
     const refreshed = await refreshAccessToken(provider);

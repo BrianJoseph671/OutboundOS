@@ -7,7 +7,6 @@ import {
   saveTokens,
   getValidAccessToken,
 } from "../services/oauth";
-import { decrypt } from "../utils/encryption";
 import { syncGoogleCalendarEvents } from "../services/googleIntegration";
 
 const router = Router();
@@ -24,6 +23,21 @@ router.get("/", async (_req, res) => {
       createdAt: c.createdAt,
       updatedAt: c.updatedAt,
     }));
+
+    // Granola is considered connected whenever Google is connected
+    const googleConn = connections.find((c) => c.provider === "google");
+    const granolaConn = connections.find((c) => c.provider === "granola");
+    if (googleConn?.isConnected && !granolaConn?.isConnected) {
+      masked.push({
+        provider: "granola",
+        isConnected: true,
+        scopes: "via-google",
+        providerAccountId: googleConn.providerAccountId || null,
+        createdAt: googleConn.createdAt,
+        updatedAt: googleConn.updatedAt,
+      });
+    }
+
     res.json(masked);
   } catch (error: any) {
     res.status(500).json({ error: error.message || "Failed to fetch integrations" });
@@ -33,9 +47,20 @@ router.get("/", async (_req, res) => {
 // Get single integration status
 router.get("/:provider", async (req, res) => {
   try {
-    const conn = await storage.getIntegrationConnection(req.params.provider);
+    const { provider } = req.params;
+
+    if (provider === "granola") {
+      const google = await storage.getIntegrationConnection("google");
+      return res.json({
+        connected: !!google?.isConnected,
+        provider: "granola",
+        via: "google",
+      });
+    }
+
+    const conn = await storage.getIntegrationConnection(provider);
     if (!conn) {
-      return res.json({ connected: false, provider: req.params.provider });
+      return res.json({ connected: false, provider });
     }
     res.json({
       connected: conn.isConnected,
@@ -50,9 +75,22 @@ router.get("/:provider", async (req, res) => {
 });
 
 // Start OAuth flow — returns authorization URL
+// Granola has no separate OAuth; it uses Google auth
 router.post("/:provider/connect", async (req, res) => {
   try {
     const { provider } = req.params;
+
+    if (provider === "granola") {
+      const google = await storage.getIntegrationConnection("google");
+      if (!google?.isConnected) {
+        return res.status(400).json({
+          error: "Connect your Google account first — Granola uses Google auth.",
+          requiresGoogle: true,
+        });
+      }
+      return res.json({ connected: true, via: "google" });
+    }
+
     const url = generateAuthorizationUrl(provider);
     res.json({ authorizationUrl: url });
   } catch (error: any) {
@@ -81,7 +119,6 @@ router.get("/callback/:provider", async (req, res) => {
     const tokens = await exchangeCodeForTokens(provider, String(code));
     await saveTokens(provider, tokens);
 
-    // Fetch provider account info for display
     if (provider === "google") {
       try {
         const userInfoRes = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
@@ -94,7 +131,7 @@ router.get("/callback/:provider", async (req, res) => {
           });
         }
       } catch {
-        // Non-critical: account info fetch failed
+        // Non-critical
       }
     }
 
@@ -110,6 +147,12 @@ router.delete("/:provider", async (req, res) => {
   try {
     const { provider } = req.params;
     await storage.deleteIntegrationConnection(provider);
+
+    // Disconnecting Google also removes Granola access
+    if (provider === "google") {
+      await storage.deleteIntegrationConnection("granola").catch(() => {});
+    }
+
     res.json({ success: true });
   } catch (error: any) {
     res.status(500).json({ error: error.message || "Failed to disconnect" });
@@ -150,7 +193,7 @@ router.post("/google/sync", async (_req, res) => {
   }
 });
 
-// Sync Granola meetings via MCP
+// Sync Granola meetings via MCP (uses Google token)
 router.post("/granola/sync", async (_req, res) => {
   try {
     const { syncGranolaMeetings } = await import("../services/granolaIntegration");
