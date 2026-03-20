@@ -153,8 +153,11 @@ export function setupAuth(app: Express) {
   const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
 
   if (googleClientId && googleClientSecret) {
-    const callbackURL = process.env.GOOGLE_CALLBACK_URL ||
-      `${process.env.APP_URL || "http://localhost:5000"}/api/auth/google/callback`;
+    const baseUrl = process.env.APP_URL ||
+      (process.env.REPLIT_DOMAINS
+        ? `https://${process.env.REPLIT_DOMAINS.split(",")[0].trim()}`
+        : "http://localhost:5000");
+    const callbackURL = process.env.GOOGLE_CALLBACK_URL || `${baseUrl}/api/auth/google/callback`;
 
     passport.use(
       new GoogleStrategy(
