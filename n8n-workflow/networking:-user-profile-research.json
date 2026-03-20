@@ -131,7 +131,7 @@
           "parameters": [
             {
               "name": "X-API-KEY",
-              "value": "REDACTED_ROTATE_THIS_KEY"
+              "value": "22c0253164e3659ee7f76741f2d9602cb51d23d3"
             },
             {
               "name": "Content-Type",
@@ -168,7 +168,7 @@
           "parameters": [
             {
               "name": "X-API-KEY",
-              "value": "REDACTED_ROTATE_THIS_KEY"
+              "value": "22c0253164e3659ee7f76741f2d9602cb51d23d3"
             },
             {
               "name": "Content-Type",
@@ -439,7 +439,7 @@
             "parameters": [
               {
                 "name": "X-API-KEY",
-                "value": "REDACTED_ROTATE_THIS_KEY"
+                "value": "22c0253164e3659ee7f76741f2d9602cb51d23d3"
               },
               {
                 "name": "Content-Type",
@@ -476,7 +476,7 @@
             "parameters": [
               {
                 "name": "X-API-KEY",
-                "value": "REDACTED_ROTATE_THIS_KEY"
+                "value": "22c0253164e3659ee7f76741f2d9602cb51d23d3"
               },
               {
                 "name": "Content-Type",
