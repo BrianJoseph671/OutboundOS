@@ -31,8 +31,6 @@ app.use(
 
 app.use(express.urlencoded({ limit: "10mb", extended: false }));
 
-setupAuth(app);
-
 // Debug middleware for webhook requests
 app.use("/api/webhooks", (req, res, next) => {
   console.log(
@@ -80,6 +78,7 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  await setupAuth(app);
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

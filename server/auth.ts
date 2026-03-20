@@ -83,7 +83,25 @@ export async function findOrCreateGoogleUser(profile: {
   return created as Express.User;
 }
 
-export function setupAuth(app: Express) {
+async function ensureSessionTable() {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS "session" (
+        "sid" varchar NOT NULL COLLATE "default",
+        "sess" json NOT NULL,
+        "expire" timestamp(6) NOT NULL,
+        CONSTRAINT "session_pkey" PRIMARY KEY ("sid") NOT DEFERRABLE INITIALLY IMMEDIATE
+      ) WITH (OIDS=FALSE);
+      CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON "session" ("expire");
+    `);
+  } catch (err) {
+    console.error("[Auth] Failed to create session table:", err);
+  }
+}
+
+export async function setupAuth(app: Express) {
+  await ensureSessionTable();
+
   const PgSession = connectPgSimple(session);
 
   const sessionSecret = process.env.SESSION_SECRET;
@@ -104,7 +122,6 @@ export function setupAuth(app: Express) {
       store: new PgSession({
         pool,
         tableName: "session",
-        createTableIfMissing: true,
       }),
       secret: sessionSecret || "outboundos-dev-only-insecure-secret",
       resave: false,
