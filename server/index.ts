@@ -4,9 +4,13 @@ import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import { setupWebSocket } from "./websocket";
+import { setupAuth } from "./auth";
 
 const app = express();
 const httpServer = createServer(app);
+
+// Trust first proxy for secure session cookies behind TLS termination (e.g. Replit, Nginx)
+app.set("trust proxy", 1);
 
 setupWebSocket(httpServer);
 
@@ -74,6 +78,7 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  await setupAuth(app);
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

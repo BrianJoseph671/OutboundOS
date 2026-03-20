@@ -1,4 +1,4 @@
-import express, { type Express } from "express";
+import express, { type Express, type Request, type Response, type NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import multer from "multer";
@@ -9,9 +9,13 @@ import {
   insertOutreachAttemptSchema,
   insertExperimentSchema,
   insertSettingsSchema,
+  type Contact,
+  type InsertOutreachAttempt,
 } from "@shared/schema";
 import batchRouter from "./routes/batch";
+import integrationsRouter from "./routes/integrations";
 import { appendResearchedTag } from "./utils/contactTags";
+import { isAuthenticated } from "./auth";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -109,8 +113,41 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express,
 ): Promise<Server> {
+  // Protect all /api/ routes except auth, cert, and webhook routes.
+  // Webhooks use their own secret-based auth (validateWebhookSecret middleware).
+  app.use("/api", (req: Request, res: Response, next: NextFunction) => {
+    const publicPaths = [
+      "/api/auth/",
+      "/api/cert/",
+      "/api/webhooks/",
+      "/api/integrations/callback/",
+    ];
+    if (publicPaths.some((p) => req.path.startsWith(p.slice(4)))) {
+      return next();
+    }
+    return isAuthenticated(req, res, next);
+  });
+
+  // Webhook secret middleware: validates X-Webhook-Secret header for /api/webhooks/*
+  const validateWebhookSecret = (req: Request, res: Response, next: NextFunction) => {
+    const secret = process.env.WEBHOOK_SECRET;
+    if (!secret) {
+      console.warn("[Webhook] WEBHOOK_SECRET not configured; webhook endpoints are disabled.");
+      return res.status(403).json({ message: "Webhook endpoints are not configured" });
+    }
+    const provided = req.headers["x-webhook-secret"];
+    if (!provided || provided !== secret) {
+      console.warn("[Webhook] Invalid or missing X-Webhook-Secret header");
+      return res.status(401).json({ message: "Unauthorized: invalid webhook secret" });
+    }
+    next();
+  };
+
   // Batch processing routes
   app.use("/api/batch", batchRouter);
+
+  // Integration routes (OAuth, meetings)
+  app.use("/api/integrations", integrationsRouter);
 
   // =========================
   // CERT: Level 3 proof (simple, deterministic)
@@ -121,14 +158,6 @@ export async function registerRoutes(
       const hasAirtable = Boolean(process.env.AIRTABLE_API_KEY);
       const hasDb = Boolean(process.env.DATABASE_URL);
 
-      let contactsCount: number | null = null;
-      try {
-        const contacts = await storage.getContacts();
-        contactsCount = contacts.length;
-      } catch {
-        contactsCount = null;
-      }
-
       res.json({
         ok: true,
         secrets: {
@@ -136,7 +165,7 @@ export async function registerRoutes(
           hasAirtable,
           hasDb,
         },
-        contactsCount,
+        contactsCount: null,
       });
     } catch (e: any) {
       res.status(500).json({
@@ -147,62 +176,6 @@ export async function registerRoutes(
   });
 
 
-
-  // CERT: Level 3 proof endpoint (DB write + DB read + OpenAI twice)
-  app.get("/api/cert/airtable-ping", async (_req, res) => {
-    try {
-      const baseId = process.env.AIRTABLE_BASE_ID;
-      const token = process.env.AIRTABLE_API_KEY;
-
-      const tableName = process.env.AIRTABLE_TABLE_NAME || "Contacts";
-
-      console.log("[airtable-ping] token prefix:", token?.slice(0, 6));
-      console.log("[airtable-ping] baseId:", baseId);
-      console.log("[airtable-ping] tableName:", tableName);
-
-      if (!baseId || !token) {
-        return res.status(400).json({
-          ok: false,
-          error: "Missing AIRTABLE_BASE_ID or AIRTABLE_API_KEY in Secrets",
-        });
-      }
-
-      const url = `https://api.airtable.com/v0/${baseId}/${encodeURIComponent(tableName)}?maxRecords=1`;
-      const response = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      const text = await response.text();
-      res.status(response.status).send(text);
-    } catch (error: any) {
-      console.error("[CERT airtable-ping] Error:", error);
-      res.status(500).json({ ok: false, error: error?.message || "Unknown error" });
-    }
-  });
-
-  app.get("/api/cert/level3-proof-v2", async (_req, res) => {
-    try {
-      const hasOpenAI = Boolean(process.env.OPENAI_API_KEY);
-      const hasAirtable = Boolean(process.env.AIRTABLE_API_KEY);
-      const hasDb = Boolean(process.env.DATABASE_URL);
-
-      // Deterministic external API call that requires no keys
-      const r = await fetch("https://httpbin.org/get");
-      const j = await r.json();
-
-      // Also prove DB works by reading count
-      const contactsCount = (await storage.getContacts()).length;
-
-      res.json({
-        ok: true,
-        secrets: { hasOpenAI, hasAirtable, hasDb },
-        externalApi: { ok: r.ok, url: j.url, origin: j.origin },
-        contactsCount,
-      });
-    } catch (e: any) {
-      res.status(500).json({ ok: false, error: e?.message || "unknown error" });
-    }
-  });
 
   // CERT: Airtable ping using Secrets (proves secret-based API integration)
   app.get("/api/cert/airtable-ping", async (_req, res) => {
@@ -235,21 +208,23 @@ export async function registerRoutes(
   // Contacts - sync endpoint for localStorage shadow (FK integrity)
   app.post("/api/contacts/sync", express.json(), async (req, res) => {
     try {
+      const userId = req.user!.id;
       const contact = req.body;
       if (!contact?.id || !contact?.name) {
         return res.status(400).json({ error: "id and name are required" });
       }
-      const upserted = await storage.upsertContact(contact);
+      const upserted = await storage.upsertContact(contact, userId);
       res.json(upserted);
     } catch (error) {
       res.status(500).json({ error: "Failed to sync contact" });
     }
   });
 
-  // Contacts (legacy - client uses localStorage; kept for backward compatibility)
+  // Contacts
   app.get("/api/contacts", async (req, res) => {
     try {
-      const contacts = await storage.getContacts();
+      const userId = req.user!.id;
+      const contacts = await storage.getContacts(userId);
       res.json(contacts);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch contacts" });
@@ -258,7 +233,8 @@ export async function registerRoutes(
 
   app.get("/api/contacts/:id", async (req, res) => {
     try {
-      const contact = await storage.getContact(req.params.id);
+      const userId = req.user!.id;
+      const contact = await storage.getContact(req.params.id, userId);
       if (!contact) {
         return res.status(404).json({ error: "Contact not found" });
       }
@@ -270,7 +246,8 @@ export async function registerRoutes(
 
   app.post("/api/contacts", async (req, res) => {
     try {
-      const validatedData = insertContactSchema.parse(req.body);
+      const userId = req.user!.id;
+      const validatedData = insertContactSchema.parse({ ...req.body, userId });
       const contact = await storage.createContact(validatedData);
       res.status(201).json(contact);
     } catch (error) {
@@ -280,7 +257,8 @@ export async function registerRoutes(
 
   app.patch("/api/contacts/:id", async (req, res) => {
     try {
-      const contact = await storage.updateContact(req.params.id, req.body);
+      const userId = req.user!.id;
+      const contact = await storage.updateContact(req.params.id, userId, req.body);
       if (!contact) {
         return res.status(404).json({ error: "Contact not found" });
       }
@@ -292,7 +270,8 @@ export async function registerRoutes(
 
   app.delete("/api/contacts/:id", async (req, res) => {
     try {
-      const deleted = await storage.deleteContact(req.params.id);
+      const userId = req.user!.id;
+      const deleted = await storage.deleteContact(req.params.id, userId);
       if (!deleted) {
         return res.status(404).json({ error: "Contact not found" });
       }
@@ -304,11 +283,12 @@ export async function registerRoutes(
 
   app.post("/api/contacts/bulk-delete", async (req, res) => {
     try {
+      const userId = req.user!.id;
       const { ids } = req.body;
       if (!Array.isArray(ids)) {
         return res.status(400).json({ error: "Expected array of ids" });
       }
-      const count = await storage.deleteContacts(ids);
+      const count = await storage.deleteContacts(ids, userId);
       res.json({ success: true, count });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete contacts" });
@@ -318,6 +298,7 @@ export async function registerRoutes(
   // Bulk Contact Import
   app.post("/api/contacts/bulk-import", async (req, res) => {
     try {
+      const userId = req.user!.id;
       const contacts = req.body.contacts;
 
       if (!Array.isArray(contacts)) {
@@ -338,7 +319,7 @@ export async function registerRoutes(
             continue;
           }
 
-          const existing = await storage.getContacts();
+          const existing = await storage.getContacts(userId);
           const duplicate = existing.find(
             (c) => c.name.toLowerCase() === contactData.name.toLowerCase(),
           );
@@ -349,7 +330,7 @@ export async function registerRoutes(
             continue;
           }
 
-          const validatedData = insertContactSchema.parse(contactData);
+          const validatedData = insertContactSchema.parse({ ...contactData, userId });
           await storage.createContact(validatedData);
           results.success++;
         } catch (error) {
@@ -465,7 +446,8 @@ export async function registerRoutes(
   // Get Airtable connection config
   app.get("/api/airtable/config", async (req, res) => {
     try {
-      const config = await storage.getAirtableConfig();
+      const userId = req.user!.id;
+      const config = await storage.getAirtableConfig(userId);
       if (!config) {
         return res.json({ connected: false });
       }
@@ -486,6 +468,7 @@ export async function registerRoutes(
   // Save Airtable connection config
   app.post("/api/airtable/config", async (req, res) => {
     try {
+      const userId = req.user!.id;
       const { baseId, tableName, personalAccessToken, fieldMapping, viewName } = req.body;
       
       if (!baseId || !tableName || !personalAccessToken) {
@@ -493,6 +476,7 @@ export async function registerRoutes(
       }
 
       const config = await storage.saveAirtableConfig({
+        userId,
         baseId,
         tableName,
         personalAccessToken,
@@ -518,7 +502,8 @@ export async function registerRoutes(
   // Disconnect Airtable
   app.delete("/api/airtable/config", async (req, res) => {
     try {
-      await storage.deleteAirtableConfig();
+      const userId = req.user!.id;
+      await storage.deleteAirtableConfig(userId);
       res.json({ success: true });
     } catch (error) {
       console.error("[Airtable Config] Delete error:", error);
@@ -529,17 +514,19 @@ export async function registerRoutes(
   // Sync/Refresh contacts from Airtable (config from body = per-browser; else fallback to stored config)
   app.post("/api/airtable/sync", express.json(), async (req, res) => {
     try {
-      const bodyConfig = req.body?.baseId && req.body?.tableName && req.body?.personalAccessToken
+      const userId = req.user!.id;
+      const bodyToken = req.body?.personalAccessToken;
+      const bodyConfig = req.body?.baseId && req.body?.tableName && bodyToken
         ? {
             baseId: req.body.baseId,
             tableName: req.body.tableName,
-            personalAccessToken: req.body.personalAccessToken,
+            personalAccessToken: bodyToken,
             viewName: req.body.viewName || "Grid view",
             fieldMapping: req.body.fieldMapping,
           }
         : null;
 
-      const dbConfig = bodyConfig ? null : await storage.getAirtableConfig();
+      const dbConfig = await storage.getAirtableConfig(userId);
       const config = bodyConfig || dbConfig;
 
       if (!config) {
@@ -597,7 +584,7 @@ export async function registerRoutes(
       }
 
       if (dbConfig?.id) {
-        await storage.updateAirtableConfig(dbConfig.id, { lastSyncAt: new Date() });
+        await storage.updateAirtableConfig(dbConfig.id, userId, { lastSyncAt: new Date() });
       }
 
       res.json({
@@ -612,7 +599,7 @@ export async function registerRoutes(
   });
 
   // n8n Webhook - Import batch outreach logs
-  app.post("/api/webhooks/outreach-logs", express.json(), async (req, res) => {
+  app.post("/api/webhooks/outreach-logs", validateWebhookSecret, express.json(), async (req, res) => {
     console.log("WEBHOOK HIT - /api/webhooks/outreach-logs");
     try {
       console.log("[Outreach Webhook] Received payload:", JSON.stringify(req.body, null, 2));
@@ -664,17 +651,23 @@ export async function registerRoutes(
             continue;
           }
 
-          // Find or create contact
-          const contacts = await storage.getContacts();
+          // Resolve userId from payload or fall back to seed user for legacy n8n workflows
+          const SEED_USER_ID = "00000000-0000-0000-0000-000000000001";
+          const webhookUserId: string = (typeof logData.userId === "string" && logData.userId)
+            ? logData.userId
+            : SEED_USER_ID;
+
+          const contacts = await storage.getContacts(webhookUserId);
           let contact = contacts.find(c => c.name.toLowerCase() === personName.toLowerCase());
 
           if (!contact) {
-            console.log(`[Outreach Webhook] Auto-creating contact: ${personName}`);
+            console.log(`[Outreach Webhook] Auto-creating contact: ${personName} for user ${webhookUserId}`);
             contact = await storage.createContact({
+              userId: webhookUserId,
               name: personName,
               company: logData.company || "Unknown",
               tags: "auto-created-from-webhook",
-            } as any);
+            });
             console.log(`[Outreach Webhook] Created contact with ID: ${contact.id}`);
           } else {
             console.log(`[Outreach Webhook] Found existing contact: ${contact.name} (ID: ${contact.id})`);
@@ -702,7 +695,8 @@ export async function registerRoutes(
           // Convert string booleans to actual booleans
           const toBool = (val: any): boolean => val === true || val === "true";
 
-          const outreachData: any = {
+          const outreachData: InsertOutreachAttempt = {
+            userId: webhookUserId,
             contactId: contact.id,
             outreachType: mappedType,
             subject: logData.subjectLine || "",
@@ -742,7 +736,7 @@ export async function registerRoutes(
   });
 
   // n8n callback: prospect research result (n8n POSTs the result here when workflow finishes)
-  app.post("/api/webhooks/prospect-research-result", express.json(), (req, res) => {
+  app.post("/api/webhooks/prospect-research-result", validateWebhookSecret, express.json(), (req, res) => {
     const body = req.body;
     let result: unknown = null;
     let requestId: string | null = null;
@@ -782,6 +776,7 @@ export async function registerRoutes(
   // Bulk Create Contacts - Create multiple contacts at once
   app.post("/api/contacts/bulk-create", async (req, res) => {
     try {
+      const userId = req.user!.id;
       const { contacts } = req.body;
 
       if (!Array.isArray(contacts)) {
@@ -802,6 +797,7 @@ export async function registerRoutes(
           // Add import tag
           const dataWithTag = {
             ...contactData,
+            userId,
             tags: contactData.tags ? `${contactData.tags},spreadsheet-import` : "spreadsheet-import",
           };
 
@@ -1111,7 +1107,8 @@ export async function registerRoutes(
   // Outreach Attempts
   app.get("/api/outreach-attempts", async (req, res) => {
     try {
-      let attempts = await storage.getOutreachAttempts();
+      const userId = req.user!.id;
+      let attempts = await storage.getOutreachAttempts(userId);
       const contactIdsRaw = req.query.contactIds;
       if (contactIdsRaw !== undefined) {
         const contactIds = typeof contactIdsRaw === "string"
@@ -1130,7 +1127,8 @@ export async function registerRoutes(
 
   app.get("/api/outreach-attempts/:id", async (req, res) => {
     try {
-      const attempt = await storage.getOutreachAttempt(req.params.id);
+      const userId = req.user!.id;
+      const attempt = await storage.getOutreachAttempt(req.params.id, userId);
       if (!attempt) {
         return res.status(404).json({ error: "Outreach attempt not found" });
       }
@@ -1142,7 +1140,8 @@ export async function registerRoutes(
 
   app.post("/api/outreach-attempts", async (req, res) => {
     try {
-      const validatedData = insertOutreachAttemptSchema.parse(req.body);
+      const userId = req.user!.id;
+      const validatedData = insertOutreachAttemptSchema.parse({ ...req.body, userId });
       const attempt = await storage.createOutreachAttempt(validatedData);
       res.status(201).json(attempt);
     } catch (error) {
@@ -1153,6 +1152,7 @@ export async function registerRoutes(
 
   app.patch("/api/outreach-attempts/:id", async (req, res) => {
     try {
+      const userId = req.user!.id;
       console.log(`Updating outreach attempt ${req.params.id}:`, req.body);
       
       const { id, ...data } = req.body;
@@ -1189,6 +1189,7 @@ export async function registerRoutes(
 
       const attempt = await storage.updateOutreachAttempt(
         req.params.id,
+        userId,
         updateData,
       );
       
@@ -1204,7 +1205,8 @@ export async function registerRoutes(
 
   app.delete("/api/outreach-attempts/:id", async (req, res) => {
     try {
-      const deleted = await storage.deleteOutreachAttempt(req.params.id);
+      const userId = req.user!.id;
+      const deleted = await storage.deleteOutreachAttempt(req.params.id, userId);
       if (!deleted) {
         return res.status(404).json({ error: "Outreach attempt not found" });
       }
@@ -1216,11 +1218,12 @@ export async function registerRoutes(
 
   app.post("/api/outreach-attempts/bulk-delete", async (req, res) => {
     try {
+      const userId = req.user!.id;
       const { ids } = req.body;
       if (!Array.isArray(ids)) {
         return res.status(400).json({ error: "Expected array of ids" });
       }
-      const count = await storage.deleteOutreachAttempts(ids);
+      const count = await storage.deleteOutreachAttempts(ids, userId);
       res.json({ success: true, count });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete outreach attempts" });
@@ -1230,6 +1233,7 @@ export async function registerRoutes(
   // Bulk Outreach Import
   app.post("/api/outreach-attempts/bulk-import", async (req, res) => {
     try {
+      const userId = req.user!.id;
       const attempts = req.body.attempts;
 
       if (!Array.isArray(attempts)) {
@@ -1260,7 +1264,7 @@ export async function registerRoutes(
       for (const attemptData of attempts) {
         try {
           // Find contact by name to get contactId
-          const contacts = await storage.getContacts();
+          const contacts = await storage.getContacts(userId);
           const contact = contacts.find(
             (c) => c.name.toLowerCase() === attemptData.contactName.toLowerCase(),
           );
@@ -1281,6 +1285,7 @@ export async function registerRoutes(
 
           // Create attempt with contactId
           const attempt = {
+            userId,
             contactId: contact.id,
             outreachType: mappedOutreachType,
             dateSent: dateSentValue ? new Date(dateSentValue) : new Date(),
@@ -1324,7 +1329,8 @@ export async function registerRoutes(
   // Experiments
   app.get("/api/experiments", async (req, res) => {
     try {
-      const experiments = await storage.getExperiments();
+      const userId = req.user!.id;
+      const experiments = await storage.getExperiments(userId);
       res.json(experiments);
     } catch (error: any) {
       const msg = error?.message ?? error?.detail ?? error?.code ?? String(error);
@@ -1335,7 +1341,8 @@ export async function registerRoutes(
 
   app.get("/api/experiments/:id", async (req, res) => {
     try {
-      const experiment = await storage.getExperiment(req.params.id);
+      const userId = req.user!.id;
+      const experiment = await storage.getExperiment(req.params.id, userId);
       if (!experiment) {
         return res.status(404).json({ error: "Experiment not found" });
       }
@@ -1347,7 +1354,8 @@ export async function registerRoutes(
 
   app.post("/api/experiments", async (req, res) => {
     try {
-      const validatedData = insertExperimentSchema.parse(req.body);
+      const userId = req.user!.id;
+      const validatedData = insertExperimentSchema.parse({ ...req.body, userId });
       const experiment = await storage.createExperiment(validatedData);
       res.status(201).json(experiment);
     } catch (error) {
@@ -1357,8 +1365,10 @@ export async function registerRoutes(
 
   app.patch("/api/experiments/:id", async (req, res) => {
     try {
+      const userId = req.user!.id;
       const experiment = await storage.updateExperiment(
         req.params.id,
+        userId,
         req.body,
       );
       if (!experiment) {
@@ -1372,7 +1382,8 @@ export async function registerRoutes(
 
   app.delete("/api/experiments/:id", async (req, res) => {
     try {
-      const deleted = await storage.deleteExperiment(req.params.id);
+      const userId = req.user!.id;
+      const deleted = await storage.deleteExperiment(req.params.id, userId);
       if (!deleted) {
         return res.status(404).json({ error: "Experiment not found" });
       }
@@ -1385,7 +1396,8 @@ export async function registerRoutes(
   // Settings
   app.get("/api/settings", async (req, res) => {
     try {
-      const settings = await storage.getSettings();
+      const userId = req.user!.id;
+      const settings = await storage.getSettings(userId);
       res.json(settings || {});
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch settings" });
@@ -1394,7 +1406,8 @@ export async function registerRoutes(
 
   app.post("/api/settings", async (req, res) => {
     try {
-      const validatedData = insertSettingsSchema.parse(req.body);
+      const userId = req.user!.id;
+      const validatedData = insertSettingsSchema.parse({ ...req.body, userId });
       const settings = await storage.createSettings(validatedData);
       res.status(201).json(settings);
     } catch (error) {
@@ -1404,7 +1417,8 @@ export async function registerRoutes(
 
   app.patch("/api/settings/:id", async (req, res) => {
     try {
-      const settings = await storage.updateSettings(req.params.id, req.body);
+      const userId = req.user!.id;
+      const settings = await storage.updateSettings(req.params.id, userId, req.body);
       if (!settings) {
         return res.status(404).json({ error: "Settings not found" });
       }
@@ -1417,7 +1431,8 @@ export async function registerRoutes(
   // CSV Export
   app.get("/api/export/contacts", async (req, res) => {
     try {
-      const contacts = await storage.getContacts();
+      const userId = req.user!.id;
+      const contacts = await storage.getContacts(userId);
 
       const headers = [
         "Name",
@@ -1455,18 +1470,19 @@ export async function registerRoutes(
 
   app.get("/api/export/outreach-attempts", async (req, res) => {
     try {
+      const userId = req.user!.id;
       const contactIdsParam = req.query.contactIds as string | undefined;
       const contactIds = contactIdsParam
         ? contactIdsParam.split(",").map((id) => id.trim()).filter(Boolean)
         : null;
 
-      let attempts = await storage.getOutreachAttempts();
+      let attempts = await storage.getOutreachAttempts(userId);
       if (contactIds && contactIds.length > 0) {
         const idSet = new Set(contactIds);
         attempts = attempts.filter((a) => idSet.has(a.contactId));
       }
 
-      const contacts = await storage.getContacts();
+      const contacts = await storage.getContacts(userId);
       const contactMap = new Map(contacts.map((c) => [c.id, c]));
 
       const headers = [
@@ -1677,16 +1693,24 @@ export async function registerRoutes(
   });
 
   // GET /api/research-packets — Fetch research packets by contact IDs (required for per-browser)
-  app.get("/api/research-packets", async (req, res) => {
+  app.get("/api/research-packets", isAuthenticated, async (req, res) => {
     try {
+      const userId = req.user!.id;
       const contactIdsParam = req.query.contactIds as string | undefined;
-      const contactIds = contactIdsParam
+      const requestedIds = contactIdsParam
         ? contactIdsParam.split(",").map((id) => id.trim()).filter(Boolean)
         : [];
+      if (requestedIds.length === 0) {
+        return res.json({ packets: [] });
+      }
+      // Validate ownership: only fetch packets for contacts that belong to this user
+      const userContacts = await storage.getContacts(userId);
+      const ownedContactIds = new Set(userContacts.map((c) => c.id));
+      const contactIds = requestedIds.filter((id) => ownedContactIds.has(id));
       if (contactIds.length === 0) {
         return res.json({ packets: [] });
       }
-      const packets = await storage.getResearchPacketsByContactIds(contactIds);
+      const packets = await storage.getResearchPacketsByContactIds(contactIds, userId);
       res.json({ packets });
     } catch (error: unknown) {
       const err = error as Record<string, unknown> | null;
@@ -1797,22 +1821,28 @@ export async function registerRoutes(
 
   app.post("/api/research/bulk", express.json(), async (req, res) => {
     try {
+    const userId = req.user!.id;
     const body = req.body as Record<string, unknown> | undefined;
     const contactIds = body?.contactIds as string[] | undefined;
     const contactsPayload = body?.contacts as Array<{ id: string; name: string; company?: string }> | undefined;
 
-    // Support both: contacts array (from localStorage) or contactIds (legacy)
-    let contacts: Array<{ id: string; name: string; company?: string } | null>;
+    // Support both: contacts array (from db) or contactIds
+    // Either way, validate ownership by fetching from DB scoped to the authenticated userId
+    let contacts: Array<{ id: string; name: string; company?: string }>;
     let contactIdsList: string[];
 
-    if (Array.isArray(contactsPayload) && contactsPayload.length > 0) {
-      contacts = contactsPayload;
-      contactIdsList = contactsPayload.map((c) => c.id);
-    } else if (Array.isArray(contactIds) && contactIds.length > 0) {
-      contactIdsList = contactIds;
-      contacts = await Promise.all(
-        contactIds.map((id) => storage.getContact(id))
+    const candidateIds: string[] = Array.isArray(contactsPayload) && contactsPayload.length > 0
+      ? contactsPayload.map((c) => c.id)
+      : Array.isArray(contactIds) && contactIds.length > 0
+        ? contactIds
+        : [];
+
+    if (candidateIds.length > 0) {
+      const fetched = await Promise.all(
+        candidateIds.map((id) => storage.getContact(id, userId))
       );
+      contacts = fetched.filter((c): c is Contact => c !== undefined).map(c => ({ id: c.id, name: c.name, company: c.company ?? undefined }));
+      contactIdsList = contacts.map((c) => c.id);
     } else {
       return res.status(400).json({ error: "contacts or contactIds array is required" });
     }
@@ -1828,28 +1858,15 @@ export async function registerRoutes(
 
     const batchId = `bulk-${Date.now()}`;
 
-    // Ensure all contacts exist in DB (research_packets.contactId FK). Contacts may be localStorage-only.
-    for (const c of contacts) {
-      if (c) {
-        try {
-          const minimal = { id: c.id, name: c.name, company: c.company ?? null } as any;
-          await storage.upsertContact(minimal);
-        } catch (syncErr: any) {
-          const msg = syncErr?.message ?? (typeof syncErr === "string" ? syncErr : String(syncErr));
-          console.warn(`[BulkResearch] Could not upsert contact ${c.id} (continuing):`, msg || "(no message)");
-        }
-      }
-    }
-
     res.writeHead(200, {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
       Connection: "keep-alive",
     });
 
-    function send(event: string, data: Record<string, unknown>) {
+    const send = (event: string, data: Record<string, unknown>) => {
       res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-    }
+    };
 
     interface BulkResult {
       contactId: string;
@@ -1861,15 +1878,15 @@ export async function registerRoutes(
 
     const results: BulkResult[] = [];
 
-    async function callWebhook(
+    const callWebhook = async (
       contactId: string,
       personName: string,
       company: string
-    ): Promise<BulkResult> {
+    ): Promise<BulkResult> => {
       const idempotencyKey = `${contactId}:${batchId}`;
 
       try {
-        await storage.upsertResearchPacket(contactId, { status: "researching" });
+        await storage.upsertResearchPacket(contactId, { status: "researching" }, userId);
       } catch (e: any) {
         console.warn(`[BulkResearch] Could not set researching for ${contactId}:`, e?.message ?? e);
       }
@@ -1921,19 +1938,19 @@ export async function registerRoutes(
               signalsHooks: researchPayload.signalsHooks || [],
               personalizedMessage: researchPayload.messageDraft || null,
               variants: [],
-            });
+            }, userId);
           } catch (storeErr: any) {
             console.warn(`[BulkResearch] Could not store research for ${personName} (n8n succeeded):`, storeErr?.message ?? storeErr);
             try {
-              await storage.upsertResearchPacket(contactId, { status: "failed" });
+              await storage.upsertResearchPacket(contactId, { status: "failed" }, userId);
             } catch (_) {}
           }
 
           try {
-            const contact = await storage.getContact(contactId);
+            const contact = await storage.getContact(contactId, userId);
             if (contact) {
               const newTags = appendResearchedTag(contact.tags);
-              await storage.updateContact(contactId, { tags: newTags });
+              await storage.updateContact(contactId, userId, { tags: newTags });
             }
           } catch (tagErr: any) {
             console.warn(`[BulkResearch] Could not add researched tag for ${contactId}:`, tagErr?.message ?? tagErr);
@@ -1949,7 +1966,7 @@ export async function registerRoutes(
           }
           const errorMsg = err.message || "Unknown error";
           try {
-            await storage.upsertResearchPacket(contactId, { status: "failed" });
+            await storage.upsertResearchPacket(contactId, { status: "failed" }, userId);
           } catch (_) {}
           const result: BulkResult = { contactId, personName, company, status: "failed", error: errorMsg };
           send("status", { contactId, status: "failed", error: errorMsg });
@@ -1958,7 +1975,7 @@ export async function registerRoutes(
       }
 
       try {
-        await storage.upsertResearchPacket(contactId, { status: "failed" });
+        await storage.upsertResearchPacket(contactId, { status: "failed" }, userId);
       } catch (_) {}
       const result: BulkResult = { contactId, personName, company, status: "failed", error: "Exhausted retries" };
       send("status", { contactId, status: "failed", error: "Exhausted retries" });
@@ -1968,7 +1985,7 @@ export async function registerRoutes(
     for (const id of contactIdsList) {
       send("status", { contactId: id, status: "queued" });
       try {
-        await storage.upsertResearchPacket(id, { status: "queued" });
+        await storage.upsertResearchPacket(id, { status: "queued" }, userId);
       } catch (queueErr: any) {
         console.error(`[BulkResearch] Failed to set queued for ${id}:`, queueErr?.message);
       }

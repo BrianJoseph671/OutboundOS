@@ -3,8 +3,31 @@ import { pgTable, text, varchar, boolean, integer, timestamp, jsonb } from "driz
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+export const users = pgTable("users", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  username: text("username").notNull().unique(),
+  email: text("email").unique(),
+  password: text("password"),
+  googleId: text("google_id").unique(),
+  displayName: text("display_name"),
+  picture: text("picture"),
+});
+
+export const insertUserSchema = createInsertSchema(users).pick({
+  username: true,
+  password: true,
+  email: true,
+  googleId: true,
+  displayName: true,
+  picture: true,
+});
+
+export type InsertUser = z.infer<typeof insertUserSchema>;
+export type User = typeof users.$inferSelect;
+
 export const contacts = pgTable("contacts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   company: text("company"),
   role: text("role"),
@@ -30,6 +53,7 @@ export type Contact = typeof contacts.$inferSelect;
 
 export const outreachAttempts = pgTable("outreach_attempts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   contactId: varchar("contact_id").notNull(),
   dateSent: timestamp("date_sent").notNull().defaultNow(),
   outreachType: text("outreach_type").notNull(),
@@ -45,7 +69,6 @@ export const outreachAttempts = pgTable("outreach_attempts", {
   meetingBooked: boolean("meeting_booked").default(false),
   converted: boolean("converted").default(false),
   notes: text("notes"),
-  // New analytics columns
   companyTier: varchar("company_tier", { length: 20 }),
   responseDate: timestamp("response_date"),
   daysToResponse: integer("days_to_response"),
@@ -62,6 +85,7 @@ export type OutreachAttempt = typeof outreachAttempts.$inferSelect;
 
 export const experiments = pgTable("experiments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   outreachType: text("outreach_type").notNull(),
   hypothesis: text("hypothesis"),
@@ -79,6 +103,7 @@ export type Experiment = typeof experiments.$inferSelect;
 
 export const settings = pgTable("settings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   defaultTone: text("default_tone").default("professional"),
   defaultCtaOptions: text("default_cta_options"),
   emailSignature: text("email_signature"),
@@ -107,22 +132,9 @@ export type LengthOption = typeof lengthOptions[number];
 export const variableOptions = ["hook", "cta", "length", "tone"] as const;
 export type VariableOption = typeof variableOptions[number];
 
-export const users = pgTable("users", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  username: text("username").notNull().unique(),
-  password: text("password").notNull(),
-});
-
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
-});
-
-export type InsertUser = z.infer<typeof insertUserSchema>;
-export type User = typeof users.$inferSelect;
-
 export const airtableConfig = pgTable("airtable_config", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   baseId: text("base_id").notNull(),
   tableName: text("table_name").notNull(),
   personalAccessToken: text("personal_access_token").notNull(),
@@ -136,11 +148,72 @@ export const insertAirtableConfigSchema = createInsertSchema(airtableConfig).omi
 export type InsertAirtableConfig = z.infer<typeof insertAirtableConfigSchema>;
 export type AirtableConfig = typeof airtableConfig.$inferSelect;
 
+export const integrationProviders = ["google", "granola"] as const;
+export type IntegrationProvider = typeof integrationProviders[number];
+
+export const meetingSources = ["google_calendar", "granola"] as const;
+export type MeetingSource = typeof meetingSources[number];
+
+export const matchMethods = ["email", "name", "manual"] as const;
+export type MatchMethod = typeof matchMethods[number];
+
+export const integrationConnections = pgTable("integration_connections", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  provider: text("provider").notNull(),
+  accessToken: text("access_token").notNull(),
+  refreshToken: text("refresh_token"),
+  tokenExpiresAt: timestamp("token_expires_at"),
+  scopes: text("scopes"),
+  providerAccountId: text("provider_account_id"),
+  isConnected: boolean("is_connected").default(true),
+  metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertIntegrationConnectionSchema = createInsertSchema(integrationConnections).omit({ id: true });
+export type InsertIntegrationConnection = z.infer<typeof insertIntegrationConnectionSchema>;
+export type IntegrationConnection = typeof integrationConnections.$inferSelect;
+
+export const meetings = pgTable("meetings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  source: text("source").notNull(),
+  externalId: text("external_id"),
+  title: text("title"),
+  startTime: timestamp("start_time"),
+  endTime: timestamp("end_time"),
+  attendees: jsonb("attendees").$type<Array<{ email?: string; name?: string; self?: boolean }>>().default([]),
+  notes: text("notes"),
+  transcript: text("transcript"),
+  summary: text("summary"),
+  actionItems: jsonb("action_items").$type<string[]>().default([]),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertMeetingSchema = createInsertSchema(meetings).omit({ id: true });
+export type InsertMeeting = z.infer<typeof insertMeetingSchema>;
+export type Meeting = typeof meetings.$inferSelect;
+
+export const contactMeetings = pgTable("contact_meetings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  contactId: varchar("contact_id").notNull().references(() => contacts.id, { onDelete: "cascade" }),
+  meetingId: varchar("meeting_id").notNull().references(() => meetings.id, { onDelete: "cascade" }),
+  matchedBy: text("matched_by").notNull().default("email"),
+});
+
+export const insertContactMeetingSchema = createInsertSchema(contactMeetings).omit({ id: true });
+export type InsertContactMeeting = z.infer<typeof insertContactMeetingSchema>;
+export type ContactMeeting = typeof contactMeetings.$inferSelect;
+
 export const researchPacketStatuses = ["not_started", "queued", "researching", "complete", "failed"] as const;
 export type ResearchPacketStatus = typeof researchPacketStatuses[number];
 
 export const researchPackets = pgTable("research_packets", {
   contactId: varchar("contact_id").primaryKey().references(() => contacts.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   status: text("status").notNull().default("not_started"),
   prospectSnapshot: text("prospect_snapshot"),
   companySnapshot: text("company_snapshot"),
