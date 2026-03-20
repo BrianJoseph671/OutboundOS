@@ -120,6 +120,7 @@ export async function registerRoutes(
       "/api/auth/",
       "/api/cert/",
       "/api/webhooks/",
+      "/api/integrations/callback/",
     ];
     if (publicPaths.some((p) => req.path.startsWith(p.slice(4)))) {
       return next();
