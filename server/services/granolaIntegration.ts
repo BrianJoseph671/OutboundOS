@@ -25,8 +25,8 @@ interface McpToolCallResult {
  * Granola uses Google OAuth for authentication — we pass the user's Google
  * access token directly to Granola's MCP endpoint.
  */
-async function getGranolaToken(): Promise<string> {
-  const token = await getValidAccessToken("google");
+async function getGranolaToken(userId: string): Promise<string> {
+  const token = await getValidAccessToken("google", userId);
   if (!token) {
     throw new Error("Google not connected. Connect your Google account first to enable Granola sync.");
   }
@@ -88,12 +88,12 @@ function extractTextFromMcpResult(result: McpToolCallResult): string {
     .join("\n");
 }
 
-export async function syncGranolaMeetings(daysBack = 30): Promise<{
+export async function syncGranolaMeetings(userId: string, daysBack = 30): Promise<{
   synced: number;
   matched: number;
   errors: string[];
 }> {
-  const accessToken = await getGranolaToken();
+  const accessToken = await getGranolaToken(userId);
   const errors: string[] = [];
   let synced = 0;
   let matched = 0;
@@ -170,6 +170,7 @@ export async function syncGranolaMeetings(daysBack = 30): Promise<{
         }));
 
         const meetingData: Partial<InsertMeeting> = {
+          userId,
           title: gMeeting.title || "Granola Meeting",
           startTime: gMeeting.startTime ? new Date(gMeeting.startTime) : null,
           endTime: gMeeting.endTime ? new Date(gMeeting.endTime) : null,
@@ -180,10 +181,10 @@ export async function syncGranolaMeetings(daysBack = 30): Promise<{
           actionItems,
         };
 
-        await storage.upsertMeetingByExternalId("granola", gMeeting.id, meetingData);
+        await storage.upsertMeetingByExternalId("granola", gMeeting.id, userId, meetingData);
         synced++;
 
-        const matchCount = await matchGranolaMeetingToContacts(gMeeting.id, attendees);
+        const matchCount = await matchGranolaMeetingToContacts(gMeeting.id, userId, attendees);
         matched += matchCount;
       } catch (err: any) {
         errors.push(`Meeting ${gMeeting.id}: ${err.message}`);
@@ -198,12 +199,13 @@ export async function syncGranolaMeetings(daysBack = 30): Promise<{
 
 async function matchGranolaMeetingToContacts(
   externalId: string,
+  userId: string,
   attendees: Array<{ email?: string; name?: string }>
 ): Promise<number> {
-  const meeting = await storage.getMeetingByExternalId("granola", externalId);
+  const meeting = await storage.getMeetingByExternalId("granola", externalId, userId);
   if (!meeting) return 0;
 
-  const contacts = await storage.getContacts();
+  const contacts = await storage.getContacts(userId);
   let matchCount = 0;
 
   for (const attendee of attendees) {
@@ -240,8 +242,8 @@ async function matchGranolaMeetingToContacts(
   return matchCount;
 }
 
-export async function mergeGranolaWithCalendar(): Promise<number> {
-  const allMeetings = await storage.getMeetings();
+export async function mergeGranolaWithCalendar(userId: string): Promise<number> {
+  const allMeetings = await storage.getMeetings(userId);
   const calendarMeetings = allMeetings.filter((m) => m.source === "google_calendar");
   const granolaMeetings = allMeetings.filter((m) => m.source === "granola");
 
@@ -264,7 +266,7 @@ export async function mergeGranolaWithCalendar(): Promise<number> {
     });
 
     if (match) {
-      await storage.updateMeeting(match.id, {
+      await storage.updateMeeting(match.id, userId, {
         notes: gm.notes || match.notes,
         transcript: gm.transcript || match.transcript,
         summary: gm.summary || match.summary,

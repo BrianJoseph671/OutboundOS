@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Request } from "express";
 import { batchProcessor } from "../services/batchProcessor";
 import { n8nClient } from "../services/n8nClient";
 import { storage } from "../storage";
@@ -6,11 +6,19 @@ import { appendResearchedTag } from "../utils/contactTags";
 
 const router = Router();
 
+function requireUserId(req: Request): string {
+  const userId = req.user?.id;
+  if (!userId) throw Object.assign(new Error("Not authenticated"), { status: 401 });
+  return userId;
+}
+
 router.post("/research", async (req, res) => {
   try {
+    const userId = requireUserId(req);
+
     const { contactIds, contacts: contactsPayload } = req.body;
 
-    let contacts: Array<{ id: string; name: string; company?: string; linkedinUrl?: string }>;
+    let contacts: Array<{ id: string; name: string; company: string; linkedinUrl?: string }>;
 
     if (Array.isArray(contactsPayload) && contactsPayload.length > 0) {
       contacts = contactsPayload.map((c: { id: string; name: string; company?: string; linkedinUrl?: string }) => ({
@@ -20,7 +28,7 @@ router.post("/research", async (req, res) => {
         linkedinUrl: c.linkedinUrl,
       }));
     } else if (Array.isArray(contactIds) && contactIds.length > 0) {
-      const allContacts = await storage.getContacts();
+      const allContacts = await storage.getContacts(userId);
       contacts = allContacts
         .filter((c) => contactIds.includes(c.id))
         .map((c) => ({
@@ -37,7 +45,7 @@ router.post("/research", async (req, res) => {
       return res.status(404).json({ error: "No matching contacts found" });
     }
 
-    const jobId = await batchProcessor.startResearchBatch(contacts);
+    const jobId = await batchProcessor.startResearchBatch(contacts, userId);
 
     res.json({ jobId, contactCount: contacts.length });
   } catch (error: unknown) {
@@ -132,7 +140,9 @@ router.post("/:jobId/retry/:contactId", async (req, res) => {
       return res.status(400).json({ error: "Contact is not in failed state" });
     }
 
-    const contact = await storage.getContact(contactId);
+    const userId = requireUserId(req);
+
+    const contact = await storage.getContact(contactId, userId);
     if (!contact) {
       return res.status(404).json({ error: "Contact not found" });
     }
@@ -146,7 +156,7 @@ router.post("/:jobId/retry/:contactId", async (req, res) => {
     const research = researchResult.research || researchResult.profileInsight || "";
 
     const newTags = appendResearchedTag(contact.tags);
-    await storage.updateContact(contactId, {
+    await storage.updateContact(contactId, userId, {
       notes: research ? `[AI Research]\n${research}` : undefined,
       tags: newTags,
     });

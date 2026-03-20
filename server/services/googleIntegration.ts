@@ -25,12 +25,12 @@ async function googleFetch(url: string, accessToken: string): Promise<Response> 
   });
 }
 
-export async function syncGoogleCalendarEvents(daysBack = 30, daysForward = 7): Promise<{
+export async function syncGoogleCalendarEvents(userId: string, daysBack = 30, daysForward = 7): Promise<{
   synced: number;
   matched: number;
   errors: string[];
 }> {
-  const accessToken = await getValidAccessToken("google");
+  const accessToken = await getValidAccessToken("google", userId);
   if (!accessToken) {
     throw new Error("Google not connected or token expired");
   }
@@ -78,17 +78,18 @@ export async function syncGoogleCalendarEvents(daysBack = 30, daysForward = 7): 
         }));
 
         const meetingData: Partial<InsertMeeting> = {
+          userId,
           title: event.summary || "Untitled Event",
           startTime: startTime ? new Date(startTime) : null,
           endTime: endTime ? new Date(endTime) : null,
           attendees,
         };
 
-        await storage.upsertMeetingByExternalId("google_calendar", event.id, meetingData);
+        await storage.upsertMeetingByExternalId("google_calendar", event.id, userId, meetingData);
         synced++;
 
         // Auto-match attendees to contacts by email
-        const matchCount = await matchMeetingToContacts(event.id, attendees);
+        const matchCount = await matchMeetingToContacts(event.id, userId, attendees);
         matched += matchCount;
       } catch (err: any) {
         errors.push(`Event ${event.id}: ${err.message}`);
@@ -103,12 +104,13 @@ export async function syncGoogleCalendarEvents(daysBack = 30, daysForward = 7): 
 
 async function matchMeetingToContacts(
   googleEventId: string,
+  userId: string,
   attendees: Array<{ email?: string; name?: string; self?: boolean }>
 ): Promise<number> {
-  const meeting = await storage.getMeetingByExternalId("google_calendar", googleEventId);
+  const meeting = await storage.getMeetingByExternalId("google_calendar", googleEventId, userId);
   if (!meeting) return 0;
 
-  const contacts = await storage.getContacts();
+  const contacts = await storage.getContacts(userId);
   let matchCount = 0;
 
   for (const attendee of attendees) {
@@ -149,8 +151,8 @@ async function matchMeetingToContacts(
   return matchCount;
 }
 
-export async function getGoogleUserInfo(): Promise<{ email: string; name?: string } | null> {
-  const accessToken = await getValidAccessToken("google");
+export async function getGoogleUserInfo(userId: string): Promise<{ email: string; name?: string } | null> {
+  const accessToken = await getValidAccessToken("google", userId);
   if (!accessToken) return null;
 
   const res = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {

@@ -4,9 +4,13 @@ import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import { setupWebSocket } from "./websocket";
+import { setupAuth } from "./auth";
 
 const app = express();
 const httpServer = createServer(app);
+
+// Trust first proxy for secure session cookies behind TLS termination (e.g. Replit, Nginx)
+app.set("trust proxy", 1);
 
 setupWebSocket(httpServer);
 
@@ -26,6 +30,8 @@ app.use(
 );
 
 app.use(express.urlencoded({ limit: "10mb", extended: false }));
+
+setupAuth(app);
 
 // Debug middleware for webhook requests
 app.use("/api/webhooks", (req, res, next) => {

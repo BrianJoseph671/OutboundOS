@@ -126,8 +126,8 @@ export async function exchangeCodeForTokens(provider: string, code: string): Pro
   };
 }
 
-export async function refreshAccessToken(provider: string): Promise<OAuthTokens | null> {
-  const connection = await storage.getIntegrationConnection(provider);
+export async function refreshAccessToken(provider: string, userId: string): Promise<OAuthTokens | null> {
+  const connection = await storage.getIntegrationConnection(provider, userId);
   if (!connection?.refreshToken) return null;
 
   const config = getProviderConfig(provider);
@@ -159,16 +159,16 @@ export async function refreshAccessToken(provider: string): Promise<OAuthTokens 
     scope: data.scope,
   };
 
-  await saveTokens(provider, tokens);
+  await saveTokens(provider, userId, tokens);
   return tokens;
 }
 
-export async function saveTokens(provider: string, tokens: OAuthTokens): Promise<void> {
+export async function saveTokens(provider: string, userId: string, tokens: OAuthTokens): Promise<void> {
   const expiresAt = tokens.expiresIn
     ? new Date(Date.now() + tokens.expiresIn * 1000)
     : null;
 
-  await storage.upsertIntegrationConnection(provider, {
+  await storage.upsertIntegrationConnection(provider, userId, {
     accessToken: encrypt(tokens.accessToken),
     refreshToken: tokens.refreshToken ? encrypt(tokens.refreshToken) : undefined,
     tokenExpiresAt: expiresAt,
@@ -177,14 +177,14 @@ export async function saveTokens(provider: string, tokens: OAuthTokens): Promise
   });
 }
 
-export async function getValidAccessToken(provider: string): Promise<string | null> {
-  const connection = await storage.getIntegrationConnection(provider);
+export async function getValidAccessToken(provider: string, userId: string): Promise<string | null> {
+  const connection = await storage.getIntegrationConnection(provider, userId);
   if (!connection?.isConnected || !connection.accessToken) return null;
 
   if (connection.tokenExpiresAt && connection.tokenExpiresAt < new Date()) {
-    const refreshed = await refreshAccessToken(provider);
+    const refreshed = await refreshAccessToken(provider, userId);
     if (!refreshed) {
-      await storage.upsertIntegrationConnection(provider, { isConnected: false });
+      await storage.upsertIntegrationConnection(provider, userId, { isConnected: false });
       return null;
     }
     return refreshed.accessToken;
