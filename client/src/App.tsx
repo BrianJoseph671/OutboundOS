@@ -7,8 +7,6 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useAuth } from "@/hooks/useAuth";
-import { Button } from "@/components/ui/button";
-import { LogOut } from "lucide-react";
 import Login from "@/pages/login";
 import Dashboard from "@/pages/dashboard";
 import Contacts from "@/pages/contacts";
@@ -37,8 +35,6 @@ function Router() {
 }
 
 function AuthenticatedApp() {
-  const { user, logout, isLoggingOut } = useAuth();
-
   const style = {
     "--sidebar-width": "15rem",
     "--sidebar-width-icon": "3rem",
@@ -52,22 +48,7 @@ function AuthenticatedApp() {
           <header className="flex items-center justify-between gap-4 px-4 py-3 border-b bg-background sticky top-0 z-50 shrink-0">
             <SidebarTrigger data-testid="button-sidebar-toggle" />
             <div className="flex items-center gap-3">
-              {user && (
-                <span className="text-sm text-muted-foreground hidden sm:inline" data-testid="text-user-email">
-                  {user.displayName || user.email}
-                </span>
-              )}
               <ThemeToggle />
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={logout}
-                disabled={isLoggingOut}
-                title="Sign out"
-                data-testid="button-logout"
-              >
-                <LogOut className="h-4 w-4" />
-              </Button>
             </div>
           </header>
           <main className="flex-1 overflow-auto px-6 py-6 min-h-0">

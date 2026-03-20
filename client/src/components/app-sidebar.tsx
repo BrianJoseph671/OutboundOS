@@ -8,19 +8,28 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarHeader,
+  SidebarFooter,
   SidebarRail,
 } from "@/components/ui/sidebar";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   LayoutDashboard,
   Users,
-  PenTool,
   FlaskConical,
   FileText,
   Settings,
   Zap,
   Upload,
   Brain,
+  LogOut,
 } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 
 const menuItems = [
   { title: "Prospect Research", url: "/prospect-research", icon: FlaskConical },
@@ -29,11 +38,14 @@ const menuItems = [
   { title: "Outreach Log", url: "/outreach-log", icon: FileText },
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Decisions", url: "/decisions", icon: Brain },
-  { title: "Settings", url: "/settings", icon: Settings },
 ];
 
 export function AppSidebar() {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
+  const { user, logout, isLoggingOut } = useAuth();
+
+  const displayName = user?.displayName || user?.email || "User";
+  const initials = displayName.charAt(0).toUpperCase();
 
   return (
     <Sidebar>
@@ -73,6 +85,52 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+      <SidebarFooter className="p-3 border-t border-sidebar-border">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              className="flex items-center gap-3 w-full rounded-md px-2 py-2 hover:bg-sidebar-accent transition-colors text-left"
+              data-testid="button-profile-menu"
+            >
+              <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center shrink-0">
+                <span className="text-sm font-semibold text-primary-foreground">
+                  {initials}
+                </span>
+              </div>
+              <div className="flex flex-col min-w-0 flex-1">
+                <span className="text-sm font-medium truncate leading-tight">
+                  {displayName}
+                </span>
+                {user?.email && user.displayName && (
+                  <span className="text-xs text-muted-foreground truncate leading-tight">
+                    {user.email}
+                  </span>
+                )}
+              </div>
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="top" align="start" className="w-52">
+            <DropdownMenuItem
+              onClick={() => setLocation("/settings")}
+              className="gap-2 cursor-pointer"
+              data-testid="menu-item-settings"
+            >
+              <Settings className="w-4 h-4" />
+              Settings
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={logout}
+              disabled={isLoggingOut}
+              className="gap-2 cursor-pointer text-destructive focus:text-destructive"
+              data-testid="menu-item-logout"
+            >
+              <LogOut className="w-4 h-4" />
+              {isLoggingOut ? "Signing out…" : "Sign out"}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </SidebarFooter>
       <SidebarRail />
     </Sidebar>
   );
