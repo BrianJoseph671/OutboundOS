@@ -70,11 +70,14 @@ export default function Login() {
   };
 
   const handleGoogleLogin = () => {
-    if (window.top && window.top !== window) {
-      window.top.location.href = "/api/auth/google";
-    } else {
-      window.location.href = "/api/auth/google";
+    try {
+      if (window.top && window.top !== window) {
+        window.top.location.href = "/api/auth/google";
+        return;
+      }
+    } catch (_e) {
     }
+    window.location.href = "/api/auth/google";
   };
 
   const googleEnabled = authConfig?.googleEnabled;
