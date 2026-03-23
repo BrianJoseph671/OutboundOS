@@ -10,5 +10,4 @@ vite.config.ts.*
 # AI/editor tool configs (local-only, not source of truth)
 .claude
 .cursor/
-.factory/
 CLAUDE.md

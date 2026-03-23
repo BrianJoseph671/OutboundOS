@@ -1,0 +1,26 @@
+commands:
+  install: npm install
+  dev: npm run dev
+  build: npm run build
+  typecheck: npm run check
+  test: npx vitest run
+  db:push: npm run db:push
+  db:migrate: npm run db:migrate
+  lint: ""
+
+services:
+  postgres:
+    start: ""
+    stop: ""
+    healthcheck: pg_isready -h localhost -p 5432
+    port: 5432
+    depends_on: []
+    notes: "Existing PostgreSQL instance, always running. Do not start/stop."
+
+  dev:
+    start: npm run dev
+    stop: Get-Process -Name "node" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match "server/index" } | Stop-Process -Force
+    healthcheck: Invoke-RestMethod -Uri http://localhost:5000/api/contacts -Method GET -TimeoutSec 5
+    port: 5000
+    depends_on: [postgres]
+    notes: "Express + Vite HMR dev server"
