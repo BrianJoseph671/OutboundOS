@@ -31,14 +31,24 @@ setInterval(() => {
   }
 }, 60_000);
 
+function getBaseUrl(): string {
+  if (process.env.APP_BASE_URL) return process.env.APP_BASE_URL;
+  const replitDomains = process.env.REPLIT_DOMAINS;
+  if (replitDomains) {
+    const domain = replitDomains.split(",")[0].trim();
+    return `https://${domain}`;
+  }
+  return "http://localhost:5000";
+}
+
 export function getProviderConfig(provider: string): OAuthProviderConfig {
-  const baseUrl = process.env.APP_BASE_URL || "http://localhost:5000";
+  const baseUrl = getBaseUrl();
 
   if (provider === "google") {
     const clientId = process.env.GOOGLE_CLIENT_ID;
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
     if (!clientId || !clientSecret) {
-      throw new Error("GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are required");
+      throw new Error("GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are required. Add them as secrets in your Replit project.");
     }
     return {
       provider: "google",
@@ -50,25 +60,9 @@ export function getProviderConfig(provider: string): OAuthProviderConfig {
         "https://www.googleapis.com/auth/calendar.readonly",
         "https://www.googleapis.com/auth/gmail.readonly",
         "https://www.googleapis.com/auth/userinfo.email",
+        "https://www.googleapis.com/auth/userinfo.profile",
       ],
       redirectUri: `${baseUrl}/api/integrations/callback/google`,
-    };
-  }
-
-  if (provider === "granola") {
-    const clientId = process.env.GRANOLA_CLIENT_ID;
-    const clientSecret = process.env.GRANOLA_CLIENT_SECRET;
-    if (!clientId || !clientSecret) {
-      throw new Error("GRANOLA_CLIENT_ID and GRANOLA_CLIENT_SECRET are required");
-    }
-    return {
-      provider: "granola",
-      clientId,
-      clientSecret,
-      authorizationUrl: "https://app.granola.ai/oauth/authorize",
-      tokenUrl: "https://app.granola.ai/oauth/token",
-      scopes: ["meetings:read"],
-      redirectUri: `${baseUrl}/api/integrations/callback/granola`,
     };
   }
 
@@ -132,8 +126,8 @@ export async function exchangeCodeForTokens(provider: string, code: string): Pro
   };
 }
 
-export async function refreshAccessToken(provider: string): Promise<OAuthTokens | null> {
-  const connection = await storage.getIntegrationConnection(provider);
+export async function refreshAccessToken(provider: string, userId: string): Promise<OAuthTokens | null> {
+  const connection = await storage.getIntegrationConnection(provider, userId);
   if (!connection?.refreshToken) return null;
 
   const config = getProviderConfig(provider);
@@ -165,16 +159,16 @@ export async function refreshAccessToken(provider: string): Promise<OAuthTokens 
     scope: data.scope,
   };
 
-  await saveTokens(provider, tokens);
+  await saveTokens(provider, userId, tokens);
   return tokens;
 }
 
-export async function saveTokens(provider: string, tokens: OAuthTokens): Promise<void> {
+export async function saveTokens(provider: string, userId: string, tokens: OAuthTokens): Promise<void> {
   const expiresAt = tokens.expiresIn
     ? new Date(Date.now() + tokens.expiresIn * 1000)
     : null;
 
-  await storage.upsertIntegrationConnection(provider, {
+  await storage.upsertIntegrationConnection(provider, userId, {
     accessToken: encrypt(tokens.accessToken),
     refreshToken: tokens.refreshToken ? encrypt(tokens.refreshToken) : undefined,
     tokenExpiresAt: expiresAt,
@@ -183,14 +177,14 @@ export async function saveTokens(provider: string, tokens: OAuthTokens): Promise
   });
 }
 
-export async function getValidAccessToken(provider: string): Promise<string | null> {
-  const connection = await storage.getIntegrationConnection(provider);
-  if (!connection?.isConnected) return null;
+export async function getValidAccessToken(provider: string, userId: string): Promise<string | null> {
+  const connection = await storage.getIntegrationConnection(provider, userId);
+  if (!connection?.isConnected || !connection.accessToken) return null;
 
   if (connection.tokenExpiresAt && connection.tokenExpiresAt < new Date()) {
-    const refreshed = await refreshAccessToken(provider);
+    const refreshed = await refreshAccessToken(provider, userId);
     if (!refreshed) {
-      await storage.upsertIntegrationConnection(provider, { isConnected: false });
+      await storage.upsertIntegrationConnection(provider, userId, { isConnected: false });
       return null;
     }
     return refreshed.accessToken;

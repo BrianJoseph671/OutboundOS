@@ -15,18 +15,21 @@ interface FollowUpResult {
 export async function generateMeetingFollowUp(
   meetingId: string,
   contactId: string,
-  tone: string = "professional"
+  tone: string = "professional",
+  userId: string
 ): Promise<FollowUpResult> {
   if (!openai) {
     throw new Error("OPENAI_API_KEY is not set");
   }
 
-  const meeting = await storage.getMeeting(meetingId);
+  const resolvedUserId = userId;
+
+  const meeting = await storage.getMeeting(meetingId, resolvedUserId);
   if (!meeting) {
     throw new Error("Meeting not found");
   }
 
-  const contact = await storage.getContact(contactId);
+  const contact = await storage.getContact(contactId, resolvedUserId);
   if (!contact) {
     throw new Error("Contact not found");
   }
@@ -42,7 +45,7 @@ export async function generateMeetingFollowUp(
     }));
 
   // Get outreach history
-  const outreachAttempts = await storage.getOutreachAttemptsByContact(contactId);
+  const outreachAttempts = await storage.getOutreachAttemptsByContact(contactId, resolvedUserId);
   const recentOutreach = outreachAttempts.slice(0, 3);
 
   // Build context
@@ -122,6 +125,7 @@ Return JSON: { "message": "...", "subject": "..." }`;
 
 export async function generateBulkFollowUps(
   contactIds: string[],
+  userId: string,
   tone: string = "professional"
 ): Promise<Array<{ contactId: string; result?: FollowUpResult; error?: string }>> {
   const results = [];
@@ -141,7 +145,7 @@ export async function generateBulkFollowUps(
         return bTime - aTime;
       });
 
-      const result = await generateMeetingFollowUp(sorted[0].meetingId, contactId, tone);
+      const result = await generateMeetingFollowUp(sorted[0].meetingId, contactId, tone, userId);
       results.push({ contactId, result });
     } catch (err: any) {
       results.push({ contactId, error: err.message });

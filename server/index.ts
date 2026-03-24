@@ -1,16 +1,16 @@
 import 'dotenv/config';
 import express, { type Request, Response, NextFunction } from "express";
-import session from "express-session";
-import connectPgSimple from "connect-pg-simple";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import { setupWebSocket } from "./websocket";
-import { passport } from "./auth";
-import { pool } from "./db";
+import { setupAuth } from "./auth";
 
 const app = express();
 const httpServer = createServer(app);
+
+// Trust first proxy for secure session cookies behind TLS termination (e.g. Replit, Nginx)
+app.set("trust proxy", 1);
 
 setupWebSocket(httpServer);
 
@@ -30,32 +30,6 @@ app.use(
 );
 
 app.use(express.urlencoded({ limit: "10mb", extended: false }));
-
-// ── Session + Auth middleware ─────────────────────────────────────────────────
-// SESSION_SECRET is required; throw at startup if missing (fail fast).
-const sessionSecret = process.env.SESSION_SECRET;
-if (!sessionSecret) {
-  throw new Error("SESSION_SECRET must be set. Add it to your environment variables.");
-}
-
-const PgStore = connectPgSimple(session);
-app.use(
-  session({
-    store: new PgStore({ pool, createTableIfMissing: true }),
-    secret: sessionSecret,
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    },
-  }),
-);
-
-app.use(passport.initialize());
-app.use(passport.session());
 
 // Debug middleware for webhook requests
 app.use("/api/webhooks", (req, res, next) => {
@@ -104,6 +78,7 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  await setupAuth(app);
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

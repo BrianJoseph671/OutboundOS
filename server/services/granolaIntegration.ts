@@ -22,9 +22,17 @@ interface McpToolCallResult {
 }
 
 /**
- * MCP client for Granola — uses HTTP-based MCP transport.
- * Calls the Granola MCP server to list and retrieve meetings.
+ * Granola uses Google OAuth for authentication — we pass the user's Google
+ * access token directly to Granola's MCP endpoint.
  */
+async function getGranolaToken(userId: string): Promise<string> {
+  const token = await getValidAccessToken("google", userId);
+  if (!token) {
+    throw new Error("Google not connected. Connect your Google account first to enable Granola sync.");
+  }
+  return token;
+}
+
 async function mcpCall(
   method: string,
   params: Record<string, unknown>,
@@ -80,26 +88,20 @@ function extractTextFromMcpResult(result: McpToolCallResult): string {
     .join("\n");
 }
 
-export async function syncGranolaMeetings(daysBack = 30): Promise<{
+export async function syncGranolaMeetings(userId: string, daysBack = 30): Promise<{
   synced: number;
   matched: number;
   errors: string[];
 }> {
-  const accessToken = await getValidAccessToken("granola");
-  if (!accessToken) {
-    throw new Error("Granola not connected or token expired");
-  }
-
+  const accessToken = await getGranolaToken(userId);
   const errors: string[] = [];
   let synced = 0;
   let matched = 0;
 
   try {
-    // First discover available tools
     const tools = await listGranolaTools(accessToken);
     const toolNames = tools.map((t: any) => t.name);
 
-    // Try to list meetings using the appropriate tool
     const listToolName = toolNames.find(
       (n: string) => n.includes("list_meetings") || n.includes("get_meetings") || n.includes("meetings")
     ) || "list_meetings";
@@ -119,7 +121,6 @@ export async function syncGranolaMeetings(daysBack = 30): Promise<{
     try {
       meetingsList = JSON.parse(rawText);
     } catch {
-      // MCP might return non-JSON; try to extract meeting info from text
       console.log("[Granola] Non-JSON response from list_meetings, attempting text parse");
       meetingsList = [];
     }
@@ -132,7 +133,6 @@ export async function syncGranolaMeetings(daysBack = 30): Promise<{
       if (!gMeeting.id) continue;
 
       try {
-        // Get detailed meeting info if available
         let notes = gMeeting.notes || "";
         let transcript = gMeeting.transcript || "";
         let summary = gMeeting.summary || "";
@@ -170,6 +170,7 @@ export async function syncGranolaMeetings(daysBack = 30): Promise<{
         }));
 
         const meetingData: Partial<InsertMeeting> = {
+          userId,
           title: gMeeting.title || "Granola Meeting",
           startTime: gMeeting.startTime ? new Date(gMeeting.startTime) : null,
           endTime: gMeeting.endTime ? new Date(gMeeting.endTime) : null,
@@ -180,11 +181,10 @@ export async function syncGranolaMeetings(daysBack = 30): Promise<{
           actionItems,
         };
 
-        await storage.upsertMeetingByExternalId("granola", gMeeting.id, meetingData);
+        await storage.upsertMeetingByExternalId("granola", gMeeting.id, userId, meetingData);
         synced++;
 
-        // Auto-match to contacts
-        const matchCount = await matchGranolaMeetingToContacts(gMeeting.id, attendees);
+        const matchCount = await matchGranolaMeetingToContacts(gMeeting.id, userId, attendees);
         matched += matchCount;
       } catch (err: any) {
         errors.push(`Meeting ${gMeeting.id}: ${err.message}`);
@@ -199,12 +199,13 @@ export async function syncGranolaMeetings(daysBack = 30): Promise<{
 
 async function matchGranolaMeetingToContacts(
   externalId: string,
+  userId: string,
   attendees: Array<{ email?: string; name?: string }>
 ): Promise<number> {
-  const meeting = await storage.getMeetingByExternalId("granola", externalId);
+  const meeting = await storage.getMeetingByExternalId("granola", externalId, userId);
   if (!meeting) return 0;
 
-  const contacts = await storage.getContacts();
+  const contacts = await storage.getContacts(userId);
   let matchCount = 0;
 
   for (const attendee of attendees) {
@@ -241,12 +242,8 @@ async function matchGranolaMeetingToContacts(
   return matchCount;
 }
 
-/**
- * Merge Granola meeting data with existing Google Calendar events.
- * Matches by time overlap + title similarity.
- */
-export async function mergeGranolaWithCalendar(): Promise<number> {
-  const allMeetings = await storage.getMeetings();
+export async function mergeGranolaWithCalendar(userId: string): Promise<number> {
+  const allMeetings = await storage.getMeetings(userId);
   const calendarMeetings = allMeetings.filter((m) => m.source === "google_calendar");
   const granolaMeetings = allMeetings.filter((m) => m.source === "granola");
 
@@ -260,19 +257,16 @@ export async function mergeGranolaWithCalendar(): Promise<number> {
       if (!cm.startTime) return false;
       const cmStart = new Date(cm.startTime).getTime();
       const timeDiff = Math.abs(gmStart - cmStart);
-      // Within 5 minutes
       if (timeDiff > 5 * 60 * 1000) return false;
-      // Title similarity (basic check)
       if (gm.title && cm.title) {
         return gm.title.toLowerCase().includes(cm.title.toLowerCase()) ||
           cm.title.toLowerCase().includes(gm.title.toLowerCase());
       }
-      return timeDiff < 60 * 1000; // Within 1 minute if no title match
+      return timeDiff < 60 * 1000;
     });
 
     if (match) {
-      // Enrich calendar event with Granola data
-      await storage.updateMeeting(match.id, {
+      await storage.updateMeeting(match.id, userId, {
         notes: gm.notes || match.notes,
         transcript: gm.transcript || match.transcript,
         summary: gm.summary || match.summary,
@@ -281,7 +275,6 @@ export async function mergeGranolaWithCalendar(): Promise<number> {
           : match.actionItems,
       });
 
-      // Copy contact links from granola meeting to calendar meeting
       const granolaLinks = await storage.getMeetingContacts(gm.id);
       for (const link of granolaLinks) {
         await storage.linkContactToMeeting({

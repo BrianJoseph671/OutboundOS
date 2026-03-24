@@ -15,7 +15,7 @@
           "parameters": [
             {
               "name": "X-API-KEY",
-              "value": "22c0253164e3659ee7f76741f2d9602cb51d23d3"
+              "value": "REDACTED_SERPER_API_KEY"
             },
             {
               "name": "Content-Type",
@@ -52,7 +52,7 @@
           "parameters": [
             {
               "name": "X-API-KEY",
-              "value": "22c0253164e3659ee7f76741f2d9602cb51d23d3"
+              "value": "REDACTED_SERPER_API_KEY"
             },
             {
               "name": "Content-Type",
@@ -89,7 +89,7 @@
           "parameters": [
             {
               "name": "X-API-KEY",
-              "value": "22c0253164e3659ee7f76741f2d9602cb51d23d3"
+              "value": "REDACTED_SERPER_API_KEY"
             },
             {
               "name": "Content-Type",
@@ -1966,7 +1966,7 @@
             "parameters": [
               {
                 "name": "X-API-KEY",
-                "value": "22c0253164e3659ee7f76741f2d9602cb51d23d3"
+                "value": "REDACTED_SERPER_API_KEY"
               },
               {
                 "name": "Content-Type",
@@ -2003,7 +2003,7 @@
             "parameters": [
               {
                 "name": "X-API-KEY",
-                "value": "22c0253164e3659ee7f76741f2d9602cb51d23d3"
+                "value": "REDACTED_SERPER_API_KEY"
               },
               {
                 "name": "Content-Type",
@@ -2040,7 +2040,7 @@
             "parameters": [
               {
                 "name": "X-API-KEY",
-                "value": "22c0253164e3659ee7f76741f2d9602cb51d23d3"
+                "value": "REDACTED_SERPER_API_KEY"
               },
               {
                 "name": "Content-Type",

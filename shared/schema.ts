@@ -3,15 +3,13 @@ import { pgTable, text, varchar, boolean, integer, timestamp, jsonb, index, uniq
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// users must be defined before contacts so contacts.userId FK reference resolves cleanly
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   username: text("username").notNull().unique(),
-  password: text("password").notNull(),
-  // OAuth / profile columns (Phase 1)
+  password: text("password"),
   email: text("email").unique(),
-  fullName: text("full_name"),
   googleId: text("google_id").unique(),
+  fullName: text("full_name"),
   avatarUrl: text("avatar_url"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
@@ -21,14 +19,15 @@ export const insertUserSchema = createInsertSchema(users).pick({
   password: true,
   email: true,
   fullName: true,
-  googleId: true,
   avatarUrl: true,
+  googleId: true,
 });
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 
 export const contacts = pgTable("contacts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   company: text("company"),
   role: text("role"),
@@ -47,10 +46,6 @@ export const contacts = pgTable("contacts", {
   researchData: text("research_data"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   // RelationshipOS columns (Phase 1)
-  // NOTE: notNull is enforced at DB level; insertContactSchema keeps userId optional
-  // for backward compat with existing code that doesn't yet have auth (userId set by
-  // the server from the session). The NOT NULL constraint is enforced by the database.
-  userId: varchar("user_id").notNull().references(() => users.id),
   source: text("source"),
   tier: text("tier").notNull().default("cool"),
   lastInteractionAt: timestamp("last_interaction_at"),
@@ -71,6 +66,7 @@ export type Contact = typeof contacts.$inferSelect;
 
 export const outreachAttempts = pgTable("outreach_attempts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   contactId: varchar("contact_id").notNull(),
   dateSent: timestamp("date_sent").notNull().defaultNow(),
   outreachType: text("outreach_type").notNull(),
@@ -86,7 +82,6 @@ export const outreachAttempts = pgTable("outreach_attempts", {
   meetingBooked: boolean("meeting_booked").default(false),
   converted: boolean("converted").default(false),
   notes: text("notes"),
-  // New analytics columns
   companyTier: varchar("company_tier", { length: 20 }),
   responseDate: timestamp("response_date"),
   daysToResponse: integer("days_to_response"),
@@ -103,6 +98,7 @@ export type OutreachAttempt = typeof outreachAttempts.$inferSelect;
 
 export const experiments = pgTable("experiments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   outreachType: text("outreach_type").notNull(),
   hypothesis: text("hypothesis"),
@@ -120,6 +116,7 @@ export type Experiment = typeof experiments.$inferSelect;
 
 export const settings = pgTable("settings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   defaultTone: text("default_tone").default("professional"),
   defaultCtaOptions: text("default_cta_options"),
   emailSignature: text("email_signature"),
@@ -148,10 +145,9 @@ export type LengthOption = typeof lengthOptions[number];
 export const variableOptions = ["hook", "cta", "length", "tone"] as const;
 export type VariableOption = typeof variableOptions[number];
 
-// users table is now defined before contacts (at top of file)
-
 export const airtableConfig = pgTable("airtable_config", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   baseId: text("base_id").notNull(),
   tableName: text("table_name").notNull(),
   personalAccessToken: text("personal_access_token").notNull(),
@@ -165,20 +161,18 @@ export const insertAirtableConfigSchema = createInsertSchema(airtableConfig).omi
 export type InsertAirtableConfig = z.infer<typeof insertAirtableConfigSchema>;
 export type AirtableConfig = typeof airtableConfig.$inferSelect;
 
-// Integration providers
 export const integrationProviders = ["google", "granola"] as const;
 export type IntegrationProvider = typeof integrationProviders[number];
 
-// Meeting sources
 export const meetingSources = ["google_calendar", "granola"] as const;
 export type MeetingSource = typeof meetingSources[number];
 
-// Contact-meeting match methods
 export const matchMethods = ["email", "name", "manual"] as const;
 export type MatchMethod = typeof matchMethods[number];
 
 export const integrationConnections = pgTable("integration_connections", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   provider: text("provider").notNull(),
   accessToken: text("access_token").notNull(),
   refreshToken: text("refresh_token"),
@@ -197,6 +191,7 @@ export type IntegrationConnection = typeof integrationConnections.$inferSelect;
 
 export const meetings = pgTable("meetings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   source: text("source").notNull(),
   externalId: text("external_id"),
   title: text("title"),
@@ -231,6 +226,7 @@ export type ResearchPacketStatus = typeof researchPacketStatuses[number];
 
 export const researchPackets = pgTable("research_packets", {
   contactId: varchar("contact_id").primaryKey().references(() => contacts.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   status: text("status").notNull().default("not_started"),
   prospectSnapshot: text("prospect_snapshot"),
   companySnapshot: text("company_snapshot"),

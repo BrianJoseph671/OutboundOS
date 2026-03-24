@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { useContacts } from "@/hooks/useContacts";
+import { useContacts, type ContactInput } from "@/hooks/useContacts";
 import { useAirtableConfig } from "@/hooks/useAirtableConfig";
 import { InteractionTimeline } from "@/components/interaction-timeline";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -48,7 +48,6 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { useBatchProgress } from "@/hooks/useBatchProgress";
-import { getContact, updateContact as updateContactStorage } from "@/lib/contactsStorage";
 import type { Contact, InsertContact, OutreachAttempt } from "@shared/schema";
 
 type ContactResearchStatus = "pending" | "processing" | "completed" | "failed";
@@ -780,7 +779,27 @@ function AddContactModal({
   const handleSaveBatch = async () => {
     const selectedContacts = batchResults
       .filter((r) => r.success && r.selected && r.contact?.name)
-      .map((r) => r.contact as InsertContact);
+      .map((r) => {
+        const c = r.contact as Partial<InsertContact>;
+        return {
+          name: c.name ?? "",
+          email: c.email ?? null,
+          company: c.company ?? null,
+          role: c.role ?? null,
+          linkedinUrl: c.linkedinUrl ?? null,
+          headline: c.headline ?? null,
+          about: c.about ?? null,
+          location: c.location ?? null,
+          experience: c.experience ?? null,
+          education: c.education ?? null,
+          skills: c.skills ?? null,
+          keywords: c.keywords ?? null,
+          notes: c.notes ?? null,
+          tags: c.tags ?? null,
+          researchStatus: c.researchStatus ?? null,
+          researchData: c.researchData ?? null,
+        };
+      });
 
     if (selectedContacts.length === 0) {
       toast({ title: "No contacts selected to save", variant: "destructive" });
@@ -1484,16 +1503,10 @@ export default function Contacts() {
 
   const syncAirtableMutation = useMutation({
     mutationFn: async () => {
-      if (!airtableConfig?.personalAccessToken) {
+      if (!airtableConfig?.connected) {
         throw new Error("Connect Airtable first");
       }
-      const response = await apiRequest("POST", "/api/airtable/sync", {
-        baseId: airtableConfig.baseId,
-        tableName: airtableConfig.tableName,
-        personalAccessToken: airtableConfig.personalAccessToken,
-        viewName: airtableConfig.viewName ?? "Grid view",
-        fieldMapping: airtableConfig.fieldMapping ?? undefined,
-      });
+      const response = await apiRequest("POST", "/api/airtable/sync", {});
       const data = await response.json();
       const incoming = data.contacts ?? [];
       if (incoming.length === 0) return { created: 0, updated: 0, lastSyncAt: data.lastSyncAt };
@@ -1591,16 +1604,6 @@ export default function Contacts() {
       }));
     });
 
-    completedContacts.forEach((c) => {
-      const contact = getContact(c.contactId);
-      if (contact) {
-        const parts = (contact.tags ?? "").split(",").map((t: string) => t.trim()).filter(Boolean);
-        if (!parts.some((t: string) => t.toLowerCase() === "researched")) {
-          parts.push("researched");
-          updateContactStorage(contact.id, { tags: parts.join(", ") });
-        }
-      }
-    });
     if (completedContacts.length > 0) invalidate();
   }, [completedContacts, failedContacts, activeJobId, invalidate]);
 
@@ -1747,15 +1750,7 @@ export default function Contacts() {
                 };
                 sessionStorage.setItem(key, JSON.stringify(cache));
               }
-              const contact = getContact(data.contactId);
-              if (contact) {
-                const parts = (contact.tags ?? "").split(",").map((t: string) => t.trim()).filter(Boolean);
-                if (!parts.some((t: string) => t.toLowerCase() === "researched")) {
-                  parts.push("researched");
-                  updateContactStorage(contact.id, { tags: parts.join(", ") });
-                  invalidate();
-                }
-              }
+              invalidate();
             } catch (_) {}
           } else if (eventType === "progress") {
             setBulkCompleted(data.completed);

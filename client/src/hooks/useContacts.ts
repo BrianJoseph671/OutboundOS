@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Contact, InsertContact } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 
-const CONTACTS_QUERY_KEY = ["contacts"];
+const CONTACTS_QUERY_KEY = ["/api/contacts"];
 const STORAGE_KEY = "outbound-contacts";
 
 /**
@@ -17,6 +17,7 @@ function writeToLocalStorage(contacts: Contact[]): void {
     // Non-critical — localStorage might be full or unavailable (e.g. private mode)
   }
 }
+export type ContactInput = Partial<Omit<Contact, "id" | "createdAt" | "userId">>;
 
 export function useContacts() {
   const queryClient = useQueryClient();

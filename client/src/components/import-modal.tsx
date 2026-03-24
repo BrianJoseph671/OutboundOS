@@ -1,8 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useContacts } from "@/hooks/useContacts";
-import { setAirtableConfig } from "@/lib/airtableConfigStorage";
 import {
   Dialog,
   DialogContent,
@@ -59,6 +58,7 @@ const EXPECTED_FIELDS = [
 export function ImportModal({ open, onOpenChange, onSuccess }: ImportModalProps) {
   const { toast } = useToast();
   const { bulkCreate } = useContacts();
+  const queryClient = useQueryClient();
   const dialogRef = useRef<HTMLDivElement>(null);
   const [modalSize, setModalSize] = useState({ width: 0, height: 0 });
   const [isResizing, setIsResizing] = useState(false);
@@ -172,14 +172,13 @@ export function ImportModal({ open, onOpenChange, onSuccess }: ImportModalProps)
       setAirtableData(data);
       setAirtableConnected(true);
       autoMapFields(data.headers, true);
-      setAirtableConfig({
-        connected: true,
+      apiRequest("POST", "/api/airtable/config", {
         baseId: airtableBaseId,
         tableName: airtableTableName,
         personalAccessToken: airtableToken,
         viewName: "Grid view",
         fieldMapping: {},
-      });
+      }).then(() => queryClient.invalidateQueries({ queryKey: ["/api/airtable/config"] }));
       toast({ title: "Connected to Airtable" });
     },
     onError: (error: Error) => {
@@ -328,14 +327,14 @@ export function ImportModal({ open, onOpenChange, onSuccess }: ImportModalProps)
 
     setIsImporting(true);
     try {
-      setAirtableConfig({
-        connected: true,
+      await apiRequest("POST", "/api/airtable/config", {
         baseId: airtableBaseId,
         tableName: airtableTableName,
         personalAccessToken: airtableToken,
         viewName: "Grid view",
         fieldMapping: airtableFieldMapping,
       });
+      queryClient.invalidateQueries({ queryKey: ["/api/airtable/config"] });
     } catch {
       toast({ title: "Warning", description: "Could not save Airtable connection, importing contacts anyway", variant: "destructive" });
     }

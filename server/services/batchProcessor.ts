@@ -55,7 +55,7 @@ class BatchProcessor extends EventEmitter {
     this.airtableConfig = config;
   }
 
-  async startResearchBatch(contacts: ContactInput[]): Promise<string> {
+  async startResearchBatch(contacts: ContactInput[], userId: string): Promise<string> {
     const jobId = randomUUID();
 
     const contactResults = new Map<string, ContactResult>();
@@ -80,7 +80,7 @@ class BatchProcessor extends EventEmitter {
 
     this.jobs.set(jobId, job);
 
-    this.processJob(jobId, contacts).catch((error) => {
+    this.processJob(jobId, contacts, userId).catch((error) => {
       const job = this.jobs.get(jobId);
       if (job) {
         job.status = "failed";
@@ -112,7 +112,7 @@ class BatchProcessor extends EventEmitter {
     };
   }
 
-  private async processJob(jobId: string, contacts: ContactInput[]): Promise<void> {
+  private async processJob(jobId: string, contacts: ContactInput[], userId: string): Promise<void> {
     const job = this.jobs.get(jobId);
     if (!job) return;
 
@@ -124,7 +124,7 @@ class BatchProcessor extends EventEmitter {
       console.log(`[BatchProcessor] Processing batch ${i / CONCURRENCY_LIMIT + 1}, contacts: ${batch.map(c => c.name).join(", ")}`);
 
       await Promise.all(
-        batch.map((contact) => this.processContact(jobId, contact))
+        batch.map((contact) => this.processContact(jobId, contact, userId))
       );
 
       if (i + CONCURRENCY_LIMIT < contacts.length) {
@@ -144,7 +144,7 @@ class BatchProcessor extends EventEmitter {
     });
   }
 
-  private async processContact(jobId: string, contact: ContactInput): Promise<void> {
+  private async processContact(jobId: string, contact: ContactInput, userId: string): Promise<void> {
     const job = this.jobs.get(jobId);
     if (!job) return;
 
@@ -174,9 +174,9 @@ class BatchProcessor extends EventEmitter {
 
       const research = researchResult.research || researchResult.profileInsight || "";
 
-      const existing = await storage.getContact(contact.id);
+      const existing = await storage.getContact(contact.id, userId);
       const newTags = existing ? appendResearchedTag(existing.tags) : "researched";
-      await storage.updateContact(contact.id, {
+      await storage.updateContact(contact.id, userId, {
         notes: research ? `[AI Research]\n${research}` : undefined,
         tags: newTags,
       });

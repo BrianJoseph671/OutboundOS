@@ -23,17 +23,13 @@ import {
   RotateCcw,
   Download,
   User,
-  Briefcase,
-  Trash2,
-  RefreshCw,
   Calendar,
   FileText,
   Plug,
+  Info,
 } from "lucide-react";
-import type { Settings as SettingsType } from "@shared/schema";
+import type { Settings as SettingsType, Contact } from "@shared/schema";
 import { format } from "date-fns";
-import { getStoredProfile, clearStoredProfile, type UserProfile } from "@/components/profile-setup";
-import { getContacts } from "@/lib/contactsStorage";
 import { IntegrationCard } from "@/components/integration-card";
 import { useIntegrations } from "@/hooks/useIntegrations";
 import { GoogleIcon } from "@/components/icons/google-icon";
@@ -49,10 +45,13 @@ interface IntegrationStatus {
 
 export default function Settings() {
   const { toast } = useToast();
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(() => getStoredProfile());
 
   const { data: settings, isLoading } = useQuery<SettingsType>({
     queryKey: ["/api/settings"],
+  });
+
+  const { data: contacts = [] } = useQuery<Contact[]>({
+    queryKey: ["/api/contacts"],
   });
 
   const { data: integrations = [] } = useQuery<IntegrationStatus[]>({
@@ -132,7 +131,6 @@ export default function Settings() {
 
   const handleExportContacts = () => {
     try {
-      const contacts = getContacts();
       const headers = ["Name", "Company", "Role", "Email", "LinkedIn URL", "Location", "Tags"];
       const rows = contacts.map((c) => [
         c.name || "",
@@ -353,6 +351,18 @@ export default function Settings() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
+          {!isConnected("google") && (
+            <div className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950/30 p-3 text-sm">
+              <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
+              <div className="text-blue-800 dark:text-blue-300">
+                <span className="font-medium">One-time setup required:</span> Add{" "}
+                <code className="font-mono text-xs bg-blue-100 dark:bg-blue-900 px-1 rounded">GOOGLE_CLIENT_ID</code>{" "}
+                and{" "}
+                <code className="font-mono text-xs bg-blue-100 dark:bg-blue-900 px-1 rounded">GOOGLE_CLIENT_SECRET</code>{" "}
+                as Replit secrets to enable Google auth. Users then connect with one click.
+              </div>
+            </div>
+          )}
           <IntegrationCard
             provider="google"
             name="Google"
@@ -367,12 +377,13 @@ export default function Settings() {
           <IntegrationCard
             provider="granola"
             name="Granola"
-            description="Pull meeting notes and transcripts via MCP"
+            description="Pull meeting notes and transcripts via MCP — uses your Google connection"
             icon={<GranolaIcon className="h-5 w-5" />}
-            connected={isConnected("granola")}
-            accountId={integrations.find((i) => i.provider === "granola")?.providerAccountId}
+            connected={isConnected("granola") || isConnected("google")}
+            viaGoogle={isConnected("google")}
+            accountId={integrations.find((i) => i.provider === "google")?.providerAccountId}
             onStatusChange={() => queryClient.invalidateQueries({ queryKey: ["/api/integrations"] })}
-            onSync={() => syncGranola()}
+            onSync={isConnected("google") ? () => syncGranola() : undefined}
             isSyncing={isSyncingGranola}
           />
         </CardContent>
@@ -412,73 +423,9 @@ export default function Settings() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {userProfile ? (
-            <>
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <div className="flex items-center gap-2">
-                  <User className="w-4 h-4 text-muted-foreground" />
-                  <span className="font-medium">{userProfile.name}</span>
-                </div>
-                {userProfile.currentRole && (
-                  <div className="flex items-center gap-2">
-                    <Briefcase className="w-4 h-4 text-muted-foreground" />
-                    <span className="text-sm">
-                      {userProfile.currentRole}
-                      {userProfile.company && ` at ${userProfile.company}`}
-                    </span>
-                  </div>
-                )}
-                {userProfile.skills && userProfile.skills.length > 0 && (
-                  <div className="flex flex-wrap gap-1 pt-1">
-                    {userProfile.skills.slice(0, 5).map((skill, i) => (
-                      <Badge key={i} variant="secondary" className="text-xs">{skill}</Badge>
-                    ))}
-                    {userProfile.skills.length > 5 && (
-                      <Badge variant="outline" className="text-xs">+{userProfile.skills.length - 5} more</Badge>
-                    )}
-                  </div>
-                )}
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    clearStoredProfile();
-                    setUserProfile(null);
-                    toast({ title: "Profile cleared - refresh to set up again" });
-                  }}
-                  className="text-destructive hover:text-destructive"
-                  data-testid="button-clear-profile"
-                >
-                  <Trash2 className="w-4 h-4 mr-2" />
-                  Clear Profile
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    clearStoredProfile();
-                    window.location.reload();
-                  }}
-                  data-testid="button-redo-profile"
-                >
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                  Redo Profile Setup
-                </Button>
-              </div>
-            </>
-          ) : (
-            <div className="text-center py-4">
-              <p className="text-muted-foreground mb-3">No profile set up yet</p>
-              <Button
-                onClick={() => window.location.reload()}
-                data-testid="button-setup-profile-settings"
-              >
-                Set Up Profile
-              </Button>
-            </div>
-          )}
+          <p className="text-sm text-muted-foreground">
+            Your account information is managed through your login credentials.
+          </p>
         </CardContent>
       </Card>
     </div>

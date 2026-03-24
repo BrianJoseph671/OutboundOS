@@ -1,21 +1,28 @@
-import { Router } from "express";
+import { Router, type Request } from "express";
 import { storage } from "../storage";
 import {
   generateAuthorizationUrl,
   validateState,
   exchangeCodeForTokens,
   saveTokens,
-  getValidAccessToken,
 } from "../services/oauth";
-import { decrypt } from "../utils/encryption";
 import { syncGoogleCalendarEvents } from "../services/googleIntegration";
 
 const router = Router();
 
+// Extract userId from typed session; throws 401 error if not authenticated
+function getUserId(req: Request): string {
+  if (!req.user?.id) {
+    throw Object.assign(new Error("Not authenticated"), { status: 401 });
+  }
+  return req.user.id;
+}
+
 // List all integration connections (masks tokens)
-router.get("/", async (_req, res) => {
+router.get("/", async (req, res) => {
   try {
-    const connections = await storage.getAllIntegrationConnections();
+    const userId = getUserId(req);
+    const connections = await storage.getAllIntegrationConnections(userId);
     const masked = connections.map((c) => ({
       provider: c.provider,
       isConnected: c.isConnected,
@@ -24,6 +31,21 @@ router.get("/", async (_req, res) => {
       createdAt: c.createdAt,
       updatedAt: c.updatedAt,
     }));
+
+    // Granola is considered connected whenever Google is connected
+    const googleConn = connections.find((c) => c.provider === "google");
+    const granolaConn = connections.find((c) => c.provider === "granola");
+    if (googleConn?.isConnected && !granolaConn?.isConnected) {
+      masked.push({
+        provider: "granola",
+        isConnected: true,
+        scopes: "via-google",
+        providerAccountId: googleConn.providerAccountId || null,
+        createdAt: googleConn.createdAt,
+        updatedAt: googleConn.updatedAt,
+      });
+    }
+
     res.json(masked);
   } catch (error: any) {
     res.status(500).json({ error: error.message || "Failed to fetch integrations" });
@@ -33,9 +55,21 @@ router.get("/", async (_req, res) => {
 // Get single integration status
 router.get("/:provider", async (req, res) => {
   try {
-    const conn = await storage.getIntegrationConnection(req.params.provider);
+    const userId = getUserId(req);
+    const { provider } = req.params;
+
+    if (provider === "granola") {
+      const google = await storage.getIntegrationConnection("google", userId);
+      return res.json({
+        connected: !!google?.isConnected,
+        provider: "granola",
+        via: "google",
+      });
+    }
+
+    const conn = await storage.getIntegrationConnection(provider, userId);
     if (!conn) {
-      return res.json({ connected: false, provider: req.params.provider });
+      return res.json({ connected: false, provider });
     }
     res.json({
       connected: conn.isConnected,
@@ -50,9 +84,23 @@ router.get("/:provider", async (req, res) => {
 });
 
 // Start OAuth flow — returns authorization URL
+// Granola has no separate OAuth; it uses Google auth
 router.post("/:provider/connect", async (req, res) => {
   try {
+    const userId = getUserId(req);
     const { provider } = req.params;
+
+    if (provider === "granola") {
+      const google = await storage.getIntegrationConnection("google", userId);
+      if (!google?.isConnected) {
+        return res.status(400).json({
+          error: "Connect your Google account first — Granola uses Google auth.",
+          requiresGoogle: true,
+        });
+      }
+      return res.json({ connected: true, via: "google" });
+    }
+
     const url = generateAuthorizationUrl(provider);
     res.json({ authorizationUrl: url });
   } catch (error: any) {
@@ -78,10 +126,14 @@ router.get("/callback/:provider", async (req, res) => {
       return res.redirect("/settings?integration_error=invalid_state");
     }
 
-    const tokens = await exchangeCodeForTokens(provider, String(code));
-    await saveTokens(provider, tokens);
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.redirect("/settings?integration_error=not_authenticated");
+    }
 
-    // Fetch provider account info for display
+    const tokens = await exchangeCodeForTokens(provider, String(code));
+    await saveTokens(provider, userId, tokens);
+
     if (provider === "google") {
       try {
         const userInfoRes = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
@@ -89,12 +141,12 @@ router.get("/callback/:provider", async (req, res) => {
         });
         if (userInfoRes.ok) {
           const userInfo = await userInfoRes.json();
-          await storage.upsertIntegrationConnection(provider, {
+          await storage.upsertIntegrationConnection(provider, userId, {
             providerAccountId: userInfo.email,
           });
         }
       } catch {
-        // Non-critical: account info fetch failed
+        // Non-critical
       }
     }
 
@@ -108,8 +160,15 @@ router.get("/callback/:provider", async (req, res) => {
 // Disconnect an integration
 router.delete("/:provider", async (req, res) => {
   try {
+    const userId = getUserId(req);
     const { provider } = req.params;
-    await storage.deleteIntegrationConnection(provider);
+    await storage.deleteIntegrationConnection(provider, userId);
+
+    // Disconnecting Google also removes Granola access
+    if (provider === "google") {
+      await storage.deleteIntegrationConnection("granola", userId).catch(() => {});
+    }
+
     res.json({ success: true });
   } catch (error: any) {
     res.status(500).json({ error: error.message || "Failed to disconnect" });
@@ -119,7 +178,8 @@ router.delete("/:provider", async (req, res) => {
 // Meetings — list all synced meetings
 router.get("/:provider/meetings", async (req, res) => {
   try {
-    const allMeetings = await storage.getMeetings();
+    const userId = getUserId(req);
+    const allMeetings = await storage.getMeetings(userId);
     const filtered = req.params.provider === "all"
       ? allMeetings
       : allMeetings.filter((m) => m.source === req.params.provider || m.source === `${req.params.provider}_calendar`);
@@ -132,6 +192,11 @@ router.get("/:provider/meetings", async (req, res) => {
 // Get meetings linked to a specific contact
 router.get("/contacts/:contactId/meetings", async (req, res) => {
   try {
+    const userId = getUserId(req);
+    const contact = await storage.getContact(req.params.contactId, userId);
+    if (!contact) {
+      return res.status(404).json({ error: "Contact not found" });
+    }
     const contactMeetings = await storage.getContactMeetings(req.params.contactId);
     res.json(contactMeetings);
   } catch (error: any) {
@@ -140,9 +205,10 @@ router.get("/contacts/:contactId/meetings", async (req, res) => {
 });
 
 // Sync Google Calendar events
-router.post("/google/sync", async (_req, res) => {
+router.post("/google/sync", async (req, res) => {
   try {
-    const result = await syncGoogleCalendarEvents();
+    const userId = getUserId(req);
+    const result = await syncGoogleCalendarEvents(userId);
     res.json(result);
   } catch (error: any) {
     console.error("Google Calendar sync error:", error);
@@ -150,11 +216,12 @@ router.post("/google/sync", async (_req, res) => {
   }
 });
 
-// Sync Granola meetings via MCP
-router.post("/granola/sync", async (_req, res) => {
+// Sync Granola meetings via MCP (uses Google token)
+router.post("/granola/sync", async (req, res) => {
   try {
+    const userId = getUserId(req);
     const { syncGranolaMeetings } = await import("../services/granolaIntegration");
-    const result = await syncGranolaMeetings();
+    const result = await syncGranolaMeetings(userId);
     res.json(result);
   } catch (error: any) {
     console.error("Granola sync error:", error);
@@ -165,9 +232,10 @@ router.post("/granola/sync", async (_req, res) => {
 // Generate AI follow-up based on meeting context
 router.post("/meetings/:meetingId/follow-up", async (req, res) => {
   try {
+    const userId = getUserId(req);
     const { generateMeetingFollowUp } = await import("../services/meetingFollowUp");
     const { contactId, tone } = req.body;
-    const result = await generateMeetingFollowUp(req.params.meetingId, contactId, tone);
+    const result = await generateMeetingFollowUp(req.params.meetingId, contactId, tone, userId);
     res.json(result);
   } catch (error: any) {
     console.error("Follow-up generation error:", error);

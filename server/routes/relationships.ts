@@ -93,7 +93,7 @@ relationshipsRouter.post("/", async (req: Request, res: Response) => {
     }
 
     // Verify the contact exists and is owned by the authenticated user
-    const contact = await storage.getContact(body.contactId);
+    const contact = await storage.getContact(body.contactId, userId);
     if (!contact || contact.userId !== userId) {
       return res.status(404).json({ error: "Contact not found" });
     }
@@ -153,7 +153,7 @@ relationshipsRouter.patch("/:id", async (req: Request, res: Response) => {
     // If the request body includes a contactId reassignment, verify that the
     // new contact exists and belongs to the authenticated user before updating.
     if (body.contactId != null) {
-      const newContact = await storage.getContact(body.contactId);
+      const newContact = await storage.getContact(body.contactId, userId);
       if (!newContact || newContact.userId !== userId) {
         return res.status(404).json({ error: "Contact not found" });
       }
