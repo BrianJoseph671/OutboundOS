@@ -7,7 +7,8 @@ import {
   researchPackets, type ResearchPacket, type InsertResearchPacket,
   integrationConnections, type IntegrationConnection, type InsertIntegrationConnection,
   meetings, type Meeting, type InsertMeeting,
-  contactMeetings, type ContactMeeting, type InsertContactMeeting
+  contactMeetings, type ContactMeeting, type InsertContactMeeting,
+  interactions, type Interaction, type InsertInteraction,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, inArray, and } from "drizzle-orm";
@@ -73,6 +74,14 @@ export interface IStorage {
   getMeetingContacts(meetingId: string): Promise<ContactMeeting[]>;
   linkContactToMeeting(data: InsertContactMeeting): Promise<ContactMeeting>;
   unlinkContactFromMeeting(contactId: string, meetingId: string): Promise<boolean>;
+
+  // Interactions
+  getInteractions(userId: string, contactId?: string): Promise<Interaction[]>;
+  getInteraction(id: string): Promise<Interaction | undefined>;
+  createInteraction(interaction: InsertInteraction): Promise<Interaction>;
+  updateInteraction(id: string, data: Partial<InsertInteraction>): Promise<Interaction | undefined>;
+  deleteInteraction(id: string): Promise<boolean>;
+  getInteractionBySourceId(channel: string, sourceId: string): Promise<Interaction | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -97,7 +106,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateContact(id: string, contact: Partial<InsertContact>): Promise<Contact | undefined> {
-    const [updated] = await db.update(contacts).set(contact).where(eq(contacts.id, id)).returning();
+    // Always set updated_at to the current time regardless of what's in the payload
+    const [updated] = await db.update(contacts).set({ ...contact, updatedAt: new Date() }).where(eq(contacts.id, id)).returning();
     return updated;
   }
 
@@ -470,6 +480,91 @@ export class DatabaseStorage implements IStorage {
       .where(and(eq(contactMeetings.contactId, contactId), eq(contactMeetings.meetingId, meetingId)))
       .returning();
     return result.length > 0;
+  }
+
+  // Interactions
+  async getInteractions(userId: string, contactId?: string): Promise<Interaction[]> {
+    if (contactId !== undefined) {
+      return await db
+        .select()
+        .from(interactions)
+        .where(and(eq(interactions.userId, userId), eq(interactions.contactId, contactId)))
+        .orderBy(desc(interactions.occurredAt));
+    }
+    return await db
+      .select()
+      .from(interactions)
+      .where(eq(interactions.userId, userId))
+      .orderBy(desc(interactions.occurredAt));
+  }
+
+  async getInteraction(id: string): Promise<Interaction | undefined> {
+    const [interaction] = await db
+      .select()
+      .from(interactions)
+      .where(eq(interactions.id, id));
+    return interaction;
+  }
+
+  async createInteraction(interaction: InsertInteraction): Promise<Interaction> {
+    // Truncate raw_content to 10,000 characters if needed
+    const rawContent =
+      interaction.rawContent != null && interaction.rawContent.length > 10000
+        ? interaction.rawContent.slice(0, 10000)
+        : interaction.rawContent;
+
+    const [created] = await db
+      .insert(interactions)
+      .values({ ...interaction, rawContent })
+      .returning();
+
+    // Update parent contact's last_interaction_at and last_interaction_channel
+    // only if the new interaction's occurred_at is newer than the current value
+    const contact = await this.getContact(created.contactId);
+    if (contact) {
+      const currentLastAt = contact.lastInteractionAt;
+      if (
+        currentLastAt === null ||
+        currentLastAt === undefined ||
+        created.occurredAt.getTime() > currentLastAt.getTime()
+      ) {
+        await db
+          .update(contacts)
+          .set({
+            lastInteractionAt: created.occurredAt,
+            lastInteractionChannel: created.channel,
+            updatedAt: new Date(),
+          })
+          .where(eq(contacts.id, created.contactId));
+      }
+    }
+
+    return created;
+  }
+
+  async updateInteraction(id: string, data: Partial<InsertInteraction>): Promise<Interaction | undefined> {
+    const [updated] = await db
+      .update(interactions)
+      .set(data)
+      .where(eq(interactions.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteInteraction(id: string): Promise<boolean> {
+    const [deleted] = await db
+      .delete(interactions)
+      .where(eq(interactions.id, id))
+      .returning();
+    return !!deleted;
+  }
+
+  async getInteractionBySourceId(channel: string, sourceId: string): Promise<Interaction | undefined> {
+    const [interaction] = await db
+      .select()
+      .from(interactions)
+      .where(and(eq(interactions.channel, channel), eq(interactions.sourceId, sourceId)));
+    return interaction;
   }
 }
 
