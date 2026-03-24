@@ -302,9 +302,9 @@ export class DatabaseStorage implements IStorage {
         status: data.status ?? "not_started",
         prospectSnapshot: data.prospectSnapshot ?? null,
         companySnapshot: data.companySnapshot ?? null,
-        signalsHooks: data.signalsHooks ?? [],
+        signalsHooks: (data.signalsHooks as string[] | null | undefined) ?? [],
         personalizedMessage: data.personalizedMessage ?? null,
-        variants: data.variants ?? [],
+        variants: (data.variants as unknown[] | null | undefined) ?? [],
         createdAt: now,
         updatedAt: now,
       })
@@ -314,9 +314,9 @@ export class DatabaseStorage implements IStorage {
           ...(data.status !== undefined && { status: data.status }),
           ...(data.prospectSnapshot !== undefined && { prospectSnapshot: data.prospectSnapshot }),
           ...(data.companySnapshot !== undefined && { companySnapshot: data.companySnapshot }),
-          ...(data.signalsHooks !== undefined && { signalsHooks: data.signalsHooks }),
+          ...(data.signalsHooks !== undefined && { signalsHooks: data.signalsHooks as string[] }),
           ...(data.personalizedMessage !== undefined && { personalizedMessage: data.personalizedMessage }),
-          ...(data.variants !== undefined && { variants: data.variants }),
+          ...(data.variants !== undefined && { variants: data.variants as unknown[] }),
           updatedAt: now,
         },
       })

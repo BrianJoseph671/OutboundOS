@@ -10,7 +10,7 @@ router.post("/research", async (req, res) => {
   try {
     const { contactIds, contacts: contactsPayload } = req.body;
 
-    let contacts: Array<{ id: string; name: string; company?: string; linkedinUrl?: string }>;
+    let contacts: Array<{ id: string; name: string; company: string; linkedinUrl?: string }>;
 
     if (Array.isArray(contactsPayload) && contactsPayload.length > 0) {
       contacts = contactsPayload.map((c: { id: string; name: string; company?: string; linkedinUrl?: string }) => ({

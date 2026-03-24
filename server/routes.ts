@@ -1810,7 +1810,7 @@ export async function registerRoutes(
     const contactsPayload = body?.contacts as Array<{ id: string; name: string; company?: string }> | undefined;
 
     // Support both: contacts array (from localStorage) or contactIds (legacy)
-    let contacts: Array<{ id: string; name: string; company?: string } | null>;
+    let contacts: Array<{ id: string; name: string; company?: string | null } | null>;
     let contactIdsList: string[];
 
     if (Array.isArray(contactsPayload) && contactsPayload.length > 0) {
@@ -1819,7 +1819,7 @@ export async function registerRoutes(
     } else if (Array.isArray(contactIds) && contactIds.length > 0) {
       contactIdsList = contactIds;
       contacts = await Promise.all(
-        contactIds.map((id) => storage.getContact(id))
+        contactIds.map((id) => storage.getContact(id).then((c) => c ?? null))
       );
     } else {
       return res.status(400).json({ error: "contacts or contactIds array is required" });
@@ -1855,9 +1855,9 @@ export async function registerRoutes(
       Connection: "keep-alive",
     });
 
-    function send(event: string, data: Record<string, unknown>) {
+    const send = (event: string, data: Record<string, unknown>) => {
       res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-    }
+    };
 
     interface BulkResult {
       contactId: string;
@@ -1869,11 +1869,11 @@ export async function registerRoutes(
 
     const results: BulkResult[] = [];
 
-    async function callWebhook(
+    const callWebhook = async (
       contactId: string,
       personName: string,
       company: string
-    ): Promise<BulkResult> {
+    ): Promise<BulkResult> => {
       const idempotencyKey = `${contactId}:${batchId}`;
 
       try {
@@ -1971,7 +1971,7 @@ export async function registerRoutes(
       const result: BulkResult = { contactId, personName, company, status: "failed", error: "Exhausted retries" };
       send("status", { contactId, status: "failed", error: "Exhausted retries" });
       return result;
-    }
+    };
 
     for (const id of contactIdsList) {
       send("status", { contactId: id, status: "queued" });

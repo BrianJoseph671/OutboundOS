@@ -45,7 +45,7 @@ export function createContact(
     ...input,
     id: crypto.randomUUID(),
     createdAt: now,
-  } as Contact;
+  } as unknown as Contact;
   contacts.push(contact);
   saveContacts(contacts);
   return contact;
@@ -87,7 +87,7 @@ export function bulkCreateContacts(
     ...input,
     id: crypto.randomUUID(),
     createdAt: now,
-  })) as Contact[];
+  })) as unknown as Contact[];
   contacts.push(...created);
   saveContacts(contacts);
   return created;
