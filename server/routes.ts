@@ -9,16 +9,29 @@ import {
   insertOutreachAttemptSchema,
   insertExperimentSchema,
   insertSettingsSchema,
+  users,
 } from "@shared/schema";
 import batchRouter from "./routes/batch";
 import integrationsRouter from "./routes/integrations";
 import { appendResearchedTag } from "./utils/contactTags";
 import { authRouter } from "./auth";
+import { db } from "./db";
 
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
 });
+
+// Seed user ID cache — lazily resolved on first createContact call that lacks req.user.
+// The seed user is the first user row inserted during schema migration.
+let _seedUserId: string | null = null;
+async function getSeedUserId(): Promise<string> {
+  if (_seedUserId) return _seedUserId;
+  const [firstUser] = await db.select({ id: users.id }).from(users).limit(1);
+  if (!firstUser) throw new Error("No seed user found — run db:push or db:migrate first");
+  _seedUserId = firstUser.id;
+  return _seedUserId;
+}
 
 // Pending prospect research: n8n calls back to /api/webhooks/prospect-research-result with the result
 const pendingProspectResearch = new Map<
@@ -279,7 +292,8 @@ export async function registerRoutes(
   app.post("/api/contacts", async (req, res) => {
     try {
       const validatedData = insertContactSchema.parse(req.body);
-      const contact = await storage.createContact(validatedData);
+      const userId = (req.user as { id: string } | undefined)?.id ?? await getSeedUserId();
+      const contact = await storage.createContact({ ...validatedData, userId });
       res.status(201).json(contact);
     } catch (error) {
       res.status(400).json({ error: "Invalid contact data" });
@@ -332,6 +346,8 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Expected array of contacts" });
       }
 
+      const userId = (req.user as { id: string } | undefined)?.id ?? await getSeedUserId();
+
       const results = {
         success: 0,
         failed: 0,
@@ -358,7 +374,7 @@ export async function registerRoutes(
           }
 
           const validatedData = insertContactSchema.parse(contactData);
-          await storage.createContact(validatedData);
+          await storage.createContact({ ...validatedData, userId });
           results.success++;
         } catch (error) {
           results.failed++;
@@ -658,6 +674,9 @@ export async function registerRoutes(
         "WhatsApp": "whatsapp",
       };
 
+      // Webhook comes from n8n without a user session — use the authenticated user or seed fallback
+      const webhookUserId = (req.user as { id: string } | undefined)?.id ?? await getSeedUserId();
+
       for (let i = 0; i < logs.length; i++) {
         const logData = logs[i];
         console.log(`[Outreach Webhook] Processing item ${i + 1}:`, JSON.stringify(logData));
@@ -682,7 +701,8 @@ export async function registerRoutes(
               name: personName,
               company: logData.company || "Unknown",
               tags: "auto-created-from-webhook",
-            } as any);
+              userId: webhookUserId,
+            });
             console.log(`[Outreach Webhook] Created contact with ID: ${contact.id}`);
           } else {
             console.log(`[Outreach Webhook] Found existing contact: ${contact.name} (ID: ${contact.id})`);
@@ -796,6 +816,8 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Expected array of contacts" });
       }
 
+      const userId = (req.user as { id: string } | undefined)?.id ?? await getSeedUserId();
+
       let created = 0;
       const errors: string[] = [];
 
@@ -815,7 +837,7 @@ export async function registerRoutes(
 
           const validatedData = insertContactSchema.parse(dataWithTag);
           // Await ensure sequential insertion order for ID/CreatedAt consistency
-          await storage.createContact(validatedData);
+          await storage.createContact({ ...validatedData, userId });
           created++;
         } catch (err) {
           errors.push(`Failed to create: ${contactData.name || "unknown"}`);

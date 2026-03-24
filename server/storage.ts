@@ -77,11 +77,11 @@ export interface IStorage {
 
   // Interactions
   getInteractions(userId: string, contactId?: string): Promise<Interaction[]>;
-  getInteraction(id: string): Promise<Interaction | undefined>;
+  getInteraction(id: string, userId: string): Promise<Interaction | undefined>;
   createInteraction(interaction: InsertInteraction): Promise<Interaction>;
-  updateInteraction(id: string, data: Partial<InsertInteraction>): Promise<Interaction | undefined>;
-  deleteInteraction(id: string): Promise<boolean>;
-  getInteractionBySourceId(channel: string, sourceId: string): Promise<Interaction | undefined>;
+  updateInteraction(id: string, userId: string, data: Partial<InsertInteraction>): Promise<Interaction | undefined>;
+  deleteInteraction(id: string, userId: string): Promise<boolean>;
+  getInteractionBySourceId(channel: string, sourceId: string, userId: string): Promise<Interaction | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -97,10 +97,15 @@ export class DatabaseStorage implements IStorage {
 
   async createContact(insertContact: InsertContact): Promise<Contact> {
     // userId is optional in InsertContact (Zod schema) for backward compat, but
-    // required at the DB level. Use a type assertion to satisfy Drizzle's insert type.
+    // required at the DB level. Callers must always supply userId (from req.user.id
+    // or the seed user fallback) before calling createContact.
+    const userId = insertContact.userId;
+    if (!userId) {
+      throw new Error("userId is required for createContact — set req.user.id or seed user id before calling");
+    }
     const [contact] = await db.insert(contacts).values({
       ...insertContact,
-      userId: insertContact.userId as string,
+      userId,
     }).returning();
     return contact;
   }
@@ -498,11 +503,11 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(interactions.occurredAt));
   }
 
-  async getInteraction(id: string): Promise<Interaction | undefined> {
+  async getInteraction(id: string, userId: string): Promise<Interaction | undefined> {
     const [interaction] = await db
       .select()
       .from(interactions)
-      .where(eq(interactions.id, id));
+      .where(and(eq(interactions.id, id), eq(interactions.userId, userId)));
     return interaction;
   }
 
@@ -542,28 +547,28 @@ export class DatabaseStorage implements IStorage {
     return created;
   }
 
-  async updateInteraction(id: string, data: Partial<InsertInteraction>): Promise<Interaction | undefined> {
+  async updateInteraction(id: string, userId: string, data: Partial<InsertInteraction>): Promise<Interaction | undefined> {
     const [updated] = await db
       .update(interactions)
       .set(data)
-      .where(eq(interactions.id, id))
+      .where(and(eq(interactions.id, id), eq(interactions.userId, userId)))
       .returning();
     return updated;
   }
 
-  async deleteInteraction(id: string): Promise<boolean> {
+  async deleteInteraction(id: string, userId: string): Promise<boolean> {
     const [deleted] = await db
       .delete(interactions)
-      .where(eq(interactions.id, id))
+      .where(and(eq(interactions.id, id), eq(interactions.userId, userId)))
       .returning();
     return !!deleted;
   }
 
-  async getInteractionBySourceId(channel: string, sourceId: string): Promise<Interaction | undefined> {
+  async getInteractionBySourceId(channel: string, sourceId: string, userId: string): Promise<Interaction | undefined> {
     const [interaction] = await db
       .select()
       .from(interactions)
-      .where(and(eq(interactions.channel, channel), eq(interactions.sourceId, sourceId)));
+      .where(and(eq(interactions.channel, channel), eq(interactions.sourceId, sourceId), eq(interactions.userId, userId)));
     return interaction;
   }
 }

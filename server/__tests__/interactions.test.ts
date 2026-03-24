@@ -197,17 +197,28 @@ describe("getInteraction", () => {
     contactId = contact.id;
   });
 
-  it("returns the interaction by id", async () => {
+  it("returns the interaction by id when userId matches", async () => {
     const created = await storage.createInteraction(makeInteraction(userId, contactId));
     testIds.interactionIds.push(created.id);
 
-    const found = await storage.getInteraction(created.id);
+    const found = await storage.getInteraction(created.id, userId);
     expect(found).toBeDefined();
     expect(found!.id).toBe(created.id);
   });
 
   it("returns undefined for non-existent id", async () => {
-    const found = await storage.getInteraction("00000000-0000-0000-0000-000000000000");
+    const found = await storage.getInteraction("00000000-0000-0000-0000-000000000000", userId);
+    expect(found).toBeUndefined();
+  });
+
+  it("returns undefined when userId does not match (cross-user isolation)", async () => {
+    const otherUser = await createTestUser("get_one_other");
+    testIds.userIds.push(otherUser.id);
+    const created = await storage.createInteraction(makeInteraction(userId, contactId));
+    testIds.interactionIds.push(created.id);
+
+    // Looking up with another userId should return undefined
+    const found = await storage.getInteraction(created.id, otherUser.id);
     expect(found).toBeUndefined();
   });
 });
@@ -314,7 +325,7 @@ describe("updateInteraction", () => {
     );
     testIds.interactionIds.push(created.id);
 
-    const updated = await storage.updateInteraction(created.id, { summary: "Updated summary" });
+    const updated = await storage.updateInteraction(created.id, userId, { summary: "Updated summary" });
     expect(updated).toBeDefined();
     expect(updated!.summary).toBe("Updated summary");
     // Other fields unchanged
@@ -322,8 +333,25 @@ describe("updateInteraction", () => {
   });
 
   it("returns undefined for non-existent id", async () => {
-    const result = await storage.updateInteraction("00000000-0000-0000-0000-000000000000", { summary: "x" });
+    const result = await storage.updateInteraction("00000000-0000-0000-0000-000000000000", userId, { summary: "x" });
     expect(result).toBeUndefined();
+  });
+
+  it("returns undefined when userId does not match (cross-user isolation)", async () => {
+    const otherUser = await createTestUser("update_other");
+    testIds.userIds.push(otherUser.id);
+    const created = await storage.createInteraction(
+      makeInteraction(userId, contactId, { summary: "Should not update" })
+    );
+    testIds.interactionIds.push(created.id);
+
+    // Attempt update with wrong userId — should return undefined and not update
+    const result = await storage.updateInteraction(created.id, otherUser.id, { summary: "Cross-user update" });
+    expect(result).toBeUndefined();
+
+    // Original should be unchanged
+    const original = await storage.getInteraction(created.id, userId);
+    expect(original!.summary).toBe("Should not update");
   });
 });
 
@@ -346,17 +374,32 @@ describe("deleteInteraction", () => {
     const created = await storage.createInteraction(makeInteraction(userId, contactId));
     // Don't add to cleanup list since we're deleting it
 
-    const result = await storage.deleteInteraction(created.id);
+    const result = await storage.deleteInteraction(created.id, userId);
     expect(result).toBe(true);
 
     // Verify it's gone
-    const found = await storage.getInteraction(created.id);
+    const found = await storage.getInteraction(created.id, userId);
     expect(found).toBeUndefined();
   });
 
   it("returns false for non-existent id", async () => {
-    const result = await storage.deleteInteraction("00000000-0000-0000-0000-000000000000");
+    const result = await storage.deleteInteraction("00000000-0000-0000-0000-000000000000", userId);
     expect(result).toBe(false);
+  });
+
+  it("returns false when userId does not match (cross-user isolation)", async () => {
+    const otherUser = await createTestUser("delete_other");
+    testIds.userIds.push(otherUser.id);
+    const created = await storage.createInteraction(makeInteraction(userId, contactId));
+    testIds.interactionIds.push(created.id);
+
+    // Attempt delete with wrong userId — should return false
+    const result = await storage.deleteInteraction(created.id, otherUser.id);
+    expect(result).toBe(false);
+
+    // Original should still exist
+    const found = await storage.getInteraction(created.id, userId);
+    expect(found).toBeDefined();
   });
 });
 
@@ -375,21 +418,21 @@ describe("getInteractionBySourceId", () => {
     contactId = contact.id;
   });
 
-  it("returns the interaction matching channel + sourceId", async () => {
+  it("returns the interaction matching channel + sourceId + userId", async () => {
     const sourceId = `src_test_${Date.now()}`;
     const created = await storage.createInteraction(
       makeInteraction(userId, contactId, { channel: "linkedin", sourceId })
     );
     testIds.interactionIds.push(created.id);
 
-    const found = await storage.getInteractionBySourceId("linkedin", sourceId);
+    const found = await storage.getInteractionBySourceId("linkedin", sourceId, userId);
     expect(found).toBeDefined();
     expect(found!.id).toBe(created.id);
     expect(found!.sourceId).toBe(sourceId);
   });
 
   it("returns undefined for non-existent channel+sourceId", async () => {
-    const found = await storage.getInteractionBySourceId("email", "non-existent-source-id");
+    const found = await storage.getInteractionBySourceId("email", "non-existent-source-id", userId);
     expect(found).toBeUndefined();
   });
 
@@ -400,7 +443,21 @@ describe("getInteractionBySourceId", () => {
     );
     testIds.interactionIds.push(created.id);
 
-    const found = await storage.getInteractionBySourceId("linkedin", sourceId);
+    const found = await storage.getInteractionBySourceId("linkedin", sourceId, userId);
+    expect(found).toBeUndefined();
+  });
+
+  it("returns undefined when userId does not match even if channel+sourceId match", async () => {
+    const otherUser = await createTestUser("source_id_other");
+    testIds.userIds.push(otherUser.id);
+    const sourceId = `src_user_mismatch_${Date.now()}`;
+    const created = await storage.createInteraction(
+      makeInteraction(userId, contactId, { channel: "email", sourceId })
+    );
+    testIds.interactionIds.push(created.id);
+
+    // Query with correct channel+sourceId but different userId
+    const found = await storage.getInteractionBySourceId("email", sourceId, otherUser.id);
     expect(found).toBeUndefined();
   });
 });
