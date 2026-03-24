@@ -1,0 +1,19 @@
+
+> rest-express@1.0.0 dev
+> cross-env NODE_ENV=development tsx server/index.ts
+
+openai service loaded
+[WebSocket] Server initialized on /ws
+12:35:09 AM [express] serving on port 5000
+12:35:09 AM [express] Open in your browser: http://127.0.0.1:5000 (use a system browser like Chrome or Edge, not Cursor's embedded browser)
+12:35:25 AM [express] GET /api/contacts 200 in 70ms :: []
+12:37:57 AM [express] GET /api/interactions 200 in 40ms
+12:37:59 AM [express] DELETE /api/interactions/utv-auth-http-1774327077186-interaction-id 200 in 580ms
+12:37:59 AM [express] GET /api/contacts 200 in 252ms :: []
+12:37:59 AM [express] GET /api/outreach-attempts 200 in 2ms :: []
+12:37:59 AM [express] GET /api/experiments 200 in 2ms :: []
+12:37:59 AM [express] GET /api/settings 200 in 3ms :: {}
+12:38:43 AM [express] GET /api/interactions/utv-auth-http-1774327077186-interaction-id 200 in 8ms
+12:38:43 AM [express] POST /api/interactions 200 in 8ms
+12:38:43 AM [express] PATCH /api/interactions/utv-auth-http-1774327077186-interaction-id 200 in 5ms
+12:38:43 AM [express] POST /api/contacts 201 in 44ms :: {"id":"1e8ed72a-804b-4244-99f6-ace86c9f6797","name":"utv-auth-http-1774327077186-contact","company":"utv-auth-http-1774327077186-company","role":"tester","linkedinUrl":"https://linkedin.com/in/utv-auth-http-1774327077186","email":"utv-auth-http-1774327077186@example.com","headline":null,"about":null,"location":null,"experience":null,"education":null,"skills":null,"keywords":null,"notes":null,"tags":null,"researchStatus":null,"researchData":null,"createdAt":"2026-03-24T00:38:43.710Z","userId":"6ee14ff2-10fc-474f-af38-2472f5db4f0a","source":null,"tier":"cool","lastInteractionAt":null,"lastInteractionChannel":null,"updatedAt":"2026-03-24T00:38:43.710Z"}

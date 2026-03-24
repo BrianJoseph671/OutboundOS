@@ -1,0 +1,233 @@
+{
+    "groupId":  "auth-http",
+    "testedAt":  "2026-03-24T04:39:28.7743011Z",
+    "isolation":  {
+                      "appUrl":  "http://127.0.0.1:5000",
+                      "missionDir":  "C:\\Users\\josep\\.factory\\missions\\c1a7d1d0-5e9b-443d-ba5f-cdb1acba01d8",
+                      "assignedAssertions":  [
+                                                 "VAL-AUTH-001",
+                                                 "VAL-AUTH-005",
+                                                 "VAL-AUTH-007",
+                                                 "VAL-AUTH-008",
+                                                 "VAL-AUTH-010"
+                                             ],
+                      "testDataPrefix":  "utv-auth-http-1774327077186"
+                  },
+    "toolsUsed":  [
+                      "powershell",
+                      "curl",
+                      "node"
+                  ],
+    "assertions":  [
+                       {
+                           "id":  "VAL-AUTH-001",
+                           "title":  "OAuth redirect initiates correctly",
+                           "status":  "pass",
+                           "steps":  [
+                                         {
+                                             "action":  "GET /auth/google without session",
+                                             "expected":  "302 redirect to Google OAuth with required query params",
+                                             "observed":  "HTTP 302 with Location=https://accounts.google.com/o/oauth2/v2/auth including response_type=code, redirect_uri=http://127.0.0.1:5000/auth/google/callback, scope=openid profile email, client_id=test-google-client-id"
+                                         }
+                                     ],
+                           "evidence":  {
+                                            "screenshots":  [
+
+                                                            ],
+                                            "consoleErrors":  "n/a (API assertion)",
+                                            "network":  "GET /auth/google -\u003e 302",
+                                            "files":  [
+                                                          "auth-and-schema/auth-http/VAL-AUTH-001-auth-google-status.txt",
+                                                          "auth-and-schema/auth-http/VAL-AUTH-001-auth-google-headers.txt"
+                                                      ]
+                                        },
+                           "issues":  null
+                       },
+                       {
+                           "id":  "VAL-AUTH-005",
+                           "title":  "GET /auth/me rejects unauthenticated request",
+                           "status":  "pass",
+                           "steps":  [
+                                         {
+                                             "action":  "GET /auth/me without cookies",
+                                             "expected":  "401 with error body and no user data",
+                                             "observed":  "HTTP 401 with body {\"error\":\"Not authenticated\"}"
+                                         }
+                                     ],
+                           "evidence":  {
+                                            "screenshots":  [
+
+                                                            ],
+                                            "consoleErrors":  "n/a (API assertion)",
+                                            "network":  "GET /auth/me -\u003e 401",
+                                            "files":  [
+                                                          "auth-and-schema/auth-http/VAL-AUTH-005-auth-me-no-cookie-status.txt",
+                                                          "auth-and-schema/auth-http/VAL-AUTH-005-auth-me-no-cookie-headers.txt",
+                                                          "auth-and-schema/auth-http/VAL-AUTH-005-auth-me-no-cookie-body.txt"
+                                                      ]
+                                        },
+                           "issues":  null
+                       },
+                       {
+                           "id":  "VAL-AUTH-007",
+                           "title":  "requireAuth middleware protects interaction endpoints",
+                           "status":  "fail",
+                           "steps":  [
+                                         {
+                                             "action":  "Unauthenticated GET /api/interactions",
+                                             "expected":  "401",
+                                             "observed":  "HTTP 200 text/html (SPA index document)"
+                                         },
+                                         {
+                                             "action":  "Unauthenticated POST /api/interactions",
+                                             "expected":  "401",
+                                             "observed":  "HTTP 200 text/html (SPA index document)"
+                                         },
+                                         {
+                                             "action":  "Unauthenticated GET /api/interactions/:id",
+                                             "expected":  "401",
+                                             "observed":  "HTTP 200 text/html (SPA index document)"
+                                         },
+                                         {
+                                             "action":  "Unauthenticated PATCH /api/interactions/:id",
+                                             "expected":  "401",
+                                             "observed":  "HTTP 200 text/html (SPA index document)"
+                                         },
+                                         {
+                                             "action":  "Unauthenticated DELETE /api/interactions/:id",
+                                             "expected":  "401",
+                                             "observed":  "HTTP 200 text/html (SPA index document)"
+                                         }
+                                     ],
+                           "evidence":  {
+                                            "screenshots":  [
+
+                                                            ],
+                                            "consoleErrors":  "n/a (API assertion)",
+                                            "network":  "GET/POST/PATCH/DELETE /api/interactions* -\u003e 200 text/html (not 401)",
+                                            "files":  [
+                                                          "auth-and-schema/auth-http/VAL-AUTH-007-get-interactions-status.txt",
+                                                          "auth-and-schema/auth-http/VAL-AUTH-007-get-interactions-headers.txt",
+                                                          "auth-and-schema/auth-http/VAL-AUTH-007-post-interactions-status.txt",
+                                                          "auth-and-schema/auth-http/VAL-AUTH-007-post-interactions-headers.txt",
+                                                          "auth-and-schema/auth-http/VAL-AUTH-007-get-interactions-id-status.txt",
+                                                          "auth-and-schema/auth-http/VAL-AUTH-007-get-interactions-id-headers.txt",
+                                                          "auth-and-schema/auth-http/VAL-AUTH-007-patch-interactions-id-status.txt",
+                                                          "auth-and-schema/auth-http/VAL-AUTH-007-patch-interactions-id-headers.txt",
+                                                          "auth-and-schema/auth-http/VAL-AUTH-007-delete-interactions-id-status.txt",
+                                                          "auth-and-schema/auth-http/VAL-AUTH-007-delete-interactions-id-headers.txt"
+                                                      ]
+                                        },
+                           "issues":  "Interaction endpoints are not returning auth failures; requests are falling through to SPA HTML with 200."
+                       },
+                       {
+                           "id":  "VAL-AUTH-008",
+                           "title":  "Legacy endpoints remain unprotected",
+                           "status":  "pass",
+                           "steps":  [
+                                         {
+                                             "action":  "GET /api/contacts unauthenticated",
+                                             "expected":  "200",
+                                             "observed":  "HTTP 200"
+                                         },
+                                         {
+                                             "action":  "GET /api/outreach-attempts unauthenticated",
+                                             "expected":  "200",
+                                             "observed":  "HTTP 200"
+                                         },
+                                         {
+                                             "action":  "GET /api/experiments unauthenticated",
+                                             "expected":  "200",
+                                             "observed":  "HTTP 200"
+                                         },
+                                         {
+                                             "action":  "GET /api/settings unauthenticated",
+                                             "expected":  "200",
+                                             "observed":  "HTTP 200"
+                                         },
+                                         {
+                                             "action":  "POST /api/contacts unauthenticated with utv-auth-http- prefix payload",
+                                             "expected":  "Legacy endpoint still works without auth",
+                                             "observed":  "HTTP 201 Created with created contact payload"
+                                         }
+                                     ],
+                           "evidence":  {
+                                            "screenshots":  [
+
+                                                            ],
+                                            "consoleErrors":  "n/a (API assertion)",
+                                            "network":  "GET legacy endpoints -\u003e 200, POST /api/contacts -\u003e 201",
+                                            "files":  [
+                                                          "auth-and-schema/auth-http/VAL-AUTH-008-get-contacts-status.txt",
+                                                          "auth-and-schema/auth-http/VAL-AUTH-008-get-outreach-attempts-status.txt",
+                                                          "auth-and-schema/auth-http/VAL-AUTH-008-get-experiments-status.txt",
+                                                          "auth-and-schema/auth-http/VAL-AUTH-008-get-settings-status.txt",
+                                                          "auth-and-schema/auth-http/VAL-AUTH-008-post-contacts-status.txt",
+                                                          "auth-and-schema/auth-http/VAL-AUTH-008-post-contacts-headers.txt",
+                                                          "auth-and-schema/auth-http/VAL-AUTH-008-post-contacts-body.txt"
+                                                      ]
+                                        },
+                           "issues":  null
+                       },
+                       {
+                           "id":  "VAL-AUTH-010",
+                           "title":  "Invalid OAuth callback handled gracefully",
+                           "status":  "blocked",
+                           "steps":  [
+                                         {
+                                             "action":  "GET /auth/google/callback (missing code)",
+                                             "expected":  "No crash; clean redirect/error handling",
+                                             "observed":  "HTTP 302 redirect to Google OAuth authorize URL"
+                                         },
+                                         {
+                                             "action":  "GET /auth/google/callback?code=utv-auth-http-...-invalid-code",
+                                             "expected":  "No crash; clean redirect/error handling",
+                                             "observed":  "HTTP 500 JSON {\"message\":\"The OAuth client was not found.\"}"
+                                         },
+                                         {
+                                             "action":  "GET /auth/me after invalid callback",
+                                             "expected":  "Server still responsive and unauthenticated state preserved",
+                                             "observed":  "HTTP 401 {\"error\":\"Not authenticated\"}"
+                                         }
+                                     ],
+                           "evidence":  {
+                                            "screenshots":  [
+
+                                                            ],
+                                            "consoleErrors":  "n/a (API assertion)",
+                                            "network":  "GET /auth/google/callback -\u003e 302 (missing code); GET /auth/google/callback?code=invalid -\u003e 500 JSON; follow-up GET /auth/me -\u003e 401",
+                                            "files":  [
+                                                          "auth-and-schema/auth-http/VAL-AUTH-010-callback-missing-code-status.txt",
+                                                          "auth-and-schema/auth-http/VAL-AUTH-010-callback-missing-code-headers.txt",
+                                                          "auth-and-schema/auth-http/VAL-AUTH-010-callback-invalid-code-status.txt",
+                                                          "auth-and-schema/auth-http/VAL-AUTH-010-callback-invalid-code-headers.txt",
+                                                          "auth-and-schema/auth-http/VAL-AUTH-010-callback-invalid-code-body.txt",
+                                                          "auth-and-schema/auth-http/VAL-AUTH-010-auth-me-after-invalid-callback-status.txt",
+                                                          "auth-and-schema/auth-http/VAL-AUTH-010-auth-me-after-invalid-callback-body.txt"
+                                                      ]
+                                        },
+                           "issues":  "Could not verify the required DB condition (no corrupt users row) because DB inspection was unavailable in this isolation shell (DATABASE_URL missing; psql not installed)."
+                       }
+                   ],
+    "frictions":  [
+                      {
+                          "description":  "Initial JSON request payload quoting through PowerShell string interpolation produced malformed JSON and 400 parse errors; switched to --data-binary with JSON files.",
+                          "resolved":  true,
+                          "resolution":  "Re-ran POST/PATCH requests using ConvertTo-Json output files and curl --data-binary @file.",
+                          "affectedAssertions":  [
+                                                     "VAL-AUTH-007",
+                                                     "VAL-AUTH-008"
+                                                 ]
+                      }
+                  ],
+    "blockers":  [
+                     {
+                         "description":  "Cannot perform direct DB verification for VAL-AUTH-010 corrupt-row check from this shell environment.",
+                         "affectedAssertions":  [
+                                                    "VAL-AUTH-010"
+                                                ],
+                         "quickFixAttempted":  "Checked process environment (DATABASE_URL not present) and attempted psql availability check (psql not installed)."
+                     }
+                 ],
+    "summary":  "Tested 5 assigned assertions: 3 passed (VAL-AUTH-001, VAL-AUTH-005, VAL-AUTH-008), 1 failed (VAL-AUTH-007), 1 blocked (VAL-AUTH-010 due unavailable DB verification despite graceful HTTP handling evidence)."
+}
