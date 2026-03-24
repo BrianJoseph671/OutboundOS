@@ -83,15 +83,12 @@ export function useContacts() {
   };
 
   const bulkCreate = async (items: InsertContact[]): Promise<Contact[]> => {
-    try {
-      await apiRequest("POST", "/api/contacts/bulk-import", {
-        contacts: items,
-      });
-      invalidate();
-    } catch {
-      // Non-blocking — invalidate to refresh the list
-      invalidate();
-    }
+    // Do NOT catch errors here — let them propagate so that TanStack Query's
+    // onError handler (and any caller awaiting this function) can surface them.
+    await apiRequest("POST", "/api/contacts/bulk-import", {
+      contacts: items,
+    });
+    invalidate();
     return [];
   };
 

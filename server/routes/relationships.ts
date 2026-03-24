@@ -106,7 +106,25 @@ relationshipsRouter.post("/", async (req: Request, res: Response) => {
       }
     }
 
-    const interaction = await storage.createInteraction({ ...body, userId });
+    let interaction: Awaited<ReturnType<typeof storage.createInteraction>>;
+    try {
+      interaction = await storage.createInteraction({ ...body, userId });
+    } catch (dbError: unknown) {
+      // PostgreSQL unique constraint violation (error code 23505):
+      // The global unique index on (channel, source_id) can fire even when the
+      // user-scoped pre-check above found nothing — e.g. a different user already
+      // owns a row with the same (channel, source_id). Return 409 instead of 500.
+      if (
+        dbError !== null &&
+        typeof dbError === "object" &&
+        (dbError as { code?: string }).code === "23505"
+      ) {
+        return res
+          .status(409)
+          .json({ error: "Interaction with this channel and source_id already exists" });
+      }
+      throw dbError;
+    }
     res.status(201).json(interaction);
   } catch (error) {
     console.error("[POST /interactions] Error:", error);
@@ -130,6 +148,15 @@ relationshipsRouter.patch("/:id", async (req: Request, res: Response) => {
       body = updateInteractionBodySchema.parse(req.body);
     } catch (validationError) {
       return res.status(400).json({ error: "Invalid interaction data" });
+    }
+
+    // If the request body includes a contactId reassignment, verify that the
+    // new contact exists and belongs to the authenticated user before updating.
+    if (body.contactId != null) {
+      const newContact = await storage.getContact(body.contactId);
+      if (!newContact || newContact.userId !== userId) {
+        return res.status(404).json({ error: "Contact not found" });
+      }
     }
 
     const interaction = await storage.updateInteraction(req.params.id, userId, body);

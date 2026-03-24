@@ -59,6 +59,24 @@ function LoadingScreen() {
 }
 
 /**
+ * Centered full-screen error state — shown when /auth/me fails with a
+ * non-401 error (e.g. network failure, 500). Provides a retry button so
+ * the user is never stuck on an infinite loading spinner.
+ */
+function ErrorScreen({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="flex h-screen w-full flex-col items-center justify-center gap-4">
+      <p className="text-sm text-muted-foreground">
+        Unable to connect. Please check your connection and try again.
+      </p>
+      <Button variant="outline" size="sm" onClick={onRetry}>
+        Retry
+      </Button>
+    </div>
+  );
+}
+
+/**
  * AppShell is rendered only for authenticated users.
  * It receives the resolved user object so the header can display user info
  * and provide a logout action.
@@ -117,10 +135,16 @@ function AppShell({ user }: { user: AuthUser }) {
  * AuthGate: fetches /auth/me on mount.
  * - While loading → shows a centered spinner
  * - On 401 (user === null) → redirects to /auth/google
+ * - On non-401 error (network failure, 500, etc.) → shows error UI with retry
  * - On 200 (user present) → renders the full app shell
  */
 function AuthGate() {
-  const { data: user, isLoading } = useQuery<AuthUser | null>({
+  const {
+    data: user,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<AuthUser | null>({
     queryKey: ["/auth/me"],
     queryFn: getQueryFn<AuthUser | null>({ on401: "returnNull" }),
     retry: false,
@@ -134,6 +158,11 @@ function AuthGate() {
       window.location.href = "/auth/google";
     }
   }, [isLoading, user]);
+
+  // Non-401 error (network failure, 500, etc.) — show error UI with retry
+  if (isError) {
+    return <ErrorScreen onRetry={() => void refetch()} />;
+  }
 
   // Still fetching or about to redirect — show spinner
   if (isLoading || user === null || user === undefined) {
