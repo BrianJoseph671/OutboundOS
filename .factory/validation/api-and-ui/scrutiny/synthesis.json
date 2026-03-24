@@ -1,6 +1,6 @@
 {
   "milestone": "api-and-ui",
-  "round": 1,
+  "round": 2,
   "status": "fail",
   "validatorsRun": {
     "test": {
@@ -20,73 +20,39 @@
     }
   },
   "reviewsSummary": {
-    "total": 3,
+    "total": 1,
     "passed": 0,
-    "failed": 3,
+    "failed": 1,
     "failedFeatures": [
-      "interactions-api-routes",
-      "frontend-auth-and-contacts-migration",
-      "contact-detail-enrichment-and-interaction-timeline"
+      "fix-api-and-ui-scrutiny-issues"
     ]
   },
   "blockingIssues": [
     {
-      "featureId": "interactions-api-routes",
+      "featureId": "fix-api-and-ui-scrutiny-issues",
       "severity": "blocking",
-      "description": "POST /api/interactions pre-check is user-scoped for (channel, source_id) conflicts while the DB unique partial index is global, so duplicates from another user can surface as 500 insert errors instead of the required 409 conflict."
+      "description": "client/src/hooks/useContacts.ts bulkCreate still discards bulk-import API response details by returning an empty array instead of propagating the API payload/error details."
     },
     {
-      "featureId": "interactions-api-routes",
+      "featureId": "fix-api-and-ui-scrutiny-issues",
       "severity": "blocking",
-      "description": "PATCH /api/interactions/:id allows contactId reassignment without validating ownership of the new contact, creating a cross-user linkage/isolation gap."
-    },
-    {
-      "featureId": "frontend-auth-and-contacts-migration",
-      "severity": "blocking",
-      "description": "useContacts.bulkCreate() discards bulk-import response/error details and returns an empty array, enabling false-success UI messaging even when some imports fail."
-    },
-    {
-      "featureId": "contact-detail-enrichment-and-interaction-timeline",
-      "severity": "blocking",
-      "description": "Required rendering-focused tests were not delivered: the added interaction timeline tests are explicitly logic-only and do not render InteractionTimeline or contact detail UI states."
+      "description": "Rendering-focused tests are still missing for interaction timeline/contact-detail UI states; the current interaction timeline test suite remains logic-only."
     }
   ],
   "appliedUpdates": [],
   "suggestedGuidanceUpdates": [
     {
       "target": "AGENTS.md",
-      "suggestion": "Update mission guidance that still says npm run check has 10 pre-existing TypeScript errors.",
-      "evidence": "Current implementation milestone validators pass with `npm run check` exit code 0; stale guidance can cause workers to skip full typecheck verification.",
-      "isSystemic": true
-    },
-    {
-      "target": "backend-worker skill",
-      "suggestion": "Clarify RED-first guidance for inherited worktrees and partially implemented features by requiring explicit documentation when tests cannot be written first.",
-      "evidence": "Review of interactions-api-routes reported implementation edits occurred before tests while skill procedure mandates strict tests-first.",
-      "isSystemic": false
-    },
-    {
-      "target": "frontend-worker skill",
-      "suggestion": "Add explicit acceptance criteria mapping from feature requirements to required test types (including rendering tests) and document inherited-worktree handling when preexisting implementation is present.",
-      "evidence": "Two api-and-ui frontend reviews flagged mismatch between required testing behavior and actual implementation/testing sequence.",
-      "isSystemic": true
-    },
-    {
-      "target": "AGENTS.md",
-      "suggestion": "Either enforce or explicitly scope exceptions for the rule that all DB operations go through server/storage.ts.",
-      "evidence": "interactions-api-routes introduced a direct Drizzle dedup query in routes.ts despite mission guidance stating all DB operations should go through storage.",
+      "suggestion": "Add a mission-planning rule that fix features created from scrutiny failures must include all unresolved blocking issues, or explicitly document intentional deferrals with rationale.",
+      "evidence": "Round 1 synthesis listed four blocking issues, but fix feature scope only covered three and left a known blocker unresolved.",
       "isSystemic": false
     }
   ],
   "rejectedObservations": [
     {
-      "observation": "Auth-gated UI validation is expensive due to OAuth/session setup complexity.",
+      "observation": "Mission AGENTS guidance is stale on expected baseline typecheck failures.",
       "reason": "already-documented"
-    },
-    {
-      "observation": "frontend-worker tests-first mismatch was reported by multiple reviews.",
-      "reason": "duplicate"
     }
   ],
-  "previousRound": null
+  "previousRound": ".factory/validation/api-and-ui/scrutiny/synthesis.round1.json"
 }
