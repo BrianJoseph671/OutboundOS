@@ -13,6 +13,7 @@ import {
 import batchRouter from "./routes/batch";
 import integrationsRouter from "./routes/integrations";
 import { appendResearchedTag } from "./utils/contactTags";
+import { authRouter } from "./auth";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -110,6 +111,9 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express,
 ): Promise<Server> {
+  // Auth routes (Google OAuth, session management)
+  app.use(authRouter);
+
   // Batch processing routes
   app.use("/api/batch", batchRouter);
 
