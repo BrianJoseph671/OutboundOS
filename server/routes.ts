@@ -10,13 +10,15 @@ import {
   insertExperimentSchema,
   insertSettingsSchema,
   users,
+  contacts,
 } from "@shared/schema";
 import batchRouter from "./routes/batch";
 import integrationsRouter from "./routes/integrations";
+import { relationshipsRouter } from "./routes/relationships";
 import { appendResearchedTag } from "./utils/contactTags";
 import { authRouter } from "./auth";
 import { db } from "./db";
-import { eq } from "drizzle-orm";
+import { eq, or, and, sql } from "drizzle-orm";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -134,6 +136,11 @@ export async function registerRoutes(
 
   // Integration routes (OAuth, meetings)
   app.use("/api/integrations", integrationsRouter);
+
+  // Relationships routes (interaction CRUD — all require auth)
+  // Mounted at /api/interactions so requireAuth only guards /api/interactions/*
+  // and does NOT affect legacy /api/contacts, /api/settings, etc.
+  app.use("/api/interactions", relationshipsRouter);
 
   // =========================
   // CERT: Level 3 proof (simple, deterministic)
@@ -272,8 +279,27 @@ export async function registerRoutes(
   // Contacts (legacy - client uses localStorage; kept for backward compatibility)
   app.get("/api/contacts", async (req, res) => {
     try {
-      const contacts = await storage.getContacts();
-      res.json(contacts);
+      const contactList = await storage.getContacts();
+
+      // Optional sort by last_interaction_at with NULLS LAST support
+      const sortParam = typeof req.query.sort === "string" ? req.query.sort : undefined;
+      const orderParam = typeof req.query.order === "string" ? req.query.order.toLowerCase() : "desc";
+
+      if (sortParam === "last_interaction_at") {
+        const ascending = orderParam === "asc";
+        contactList.sort((a, b) => {
+          const aVal = a.lastInteractionAt;
+          const bVal = b.lastInteractionAt;
+          // NULLS LAST: nulls always sort to the end regardless of direction
+          if (!aVal && !bVal) return 0;
+          if (!aVal) return 1;
+          if (!bVal) return -1;
+          const diff = aVal.getTime() - bVal.getTime();
+          return ascending ? diff : -diff;
+        });
+      }
+
+      res.json(contactList);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch contacts" });
     }
@@ -294,7 +320,32 @@ export async function registerRoutes(
   app.post("/api/contacts", async (req, res) => {
     try {
       const validatedData = insertContactSchema.parse(req.body);
-      const userId = (req.user as { id: string } | undefined)?.id ?? await getSeedUserId();
+      const authenticatedUserId = (req.user as { id: string } | undefined)?.id;
+
+      // Dedup check: only when the request is authenticated
+      if (authenticatedUserId) {
+        const dedupConditions: ReturnType<typeof eq>[] = [];
+        if (validatedData.email) {
+          // Case-insensitive email comparison
+          dedupConditions.push(
+            sql`LOWER(${contacts.email}) = ${validatedData.email.toLowerCase()}` as unknown as ReturnType<typeof eq>
+          );
+        }
+        if (validatedData.linkedinUrl) {
+          dedupConditions.push(eq(contacts.linkedinUrl, validatedData.linkedinUrl));
+        }
+        if (dedupConditions.length > 0) {
+          const [existing] = await db
+            .select()
+            .from(contacts)
+            .where(and(eq(contacts.userId, authenticatedUserId), or(...dedupConditions)));
+          if (existing) {
+            return res.status(409).json({ error: "Contact with this email or LinkedIn URL already exists" });
+          }
+        }
+      }
+
+      const userId = authenticatedUserId ?? await getSeedUserId();
       const contact = await storage.createContact({ ...validatedData, userId });
       res.status(201).json(contact);
     } catch (error) {
@@ -304,7 +355,19 @@ export async function registerRoutes(
 
   app.patch("/api/contacts/:id", async (req, res) => {
     try {
-      const contact = await storage.updateContact(req.params.id, req.body);
+      const updateData = { ...req.body };
+
+      // Coerce date string to Date for RelationshipOS timestamp fields
+      if (typeof updateData.lastInteractionAt === "string") {
+        const d = new Date(updateData.lastInteractionAt);
+        updateData.lastInteractionAt = isNaN(d.getTime()) ? null : d;
+      }
+      if (typeof updateData.updatedAt === "string") {
+        const d = new Date(updateData.updatedAt);
+        updateData.updatedAt = isNaN(d.getTime()) ? null : d;
+      }
+
+      const contact = await storage.updateContact(req.params.id, updateData);
       if (!contact) {
         return res.status(404).json({ error: "Contact not found" });
       }
