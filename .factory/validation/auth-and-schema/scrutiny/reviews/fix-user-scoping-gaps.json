@@ -1,0 +1,33 @@
+{
+  "featureId": "fix-user-scoping-gaps",
+  "reviewedAt": "2026-03-24T04:04:14.583430+00:00",
+  "commitId": "72ddeea",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "The fix commit correctly resolves the original blocking issues from both prior failed features: createContact no longer uses an unsafe cast, all server createContact callsites now provide a userId fallback, and interaction methods now require userId and enforce user-scoped WHERE clauses. However, the new seed-user fallback lookup is not actually constrained to the seed user and can resolve an arbitrary user row.",
+    "issues": [
+      {
+        "file": "server/routes.ts",
+        "line": 30,
+        "severity": "blocking",
+        "description": "getSeedUserId() uses `SELECT id FROM users LIMIT 1` instead of querying the seed user identity. In multi-user environments this can assign unauthenticated contact creates/imports/webhook contacts to a non-seed account, violating the feature requirement to use the seed user ID fallback."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "conventions",
+      "observation": "Mission guidance requires seed-user fallback for unauthenticated contact creation paths, but does not state how to resolve the seed user deterministically (e.g., by known seed username).",
+      "evidence": "Mission AGENTS.md migration guardrail says to use seed user fallback; scripts/seed.ts defines an explicit seed identity (`SEED_USERNAME = \"brian_placeholder\"`), while server/routes.ts resolves fallback with `from(users).limit(1)`."
+    },
+    {
+      "area": "knowledge",
+      "observation": "Shared library notes document that contacts.user_id must be assigned, but omit the concrete seed identity lookup detail needed to implement safe fallback behavior.",
+      "evidence": ".factory/library/relationshipos-schema-notes.md describes mandatory userId assignment but does not capture the seed-user identifier/pattern from scripts/seed.ts."
+    }
+  ],
+  "addressesFailureFrom": ".factory/validation/auth-and-schema/scrutiny/reviews/schema-users-contacts-interactions.json; .factory/validation/auth-and-schema/scrutiny/reviews/storage-layer-interactions.json",
+  "summary": "Fail. The fix addresses all previously reported blockers around createContact enforcement and interaction user scoping, but introduces a new blocking correctness issue: fallback user resolution is non-deterministic (`LIMIT 1`) and does not guarantee the seed user ID."
+}
