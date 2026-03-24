@@ -1,0 +1,100 @@
+{
+  "milestone": "auth-and-schema",
+  "round": 1,
+  "status": "fail",
+  "validatorsRun": {
+    "test": {
+      "passed": true,
+      "command": "npm --prefix \"C:\\Users\\josep\\downloads\\projects\\outbound os\\outboundos\" exec vitest run",
+      "exitCode": 0
+    },
+    "typecheck": {
+      "passed": true,
+      "command": "npm --prefix \"C:\\Users\\josep\\downloads\\projects\\outbound os\\outboundos\" run check",
+      "exitCode": 0
+    },
+    "lint": {
+      "passed": true,
+      "command": "",
+      "exitCode": 0
+    }
+  },
+  "reviewsSummary": {
+    "total": 5,
+    "passed": 3,
+    "failed": 2,
+    "failedFeatures": [
+      "schema-users-contacts-interactions",
+      "storage-layer-interactions"
+    ]
+  },
+  "blockingIssues": [
+    {
+      "featureId": "schema-users-contacts-interactions",
+      "severity": "blocking",
+      "description": "server/storage.ts createContact force-casts optional userId and can insert NULL into contacts.user_id, which now violates the NOT NULL constraint at runtime."
+    },
+    {
+      "featureId": "schema-users-contacts-interactions",
+      "severity": "blocking",
+      "description": "server/routes.ts POST /api/contacts (and other createContact callsites) forwards payloads parsed from insertContactSchema without guaranteeing userId, causing runtime failures against contacts.user_id NOT NULL."
+    },
+    {
+      "featureId": "storage-layer-interactions",
+      "severity": "blocking",
+      "description": "server/storage.ts getInteraction reads by interaction id only with no user_id filter, violating required user-scoped query behavior."
+    },
+    {
+      "featureId": "storage-layer-interactions",
+      "severity": "blocking",
+      "description": "server/storage.ts updateInteraction and deleteInteraction operate by id only with no user_id filter, enabling potential cross-user writes/deletes."
+    },
+    {
+      "featureId": "storage-layer-interactions",
+      "severity": "blocking",
+      "description": "server/storage.ts getInteractionBySourceId filters only by (channel, source_id) and does not scope by user_id."
+    }
+  ],
+  "appliedUpdates": [
+    {
+      "target": "library",
+      "description": "Added .factory/library/relationshipos-schema-notes.md documenting that contacts.user_id is DB NOT NULL and contact-create paths must always assign userId before storage.createContact.",
+      "sourceFeature": "schema-users-contacts-interactions"
+    }
+  ],
+  "suggestedGuidanceUpdates": [
+    {
+      "target": "skills/backend-worker",
+      "suggestion": "Add an explicit exception path for infrastructure/type-only or storage-only tasks so mandatory RED-first and manual endpoint checks can be adapted with written justification.",
+      "evidence": "setup-test-infrastructure, storage-layer-interactions, google-oauth-auth, and fix-preexisting-typescript-errors reviews all flagged procedure mismatch around strict TDD/manual endpoint expectations.",
+      "isSystemic": true
+    },
+    {
+      "target": "AGENTS.md",
+      "suggestion": "Clarify instruction precedence when a feature explicitly requires fixing pre-existing baseline issues that mission guidance otherwise says not to fix.",
+      "evidence": "fix-preexisting-typescript-errors review flagged conflict between mission AGENTS \"do not fix pre-existing TypeScript errors\" guidance and the feature's explicit objective; similar mismatch appeared in google-oauth-auth review context.",
+      "isSystemic": true
+    },
+    {
+      "target": "AGENTS.md",
+      "suggestion": "Add a migration guardrail: when adding new NOT NULL foreign keys to legacy entities, either make input schemas required simultaneously or enforce fallback assignment in every write path before rollout.",
+      "evidence": "schema-users-contacts-interactions review found contacts.user_id DB NOT NULL while insert/schema and create routes still allowed missing userId.",
+      "isSystemic": true
+    }
+  ],
+  "rejectedObservations": [
+    {
+      "observation": "storage-layer-interactions note that backend-worker requires manual endpoint checks for storage-only work",
+      "reason": "duplicate"
+    },
+    {
+      "observation": "google-oauth-auth note about strict RED-first ordering not followed",
+      "reason": "duplicate"
+    },
+    {
+      "observation": "schema-users-contacts-interactions claim that missing library knowledge alone caused the defect",
+      "reason": "ambiguous"
+    }
+  ],
+  "previousRound": null
+}

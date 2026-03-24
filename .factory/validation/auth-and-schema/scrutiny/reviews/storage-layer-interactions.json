@@ -1,0 +1,46 @@
+{
+  "featureId": "storage-layer-interactions",
+  "reviewedAt": "2026-03-24T03:46:43Z",
+  "commitId": "6d74f86",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "The feature correctly adds interaction CRUD storage methods, raw_content truncation, and contact timestamp updates, but it misses required multi-user query scoping on several interaction methods.",
+    "issues": [
+      {
+        "file": "server/storage.ts",
+        "line": 501,
+        "severity": "blocking",
+        "description": "getInteraction queries by interaction id only (`where(eq(interactions.id, id))`) with no `user_id` filter. This conflicts with the feature's expected behavior that interaction queries are user-scoped."
+      },
+      {
+        "file": "server/storage.ts",
+        "line": 545,
+        "severity": "blocking",
+        "description": "updateInteraction updates rows by id only (`where(eq(interactions.id, id))`) without `user_id` scoping, allowing cross-user writes through the storage layer if an id is known."
+      },
+      {
+        "file": "server/storage.ts",
+        "line": 554,
+        "severity": "blocking",
+        "description": "deleteInteraction deletes by id only (`where(eq(interactions.id, id))`) without `user_id` scoping, allowing cross-user deletes through the storage layer if an id is known."
+      },
+      {
+        "file": "server/storage.ts",
+        "line": 562,
+        "severity": "blocking",
+        "description": "getInteractionBySourceId filters by `(channel, source_id)` only and does not include `user_id`, which does not satisfy the expected user-scoped query behavior."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "skills",
+      "observation": "The backend-worker skill's procedure appears over-prescriptive for storage-only work by requiring manual API endpoint checks in all backend features.",
+      "evidence": "`.factory/skills/backend-worker/SKILL.md` Step 4 requires starting dev server and manual endpoint tests, but transcript skeleton for worker session `762776c1-988d-4c9a-8113-613e617ab250` shows storage-only validation via tests/typecheck commands without endpoint work."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "Implementation is substantial and well-tested for CRUD behavior, raw_content truncation, and contact timestamp updates, but fails the feature's user-scoping expectation because multiple interaction methods query/update/delete without `user_id` filters."
+}

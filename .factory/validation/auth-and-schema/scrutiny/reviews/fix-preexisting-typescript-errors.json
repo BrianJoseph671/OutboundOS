@@ -1,0 +1,26 @@
+{
+  "featureId": "fix-preexisting-typescript-errors",
+  "reviewedAt": "2026-03-24T03:46:24.991462+00:00",
+  "commitId": "0d3dc85",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The commit applies focused, minimal type-level fixes across the four targeted files and aligns with the feature's expected behavior. Changes match the listed TypeScript failures (createdAt cast mismatch, undefined-to-null mapping, block-scoped function declarations under ES5 strict mode, company typing in batch route, and jsonb typing in research packet upsert) without introducing functional logic changes.",
+    "issues": []
+  },
+  "sharedStateObservations": [
+    {
+      "area": "skills",
+      "observation": "backend-worker skill enforces a strict TDD-first step, but this feature is explicitly a pre-existing TypeScript-only fix task; the worker skipped RED tests and marked followedProcedure=false. The procedure likely needs an explicit exception path for compile/type-only maintenance tasks.",
+      "evidence": ".factory/skills/backend-worker/SKILL.md (\"2. Write Tests First (RED)\"); handoff skillFeedback in C:/Users/josep/.factory/missions/c1a7d1d0-5e9b-443d-ba5f-cdb1acba01d8/handoffs/2026-03-24T02-16-04-855Z__fix-preexisting-typescript-errors__975ec22c-ab41-46af-964b-afc3de8ab723.json shows followedProcedure=false with justified deviation."
+    },
+    {
+      "area": "conventions",
+      "observation": "Mission-level AGENTS guidance says workers should not fix pre-existing TypeScript errors, but this feature explicitly requires fixing those pre-existing errors. This creates conflicting instructions for workers.",
+      "evidence": "C:/Users/josep/.factory/missions/c1a7d1d0-5e9b-443d-ba5f-cdb1acba01d8/AGENTS.md section \"Known Pre-Existing Issues (Do Not Fix)\" vs feature description in C:/Users/josep/.factory/missions/c1a7d1d0-5e9b-443d-ba5f-cdb1acba01d8/features.json for id fix-preexisting-typescript-errors."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "Review complete: feature passes scrutiny. The implementation is minimal, directly addresses the listed pre-existing TypeScript errors, and matches expected behavior for typecheck/test stability. No blocking or non-blocking code defects were found in the reviewed diff."
+}
