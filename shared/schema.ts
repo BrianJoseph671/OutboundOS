@@ -1,7 +1,31 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, boolean, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, boolean, integer, timestamp, jsonb, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+
+// users must be defined before contacts so contacts.userId FK reference resolves cleanly
+export const users = pgTable("users", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  username: text("username").notNull().unique(),
+  password: text("password").notNull(),
+  // OAuth / profile columns (Phase 1)
+  email: text("email").unique(),
+  fullName: text("full_name"),
+  googleId: text("google_id").unique(),
+  avatarUrl: text("avatar_url"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertUserSchema = createInsertSchema(users).pick({
+  username: true,
+  password: true,
+  email: true,
+  fullName: true,
+  googleId: true,
+  avatarUrl: true,
+});
+export type InsertUser = z.infer<typeof insertUserSchema>;
+export type User = typeof users.$inferSelect;
 
 export const contacts = pgTable("contacts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -22,9 +46,26 @@ export const contacts = pgTable("contacts", {
   researchStatus: text("research_status"),
   researchData: text("research_data"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+  // RelationshipOS columns (Phase 1)
+  // NOTE: notNull is enforced at DB level; insertContactSchema keeps userId optional
+  // for backward compat with existing code that doesn't yet have auth (userId set by
+  // the server from the session). The NOT NULL constraint is enforced by the database.
+  userId: varchar("user_id").notNull().references(() => users.id),
+  source: text("source"),
+  tier: text("tier").notNull().default("cool"),
+  lastInteractionAt: timestamp("last_interaction_at"),
+  lastInteractionChannel: text("last_interaction_channel"),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("contacts_user_id_idx").on(table.userId),
+]);
 
-export const insertContactSchema = createInsertSchema(contacts).omit({ id: true });
+// userId is optional in the Zod schema for backward compatibility with code that
+// doesn't yet set userId from a session (auth is added in a later feature).
+// The NOT NULL constraint is enforced at the database level.
+export const insertContactSchema = createInsertSchema(contacts)
+  .omit({ id: true })
+  .extend({ userId: z.string().optional() });
 export type InsertContact = z.infer<typeof insertContactSchema>;
 export type Contact = typeof contacts.$inferSelect;
 
@@ -107,19 +148,7 @@ export type LengthOption = typeof lengthOptions[number];
 export const variableOptions = ["hook", "cta", "length", "tone"] as const;
 export type VariableOption = typeof variableOptions[number];
 
-export const users = pgTable("users", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  username: text("username").notNull().unique(),
-  password: text("password").notNull(),
-});
-
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
-});
-
-export type InsertUser = z.infer<typeof insertUserSchema>;
-export type User = typeof users.$inferSelect;
+// users table is now defined before contacts (at top of file)
 
 export const airtableConfig = pgTable("airtable_config", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -215,3 +244,33 @@ export const researchPackets = pgTable("research_packets", {
 export const insertResearchPacketSchema = createInsertSchema(researchPackets);
 export type InsertResearchPacket = z.infer<typeof insertResearchPacketSchema>;
 export type ResearchPacket = typeof researchPackets.$inferSelect;
+
+// Interactions table (Phase 1 — RelationshipOS)
+export const interactions = pgTable("interactions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  contactId: varchar("contact_id").notNull().references(() => contacts.id, { onDelete: "cascade" }),
+  channel: text("channel").notNull(),
+  direction: text("direction").notNull(),
+  occurredAt: timestamp("occurred_at").notNull(),
+  sourceId: text("source_id"),
+  summary: text("summary"),
+  rawContent: text("raw_content"),
+  openThreads: text("open_threads"),
+  ingestedAt: timestamp("ingested_at").notNull().defaultNow(),
+}, (table) => [
+  // Partial unique index: prevent duplicate external interactions per channel+source_id
+  uniqueIndex("interactions_channel_source_id_unique")
+    .on(table.channel, table.sourceId)
+    .where(sql`${table.sourceId} IS NOT NULL`),
+  // Performance index for contact detail lookups
+  index("interactions_user_contact_idx").on(table.userId, table.contactId),
+  // Performance index for chronological queries
+  index("interactions_user_occurred_at_idx").on(table.userId, table.occurredAt),
+]);
+
+export const insertInteractionSchema = createInsertSchema(interactions, {
+  occurredAt: z.coerce.date(),
+}).omit({ id: true, ingestedAt: true });
+export type InsertInteraction = z.infer<typeof insertInteractionSchema>;
+export type Interaction = typeof interactions.$inferSelect;

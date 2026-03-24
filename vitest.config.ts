@@ -5,6 +5,8 @@ export default defineConfig({
   test: {
     environment: "node",
     globals: true,
+    // Load .env before running tests so DATABASE_URL is available
+    setupFiles: ["dotenv/config"],
   },
   resolve: {
     alias: {

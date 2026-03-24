@@ -1439,7 +1439,7 @@ export default function Contacts() {
       const data = await response.json();
       const incoming = data.contacts ?? [];
       if (incoming.length === 0) return { created: 0, updated: 0, lastSyncAt: data.lastSyncAt };
-      const toCreate: Array<Omit<Contact, "id" | "createdAt">> = [];
+      const toCreate: InsertContact[] = [];
       let updated = 0;
       for (const c of incoming) {
         const existing = contacts.find(

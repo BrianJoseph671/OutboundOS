@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { Contact } from "@shared/schema";
+import type { Contact, InsertContact } from "@shared/schema";
 import {
   getContacts,
   createContact as createContactStorage,
@@ -31,7 +31,7 @@ export function useContacts() {
   const invalidate = () => queryClient.invalidateQueries({ queryKey: CONTACTS_QUERY_KEY });
 
   const createContact = async (
-    input: Omit<Contact, "id" | "createdAt">
+    input: InsertContact
   ): Promise<Contact> => {
     const contact = createContactStorage(input);
     await syncContactToServer(contact);
@@ -41,7 +41,7 @@ export function useContacts() {
 
   const updateContact = async (
     id: string,
-    updates: Partial<Omit<Contact, "id" | "createdAt">>
+    updates: Partial<InsertContact>
   ): Promise<Contact | undefined> => {
     const contact = updateContactStorage(id, updates);
     if (contact) await syncContactToServer(contact);
@@ -62,7 +62,7 @@ export function useContacts() {
   };
 
   const bulkCreate = async (
-    items: Array<Omit<Contact, "id" | "createdAt">>
+    items: InsertContact[]
   ): Promise<Contact[]> => {
     const created = bulkCreateContacts(items);
     for (const c of created) await syncContactToServer(c);

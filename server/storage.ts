@@ -87,7 +87,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createContact(insertContact: InsertContact): Promise<Contact> {
-    const [contact] = await db.insert(contacts).values(insertContact).returning();
+    // userId is optional in InsertContact (Zod schema) for backward compat, but
+    // required at the DB level. Use a type assertion to satisfy Drizzle's insert type.
+    const [contact] = await db.insert(contacts).values({
+      ...insertContact,
+      userId: insertContact.userId as string,
+    }).returning();
     return contact;
   }
 
@@ -155,6 +160,7 @@ export class DatabaseStorage implements IStorage {
         tags: contact.tags,
         researchStatus: contact.researchStatus,
         researchData: contact.researchData,
+        userId: contact.userId,
       })
       .returning();
     return created!;

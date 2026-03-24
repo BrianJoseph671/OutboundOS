@@ -1,10 +1,12 @@
-import type { Contact } from "@shared/schema";
+import type { Contact, InsertContact } from "@shared/schema";
 
 const STORAGE_KEY = "outbound-contacts";
 
-export type ContactInput = Omit<Contact, "id" | "createdAt"> & {
+// ContactInput is based on InsertContact so new nullable/defaulted columns are optional.
+// id and createdAt are overridden to allow pre-assigned or string values from localStorage.
+export type ContactInput = InsertContact & {
   id?: string;
-  createdAt?: string;
+  createdAt?: Date | string | null;
 };
 
 function loadContacts(): Contact[] {
@@ -51,7 +53,7 @@ export function createContact(
 
 export function updateContact(
   id: string,
-  updates: Partial<Omit<Contact, "id" | "createdAt">>
+  updates: Partial<InsertContact>
 ): Contact | undefined {
   const contacts = loadContacts();
   const idx = contacts.findIndex((c) => c.id === id);
