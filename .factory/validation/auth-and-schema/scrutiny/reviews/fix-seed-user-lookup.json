@@ -1,0 +1,15 @@
+{
+  "featureId": "fix-seed-user-lookup",
+  "reviewedAt": "2026-03-24T00:11:25.5750324-04:00",
+  "commitId": "3ba6e44",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "Pass. The fix commit directly resolves the prior blocking issue by replacing non-deterministic seed-user fallback lookup (`LIMIT 1`) with deterministic lookup by `username = 'brian_placeholder'`, and it adds a clear remediation error when the seed user is missing.",
+    "issues": []
+  },
+  "sharedStateObservations": [],
+  "addressesFailureFrom": ".factory/validation/auth-and-schema/scrutiny/reviews/fix-user-scoping-gaps.json",
+  "summary": "Reviewed transcript skeleton, handoff, prior failed review, and both relevant diffs (72ddeea and 3ba6e44). The original blocker in getSeedUserId() is fixed in current code (`server/routes.ts`) using deterministic username-based resolution aligned with `scripts/seed.ts`, with no new blocking issues found."
+}
