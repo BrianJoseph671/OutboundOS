@@ -16,6 +16,7 @@ import integrationsRouter from "./routes/integrations";
 import { appendResearchedTag } from "./utils/contactTags";
 import { authRouter } from "./auth";
 import { db } from "./db";
+import { eq } from "drizzle-orm";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -23,13 +24,14 @@ const upload = multer({
 });
 
 // Seed user ID cache — lazily resolved on first createContact call that lacks req.user.
-// The seed user is the first user row inserted during schema migration.
+// The seed user is the known placeholder user 'brian_placeholder' created by scripts/seed.ts.
+const SEED_USERNAME = "brian_placeholder";
 let _seedUserId: string | null = null;
 async function getSeedUserId(): Promise<string> {
   if (_seedUserId) return _seedUserId;
-  const [firstUser] = await db.select({ id: users.id }).from(users).limit(1);
-  if (!firstUser) throw new Error("No seed user found — run db:push or db:migrate first");
-  _seedUserId = firstUser.id;
+  const [seedUser] = await db.select({ id: users.id }).from(users).where(eq(users.username, SEED_USERNAME)).limit(1);
+  if (!seedUser) throw new Error("Seed user not found. Run: npx tsx scripts/seed.ts");
+  _seedUserId = seedUser.id;
   return _seedUserId;
 }
 
