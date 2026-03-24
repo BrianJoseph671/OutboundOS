@@ -1,0 +1,39 @@
+{
+  "featureId": "fix-api-and-ui-scrutiny-issues",
+  "reviewedAt": "2026-03-24T14:38:52.025312+00:00",
+  "commitId": "8080223",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "The fix commit correctly resolves the interactions API issues (23505 -> 409 and PATCH contactId ownership checks) and adds AuthGate non-401 error handling, but two prior blocking items remain unresolved: bulk import result propagation and the missing rendering-focused interaction timeline tests.",
+    "issues": [
+      {
+        "file": "client/src/hooks/useContacts.ts",
+        "line": 92,
+        "severity": "blocking",
+        "description": "bulkCreate still discards the bulk-import API response by always returning an empty array (`return []`). This does not satisfy the required \"propagate the API response properly so errors surface to the UI\" behavior and preserves the false-success risk called out in the prior review when server-side per-item failures occur."
+      },
+      {
+        "file": "client/src/__tests__/interaction-timeline.test.ts",
+        "line": 5,
+        "severity": "blocking",
+        "description": "The original blocking issue from contact-detail-enrichment-and-interaction-timeline remains: tests are still explicitly logic-only and do not render InteractionTimeline/contact-detail UI states. The fix commit does not address this requirement."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "conventions",
+      "observation": "Mission planning/scope drift: prior synthesis listed 4 blocking issues, but this fix feature was scoped as \"Fix 3 blocking issues\" and did not include the interaction timeline rendering-test blocker, leaving a known blocker unresolved.",
+      "evidence": ".factory/validation/api-and-ui/scrutiny/synthesis.json:51 lists missing rendering-focused tests as blocking; mission features entry at C:/Users/josep/.factory/missions/c1a7d1d0-5e9b-443d-ba5f-cdb1acba01d8/features.json:514 scopes this fix as \"Fix 3 blocking issues\"."
+    },
+    {
+      "area": "conventions",
+      "observation": "Mission AGENTS guidance is stale on typecheck baseline and can mislead workers to expect `npm run check` failure.",
+      "evidence": "Mission AGENTS says typecheck has 10 pre-existing failures (C:/Users/josep/.factory/missions/c1a7d1d0-5e9b-443d-ba5f-cdb1acba01d8/AGENTS.md:82), while the fix handoff reports `npm run check` exitCode 0 (handoff ...a863f7cd...json line with command `npm run check`)."
+    }
+  ],
+  "addressesFailureFrom": ".factory/validation/api-and-ui/scrutiny/synthesis.json",
+  "summary": "Reviewed handoff, transcript skeleton, skill context, commit 8080223 diff, and prior failed reviews. Interactions/API and AuthGate fixes are implemented, but the feature still fails scrutiny because bulkCreate does not propagate the bulk-import response payload and the previously blocking interaction timeline rendering-test gap remains unresolved."
+}

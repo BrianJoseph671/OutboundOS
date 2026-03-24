@@ -27,6 +27,7 @@ import {
   Zap,
   Upload,
   Brain,
+  Heart,
   LogOut,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
@@ -35,6 +36,7 @@ const menuItems = [
   { title: "Prospect Research", url: "/prospect-research", icon: FlaskConical },
   { title: "Import Prospects", url: "/research-setup", icon: Upload },
   { title: "Contacts", url: "/contacts", icon: Users },
+  { title: "Relationships", url: "/contacts", icon: Heart },
   { title: "Outreach Log", url: "/outreach-log", icon: FileText },
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Decisions", url: "/decisions", icon: Brain },

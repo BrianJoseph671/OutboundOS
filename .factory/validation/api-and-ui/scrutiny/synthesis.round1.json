@@ -1,0 +1,92 @@
+{
+  "milestone": "api-and-ui",
+  "round": 1,
+  "status": "fail",
+  "validatorsRun": {
+    "test": {
+      "passed": true,
+      "command": "npm --prefix \"C:\\Users\\josep\\downloads\\projects\\outbound os\\outboundos\" exec vitest run",
+      "exitCode": 0
+    },
+    "typecheck": {
+      "passed": true,
+      "command": "npm --prefix \"C:\\Users\\josep\\downloads\\projects\\outbound os\\outboundos\" run check",
+      "exitCode": 0
+    },
+    "lint": {
+      "passed": true,
+      "command": "",
+      "exitCode": 0
+    }
+  },
+  "reviewsSummary": {
+    "total": 3,
+    "passed": 0,
+    "failed": 3,
+    "failedFeatures": [
+      "interactions-api-routes",
+      "frontend-auth-and-contacts-migration",
+      "contact-detail-enrichment-and-interaction-timeline"
+    ]
+  },
+  "blockingIssues": [
+    {
+      "featureId": "interactions-api-routes",
+      "severity": "blocking",
+      "description": "POST /api/interactions pre-check is user-scoped for (channel, source_id) conflicts while the DB unique partial index is global, so duplicates from another user can surface as 500 insert errors instead of the required 409 conflict."
+    },
+    {
+      "featureId": "interactions-api-routes",
+      "severity": "blocking",
+      "description": "PATCH /api/interactions/:id allows contactId reassignment without validating ownership of the new contact, creating a cross-user linkage/isolation gap."
+    },
+    {
+      "featureId": "frontend-auth-and-contacts-migration",
+      "severity": "blocking",
+      "description": "useContacts.bulkCreate() discards bulk-import response/error details and returns an empty array, enabling false-success UI messaging even when some imports fail."
+    },
+    {
+      "featureId": "contact-detail-enrichment-and-interaction-timeline",
+      "severity": "blocking",
+      "description": "Required rendering-focused tests were not delivered: the added interaction timeline tests are explicitly logic-only and do not render InteractionTimeline or contact detail UI states."
+    }
+  ],
+  "appliedUpdates": [],
+  "suggestedGuidanceUpdates": [
+    {
+      "target": "AGENTS.md",
+      "suggestion": "Update mission guidance that still says npm run check has 10 pre-existing TypeScript errors.",
+      "evidence": "Current implementation milestone validators pass with `npm run check` exit code 0; stale guidance can cause workers to skip full typecheck verification.",
+      "isSystemic": true
+    },
+    {
+      "target": "backend-worker skill",
+      "suggestion": "Clarify RED-first guidance for inherited worktrees and partially implemented features by requiring explicit documentation when tests cannot be written first.",
+      "evidence": "Review of interactions-api-routes reported implementation edits occurred before tests while skill procedure mandates strict tests-first.",
+      "isSystemic": false
+    },
+    {
+      "target": "frontend-worker skill",
+      "suggestion": "Add explicit acceptance criteria mapping from feature requirements to required test types (including rendering tests) and document inherited-worktree handling when preexisting implementation is present.",
+      "evidence": "Two api-and-ui frontend reviews flagged mismatch between required testing behavior and actual implementation/testing sequence.",
+      "isSystemic": true
+    },
+    {
+      "target": "AGENTS.md",
+      "suggestion": "Either enforce or explicitly scope exceptions for the rule that all DB operations go through server/storage.ts.",
+      "evidence": "interactions-api-routes introduced a direct Drizzle dedup query in routes.ts despite mission guidance stating all DB operations should go through storage.",
+      "isSystemic": false
+    }
+  ],
+  "rejectedObservations": [
+    {
+      "observation": "Auth-gated UI validation is expensive due to OAuth/session setup complexity.",
+      "reason": "already-documented"
+    },
+    {
+      "observation": "frontend-worker tests-first mismatch was reported by multiple reviews.",
+      "reason": "duplicate"
+    }
+  ],
+  "previousRound": null
+}

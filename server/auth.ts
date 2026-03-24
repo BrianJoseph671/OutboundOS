@@ -18,8 +18,10 @@ declare global {
       username: string;
       email: string | null;
       googleId: string | null;
-      displayName: string | null;
-      picture: string | null;
+      fullName: string | null;
+      avatarUrl: string | null;
+      createdAt: Date;
+      password: string | null;
     }
   }
 }
@@ -64,7 +66,12 @@ export async function findOrCreateGoogleUser(profile: {
   if (existing) {
     const [updated] = await db
       .update(users)
-      .set({ googleId, displayName, picture, email: email ?? existing.email })
+      .set({
+        googleId,
+        fullName: displayName,
+        avatarUrl: picture,
+        email: email ?? existing.email,
+      })
       .where(eq(users.id, existing.id))
       .returning();
     return updated as Express.User;
@@ -77,7 +84,13 @@ export async function findOrCreateGoogleUser(profile: {
 
   const [created] = await db
     .insert(users)
-    .values({ username, email, googleId, displayName, picture })
+    .values({
+      username,
+      email,
+      googleId,
+      fullName: displayName,
+      avatarUrl: picture,
+    })
     .returning();
 
   return created as Express.User;
@@ -199,9 +212,20 @@ export async function setupAuth(app: Express) {
       "/api/auth/google",
       passport.authenticate("google", { scope: ["profile", "email"] })
     );
+    app.get(
+      "/auth/google",
+      passport.authenticate("google", { scope: ["profile", "email"] })
+    );
 
     app.get(
       "/api/auth/google/callback",
+      passport.authenticate("google", { failureRedirect: "/?error=google_auth_failed" }),
+      (req: Request, res: Response) => {
+        res.redirect("/");
+      }
+    );
+    app.get(
+      "/auth/google/callback",
       passport.authenticate("google", { failureRedirect: "/?error=google_auth_failed" }),
       (req: Request, res: Response) => {
         res.redirect("/");
@@ -248,13 +272,18 @@ export async function setupAuth(app: Express) {
           username,
           email,
           password: hashedPassword,
-          displayName: displayName || username,
+          fullName: displayName || username,
         })
         .returning();
 
       req.login(user as Express.User, (err) => {
         if (err) return res.status(500).json({ message: "Login after register failed" });
-        return res.json({ id: user.id, email: user.email, displayName: user.displayName });
+        return res.json({
+          id: user.id,
+          email: user.email,
+          displayName: (user as any).fullName ?? null,
+          picture: (user as any).avatarUrl ?? null,
+        });
       });
     } catch (err: any) {
       console.error("[Auth] Register error:", err);
@@ -270,7 +299,12 @@ export async function setupAuth(app: Express) {
       }
       req.login(user, (err) => {
         if (err) return next(err);
-        return res.json({ id: user.id, email: user.email, displayName: user.displayName, picture: user.picture });
+        return res.json({
+          id: user.id,
+          email: user.email,
+          displayName: (user as any).fullName ?? null,
+          picture: (user as any).avatarUrl ?? null,
+        });
       });
     })(req, res, next);
   });
@@ -284,13 +318,39 @@ export async function setupAuth(app: Express) {
       });
     });
   });
+  app.post("/auth/logout", (req: Request, res: Response, next: NextFunction) => {
+    req.logout((err) => {
+      if (err) return next(err);
+      req.session.destroy(() => {
+        res.clearCookie("connect.sid");
+        res.json({ success: true });
+      });
+    });
+  });
 
   app.get("/api/auth/me", (req: Request, res: Response) => {
     if (!req.user) {
       return res.status(401).json({ message: "Not authenticated" });
     }
-    const user = req.user;
-    res.json({ id: user.id, email: user.email, displayName: user.displayName, picture: user.picture });
+    const user = req.user as any;
+    res.json({
+      id: user.id,
+      email: user.email,
+      displayName: user.fullName ?? user.displayName ?? null,
+      picture: user.avatarUrl ?? user.picture ?? null,
+    });
+  });
+  app.get("/auth/me", (req: Request, res: Response) => {
+    if (!req.user) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+    const user = req.user as any;
+    res.json({
+      id: user.id,
+      email: user.email,
+      displayName: user.fullName ?? user.displayName ?? null,
+      picture: user.avatarUrl ?? user.picture ?? null,
+    });
   });
 
   app.get("/api/auth/config", (_req: Request, res: Response) => {

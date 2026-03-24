@@ -8,6 +8,7 @@ import {
   integrationConnections, type IntegrationConnection, type InsertIntegrationConnection,
   meetings, type Meeting, type InsertMeeting,
   contactMeetings, type ContactMeeting, type InsertContactMeeting,
+  interactions, type Interaction, type InsertInteraction,
   users, type User, type InsertUser
 } from "@shared/schema";
 import { db } from "./db";
@@ -80,6 +81,14 @@ export interface IStorage {
   getMeetingContacts(meetingId: string): Promise<ContactMeeting[]>;
   linkContactToMeeting(data: InsertContactMeeting): Promise<ContactMeeting>;
   unlinkContactFromMeeting(contactId: string, meetingId: string): Promise<boolean>;
+
+  // Interactions
+  getInteractions(userId: string, contactId?: string): Promise<Interaction[]>;
+  getInteraction(id: string, userId: string): Promise<Interaction | undefined>;
+  createInteraction(interaction: InsertInteraction): Promise<Interaction>;
+  updateInteraction(id: string, userId: string, data: Partial<InsertInteraction>): Promise<Interaction | undefined>;
+  deleteInteraction(id: string, userId: string): Promise<boolean>;
+  getInteractionBySourceId(channel: string, sourceId: string, userId: string): Promise<Interaction | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -113,12 +122,22 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createContact(insertContact: InsertContact): Promise<Contact> {
-    const [contact] = await db.insert(contacts).values(insertContact).returning();
+    // userId is optional in InsertContact (Zod schema) for backward compat, but
+    // required at the DB level. Callers must always supply userId (from req.user.id
+    // or the seed user fallback) before calling createContact.
+    const userId = insertContact.userId;
+    if (!userId) {
+      throw new Error("userId is required for createContact — set req.user.id or seed user id before calling");
+    }
+    const [contact] = await db.insert(contacts).values({
+      ...insertContact,
+      userId,
+    }).returning();
     return contact;
   }
 
   async updateContact(id: string, userId: string, contact: Partial<InsertContact>): Promise<Contact | undefined> {
-    const [updated] = await db.update(contacts).set(contact)
+    const [updated] = await db.update(contacts).set({ ...contact, updatedAt: new Date() })
       .where(and(eq(contacts.id, id), eq(contacts.userId, userId)))
       .returning();
     return updated;
@@ -352,9 +371,9 @@ export class DatabaseStorage implements IStorage {
         status: data.status ?? "not_started",
         prospectSnapshot: data.prospectSnapshot ?? null,
         companySnapshot: data.companySnapshot ?? null,
-        signalsHooks: (data.signalsHooks ?? []) as string[],
+        signalsHooks: (data.signalsHooks as string[] | null | undefined) ?? [],
         personalizedMessage: data.personalizedMessage ?? null,
-        variants: (data.variants ?? []) as unknown[],
+        variants: (data.variants as unknown[] | null | undefined) ?? [],
         createdAt: now,
         updatedAt: now,
       })
@@ -541,6 +560,91 @@ export class DatabaseStorage implements IStorage {
       .where(and(eq(contactMeetings.contactId, contactId), eq(contactMeetings.meetingId, meetingId)))
       .returning();
     return result.length > 0;
+  }
+
+  // Interactions
+  async getInteractions(userId: string, contactId?: string): Promise<Interaction[]> {
+    if (contactId !== undefined) {
+      return await db
+        .select()
+        .from(interactions)
+        .where(and(eq(interactions.userId, userId), eq(interactions.contactId, contactId)))
+        .orderBy(desc(interactions.occurredAt));
+    }
+    return await db
+      .select()
+      .from(interactions)
+      .where(eq(interactions.userId, userId))
+      .orderBy(desc(interactions.occurredAt));
+  }
+
+  async getInteraction(id: string, userId: string): Promise<Interaction | undefined> {
+    const [interaction] = await db
+      .select()
+      .from(interactions)
+      .where(and(eq(interactions.id, id), eq(interactions.userId, userId)));
+    return interaction;
+  }
+
+  async createInteraction(interaction: InsertInteraction): Promise<Interaction> {
+    // Truncate raw_content to 10,000 characters if needed
+    const rawContent =
+      interaction.rawContent != null && interaction.rawContent.length > 10000
+        ? interaction.rawContent.slice(0, 10000)
+        : interaction.rawContent;
+
+    const [created] = await db
+      .insert(interactions)
+      .values({ ...interaction, rawContent })
+      .returning();
+
+    // Update parent contact's last_interaction_at and last_interaction_channel
+    // only if the new interaction's occurred_at is newer than the current value
+    const contact = await this.getContact(created.contactId, created.userId);
+    if (contact) {
+      const currentLastAt = contact.lastInteractionAt;
+      if (
+        currentLastAt === null ||
+        currentLastAt === undefined ||
+        created.occurredAt.getTime() > currentLastAt.getTime()
+      ) {
+        await db
+          .update(contacts)
+          .set({
+            lastInteractionAt: created.occurredAt,
+            lastInteractionChannel: created.channel,
+            updatedAt: new Date(),
+          })
+          .where(eq(contacts.id, created.contactId));
+      }
+    }
+
+    return created;
+  }
+
+  async updateInteraction(id: string, userId: string, data: Partial<InsertInteraction>): Promise<Interaction | undefined> {
+    const [updated] = await db
+      .update(interactions)
+      .set(data)
+      .where(and(eq(interactions.id, id), eq(interactions.userId, userId)))
+      .returning();
+    return updated;
+  }
+
+  async deleteInteraction(id: string, userId: string): Promise<boolean> {
+    const [deleted] = await db
+      .delete(interactions)
+      .where(and(eq(interactions.id, id), eq(interactions.userId, userId)))
+      .returning();
+    return !!deleted;
+  }
+
+  async getInteractionBySourceId(channel: string, sourceId: string, userId: string): Promise<Interaction | undefined> {
+    const [interaction] = await db
+      .select()
+      .from(interactions)
+      .where(and(eq(interactions.channel, channel), eq(interactions.sourceId, sourceId), eq(interactions.userId, userId)));
+    return interaction;
   }
 }
 

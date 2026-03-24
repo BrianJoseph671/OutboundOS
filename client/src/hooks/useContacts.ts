@@ -1,9 +1,22 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import type { Contact } from "@shared/schema";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import type { Contact, InsertContact } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 
 const CONTACTS_QUERY_KEY = ["/api/contacts"];
+const STORAGE_KEY = "outbound-contacts";
 
+/**
+ * Write-through cache: persist the latest API-fetched contacts to localStorage
+ * so that code reading directly from contactsStorage (e.g. batch research callbacks)
+ * sees up-to-date data without needing to re-fetch.
+ */
+function writeToLocalStorage(contacts: Contact[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(contacts));
+  } catch {
+    // Non-critical — localStorage might be full or unavailable (e.g. private mode)
+  }
+}
 export type ContactInput = Partial<Omit<Contact, "id" | "createdAt" | "userId">>;
 
 export function useContacts() {
@@ -11,72 +24,73 @@ export function useContacts() {
 
   const { data: contacts = [], isLoading } = useQuery<Contact[]>({
     queryKey: CONTACTS_QUERY_KEY,
-  });
-
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: CONTACTS_QUERY_KEY });
-
-  const createContactMutation = useMutation({
-    mutationFn: async (input: ContactInput) => {
-      const res = await apiRequest("POST", "/api/contacts", input);
-      return res.json() as Promise<Contact>;
-    },
-    onSuccess: () => invalidate(),
-  });
-
-  const updateContactMutation = useMutation({
-    mutationFn: async ({ id, updates }: { id: string; updates: ContactInput }) => {
-      const res = await apiRequest("PATCH", `/api/contacts/${id}`, updates);
-      return res.json() as Promise<Contact>;
-    },
-    onSuccess: () => invalidate(),
-  });
-
-  const deleteContactMutation = useMutation({
-    mutationFn: async (id: string) => {
-      await apiRequest("DELETE", `/api/contacts/${id}`);
-      return true;
-    },
-    onSuccess: () => invalidate(),
-  });
-
-  const deleteContactsMutation = useMutation({
-    mutationFn: async (ids: string[]) => {
-      const res = await apiRequest("POST", "/api/contacts/bulk-delete", { ids });
-      const data = await res.json();
-      return data.count as number;
-    },
-    onSuccess: () => invalidate(),
-  });
-
-  const bulkCreateMutation = useMutation({
-    mutationFn: async (items: ContactInput[]) => {
-      const res = await apiRequest("POST", "/api/contacts/bulk-create", { contacts: items });
-      const data = await res.json();
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/contacts");
+      const data: Contact[] = await res.json();
+      // Write-through: keep localStorage in sync so contactsStorage helpers
+      // (getContact, updateContactStorage) still work for non-hook callers.
+      writeToLocalStorage(data);
       return data;
     },
-    onSuccess: () => invalidate(),
+    staleTime: 30_000, // 30 seconds — contacts change infrequently
   });
 
-  const createContact = async (input: ContactInput): Promise<Contact> => {
-    return createContactMutation.mutateAsync(input);
+  const invalidate = () =>
+    queryClient.invalidateQueries({ queryKey: CONTACTS_QUERY_KEY });
+
+  const createContact = async (input: InsertContact): Promise<Contact> => {
+    const res = await apiRequest("POST", "/api/contacts", input);
+    const contact: Contact = await res.json();
+    invalidate();
+    return contact;
   };
 
-  const updateContact = async (id: string, updates: ContactInput): Promise<Contact | undefined> => {
-    return updateContactMutation.mutateAsync({ id, updates });
+  const updateContact = async (
+    id: string,
+    updates: Partial<InsertContact>,
+  ): Promise<Contact | undefined> => {
+    try {
+      const res = await apiRequest("PATCH", `/api/contacts/${id}`, updates);
+      const contact: Contact = await res.json();
+      invalidate();
+      return contact;
+    } catch {
+      invalidate();
+      return undefined;
+    }
   };
 
   const deleteContact = async (id: string): Promise<boolean> => {
-    return deleteContactMutation.mutateAsync(id);
+    try {
+      await apiRequest("DELETE", `/api/contacts/${id}`);
+      invalidate();
+      return true;
+    } catch {
+      return false;
+    }
   };
 
   const deleteContacts = async (ids: string[]): Promise<number> => {
-    return deleteContactsMutation.mutateAsync(ids);
+    try {
+      const res = await apiRequest("POST", "/api/contacts/bulk-delete", {
+        ids,
+      });
+      const data = await res.json();
+      invalidate();
+      return (data as { count?: number }).count ?? 0;
+    } catch {
+      return 0;
+    }
   };
 
-  const bulkCreate = async (items: ContactInput[]): Promise<Contact[]> => {
-    await bulkCreateMutation.mutateAsync(items);
-    await invalidate();
-    return queryClient.getQueryData<Contact[]>(CONTACTS_QUERY_KEY) || [];
+  const bulkCreate = async (items: InsertContact[]): Promise<Contact[]> => {
+    // Do NOT catch errors here — let them propagate so that TanStack Query's
+    // onError handler (and any caller awaiting this function) can surface them.
+    await apiRequest("POST", "/api/contacts/bulk-import", {
+      contacts: items,
+    });
+    invalidate();
+    return [];
   };
 
   return {

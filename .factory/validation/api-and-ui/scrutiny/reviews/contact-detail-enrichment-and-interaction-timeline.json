@@ -1,0 +1,33 @@
+{
+  "featureId": "contact-detail-enrichment-and-interaction-timeline",
+  "reviewedAt": "2026-03-24T09:53:02.7862762-04:00",
+  "commitId": "db5cdb4",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "Core UI implementation is strong (hook, timeline component, log form, and contact detail enrichment), but the test deliverable is not fully satisfied: required rendering-focused tests were not implemented.",
+    "issues": [
+      {
+        "file": "client/src/__tests__/interaction-timeline.test.ts",
+        "line": 5,
+        "severity": "blocking",
+        "description": "The feature explicitly required tests for timeline rendering and empty-state/tier-badge UI behavior, but this test file states it avoids rendering components and only validates isolated logic. It does not render `InteractionTimeline` or `ContactDetail`, so the required rendering coverage is missing."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "skills",
+      "observation": "frontend-worker procedure says to write tests first (RED) and include component rendering tests, but the transcript shows implementation edits before test creation, and the resulting tests are logic-only.",
+      "evidence": "worker-transcripts.jsonl (session ac4752b4-8dc6-4898-ab88-aabbc08e5118) shows `Create useInteractions.ts` and `Create interaction-timeline.tsx` before `Create client/src/__tests__/interaction-timeline.test.ts`; skill file `.factory/skills/frontend-worker/SKILL.md` requires RED first and rendering tests."
+    },
+    {
+      "area": "knowledge",
+      "observation": "Auth-gated UI validation remains operationally expensive; workers are still spending many commands attempting local session workarounds before concluding OAuth is blocked.",
+      "evidence": "Transcript skeleton includes repeated session/debug script attempts (`scripts/check-sessions.js`, `scripts/create-test-session.js`, `scripts/create-session.ts`) and `SESSION_SECRET not set in environment` during this feature run despite existing auth notes in `.factory/library/user-testing.md`."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "Reviewed handoff, transcript skeleton, skill, and commit db5cdb4 diff. Implementation quality is generally good, but the feature is marked FAIL because required rendering-oriented tests were not delivered; only logic-level tests were added."
+}

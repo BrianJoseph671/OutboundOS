@@ -1,0 +1,45 @@
+{
+  "featureId": "schema-users-contacts-interactions",
+  "reviewedAt": "2026-03-24T03:49:32Z",
+  "commitId": "0ef71be",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "Core schema changes (users/contacts/interactions columns, constraints, and indexes) are implemented, but the feature introduces a blocking runtime regression: contact creation paths accept payloads without userId while the DB now enforces contacts.user_id NOT NULL.",
+    "issues": [
+      {
+        "file": "server/storage.ts",
+        "line": 98,
+        "severity": "blocking",
+        "description": "createContact force-casts optional userId (`userId: insertContact.userId as string`) instead of guaranteeing a value. When userId is omitted, inserts hit a DB NOT NULL violation on contacts.user_id at runtime."
+      },
+      {
+        "file": "server/routes.ts",
+        "line": 279,
+        "severity": "blocking",
+        "description": "POST /api/contacts parses with insertContactSchema (where userId is optional in shared/schema.ts) and forwards directly to storage.createContact without attaching a fallback/derived userId. This path, and similar createContact callsites (e.g. webhook auto-create at routes.ts:681), now fails against contacts.user_id NOT NULL."
+      },
+      {
+        "file": "server/__tests__/schema.test.ts",
+        "line": 456,
+        "severity": "non_blocking",
+        "description": "VAL-SCHEMA-005 test checks `SELECT * FROM users LIMIT 1`, which does not actually assert the seed user exists (username/placeholder fields). This can pass even if the specific seed behavior regresses."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "conventions",
+      "observation": "Mission docs do not currently codify a transitional convention for assigning contacts.user_id while legacy unauthenticated contact-creation routes are still active. This gap allowed a NOT NULL schema rollout that breaks existing create flows.",
+      "evidence": "shared/schema.ts:53 + shared/schema.ts:66-68 make DB user_id required but input optional; server/routes.ts:279-282 and 681-685 call storage.createContact without guaranteed userId."
+    },
+    {
+      "area": "knowledge",
+      "observation": "A key schema rollout nuance (db:push + NOT NULL user_id with legacy create flows) is not captured in .factory/library. This increases risk of repeated regressions in future schema/auth work.",
+      "evidence": "Transcript skeleton for workerSessionId 69b9ac8b-828d-4ff4-9569-f7dbdc7aaaac shows iterative recovery around user_id nullability/backfill, while .factory/library/architecture.md and environment.md do not document this migration hazard."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "Schema/table/index implementation is largely correct, but the feature should not be accepted as-is because contact creation can now fail at runtime when userId is omitted. Blocking remediation is needed to guarantee user_id assignment on create paths (or make schema/input constraints consistent) before marking complete."
+}

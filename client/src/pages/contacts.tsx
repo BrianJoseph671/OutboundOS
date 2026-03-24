@@ -1,9 +1,11 @@
 import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
+import { format } from "date-fns";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useContacts, type ContactInput } from "@/hooks/useContacts";
 import { useAirtableConfig } from "@/hooks/useAirtableConfig";
+import { InteractionTimeline } from "@/components/interaction-timeline";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -340,6 +342,25 @@ function ContactCard({
   );
 }
 
+// ── Tier badge color mapping ──────────────────────────────────────────────────
+
+type ContactTier = "warm" | "cool" | "cold" | "vip";
+
+function getTierBadgeClass(tier: string): string {
+  switch (tier as ContactTier) {
+    case "warm":
+      return "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 border-0";
+    case "cool":
+      return "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 border-0";
+    case "cold":
+      return "bg-slate-100 text-slate-600 dark:bg-slate-800/60 dark:text-slate-300 border-0";
+    case "vip":
+      return "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300 border-0";
+    default:
+      return "bg-slate-100 text-slate-600 dark:bg-slate-800/60 dark:text-slate-300 border-0";
+  }
+}
+
 function ContactDetail({
   contact,
   onClose,
@@ -400,6 +421,11 @@ function ContactDetail({
     }
   };
 
+  // Format last interaction date
+  const lastInteractionDisplay = contact.lastInteractionAt
+    ? format(new Date(contact.lastInteractionAt), "MMM d, yyyy")
+    : null;
+
   return (
     <div className="space-y-6">
       <div className="flex items-start gap-4">
@@ -415,7 +441,27 @@ function ContactDetail({
           {contact.headline && (
             <p className="text-muted-foreground mt-1">{contact.headline}</p>
           )}
-          <div className="flex items-center gap-4 mt-3 flex-wrap">
+          {/* Tier badge + Source tag row */}
+          <div className="flex items-center gap-2 mt-2 flex-wrap">
+            {contact.tier && (
+              <Badge
+                variant="secondary"
+                className={`text-xs capitalize ${getTierBadgeClass(contact.tier)}`}
+                data-testid="badge-contact-tier"
+              >
+                {contact.tier}
+              </Badge>
+            )}
+            {contact.source && (
+              <span
+                className="text-xs text-muted-foreground"
+                data-testid="tag-contact-source"
+              >
+                {contact.source}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-4 mt-2 flex-wrap">
             {contact.company && (
               <span className="flex items-center gap-1 text-sm">
                 <Building2 className="w-4 h-4 text-muted-foreground" />
@@ -428,6 +474,15 @@ function ContactDetail({
                 {contact.location}
               </span>
             )}
+          </div>
+          {/* Last interaction date */}
+          <div className="mt-2" data-testid="text-last-interaction">
+            <span className="text-xs text-muted-foreground">
+              Last interaction:{" "}
+              <span className="font-medium">
+                {lastInteractionDisplay ?? "No interactions yet"}
+              </span>
+            </span>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -550,6 +605,9 @@ function ContactDetail({
           </p>
         </div>
       )}
+
+      {/* Interaction Timeline */}
+      <InteractionTimeline contactId={contact.id} />
 
       <div className="space-y-3">
         <h3 className="text-sm font-medium">Outreach History</h3>
@@ -1452,7 +1510,7 @@ export default function Contacts() {
       const data = await response.json();
       const incoming = data.contacts ?? [];
       if (incoming.length === 0) return { created: 0, updated: 0, lastSyncAt: data.lastSyncAt };
-      const toCreate: ContactInput[] = [];
+      const toCreate: InsertContact[] = [];
       let updated = 0;
       for (const c of incoming) {
         const existing = contacts.find(

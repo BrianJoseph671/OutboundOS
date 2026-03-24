@@ -1,0 +1,48 @@
+(node:27240) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)
+    at JSON.parse (<anonymous>)
+    at parse (C:\Users\josep\Downloads\Projects\Outbound OS\OutboundOS\node_modules\body-parser\lib\types\json.js:92:19)
+    at C:\Users\josep\Downloads\Projects\Outbound OS\OutboundOS\node_modules\body-parser\lib\read.js:128:18
+    at AsyncResource.runInAsyncScope (node:async_hooks:214:14)
+    at invokeCallback (C:\Users\josep\Downloads\Projects\Outbound OS\OutboundOS\node_modules\raw-body\index.js:238:16)
+    at done (C:\Users\josep\Downloads\Projects\Outbound OS\OutboundOS\node_modules\raw-body\index.js:227:7)
+    at IncomingMessage.onEnd (C:\Users\josep\Downloads\Projects\Outbound OS\OutboundOS\node_modules\raw-body\index.js:287:7)
+    at IncomingMessage.emit (node:events:508:28)
+    at endReadableNT (node:internal/streams/readable:1701:12)
+    at process.processTicksAndRejections (node:internal/process/task_queues:89:21)
+SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)
+    at JSON.parse (<anonymous>)
+    at parse (C:\Users\josep\Downloads\Projects\Outbound OS\OutboundOS\node_modules\body-parser\lib\types\json.js:92:19)
+    at C:\Users\josep\Downloads\Projects\Outbound OS\OutboundOS\node_modules\body-parser\lib\read.js:128:18
+    at AsyncResource.runInAsyncScope (node:async_hooks:214:14)
+    at invokeCallback (C:\Users\josep\Downloads\Projects\Outbound OS\OutboundOS\node_modules\raw-body\index.js:238:16)
+    at done (C:\Users\josep\Downloads\Projects\Outbound OS\OutboundOS\node_modules\raw-body\index.js:227:7)
+    at IncomingMessage.onEnd (C:\Users\josep\Downloads\Projects\Outbound OS\OutboundOS\node_modules\raw-body\index.js:287:7)
+    at IncomingMessage.emit (node:events:508:28)
+    at endReadableNT (node:internal/streams/readable:1701:12)
+    at process.processTicksAndRejections (node:internal/process/task_queues:89:21)
+
+A PostCSS plugin did not pass the `from` option to `postcss.parse`. This may cause imported assets to be incorrectly transformed. If you've recently added a PostCSS plugin that raised this warning, please contact the package author to fix the issue.
+SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)
+    at JSON.parse (<anonymous>)
+    at parse (C:\Users\josep\Downloads\Projects\Outbound OS\OutboundOS\node_modules\body-parser\lib\types\json.js:92:19)
+    at C:\Users\josep\Downloads\Projects\Outbound OS\OutboundOS\node_modules\body-parser\lib\read.js:128:18
+    at AsyncResource.runInAsyncScope (node:async_hooks:214:14)
+    at invokeCallback (C:\Users\josep\Downloads\Projects\Outbound OS\OutboundOS\node_modules\raw-body\index.js:238:16)
+    at done (C:\Users\josep\Downloads\Projects\Outbound OS\OutboundOS\node_modules\raw-body\index.js:227:7)
+    at IncomingMessage.onEnd (C:\Users\josep\Downloads\Projects\Outbound OS\OutboundOS\node_modules\raw-body\index.js:287:7)
+    at IncomingMessage.emit (node:events:508:28)
+    at endReadableNT (node:internal/streams/readable:1701:12)
+    at process.processTicksAndRejections (node:internal/process/task_queues:89:21)
+TokenError: The OAuth client was not found.
+    at OAuth2Strategy.parseErrorResponse (C:\Users\josep\Downloads\Projects\Outbound OS\OutboundOS\node_modules\passport-oauth2\lib\strategy.js:373:12)
+    at OAuth2Strategy._createOAuthError (C:\Users\josep\Downloads\Projects\Outbound OS\OutboundOS\node_modules\passport-oauth2\lib\strategy.js:420:16)
+    at C:\Users\josep\Downloads\Projects\Outbound OS\OutboundOS\node_modules\passport-oauth2\lib\strategy.js:177:45
+    at C:\Users\josep\Downloads\Projects\Outbound OS\OutboundOS\node_modules\oauth\lib\oauth2.js:196:18
+    at passBackControl (C:\Users\josep\Downloads\Projects\Outbound OS\OutboundOS\node_modules\oauth\lib\oauth2.js:132:9)
+    at IncomingMessage.<anonymous> (C:\Users\josep\Downloads\Projects\Outbound OS\OutboundOS\node_modules\oauth\lib\oauth2.js:157:7)
+    at IncomingMessage.emit (node:events:520:35)
+    at endReadableNT (node:internal/streams/readable:1701:12)
+    at process.processTicksAndRejections (node:internal/process/task_queues:89:21)
+^C^C^C
