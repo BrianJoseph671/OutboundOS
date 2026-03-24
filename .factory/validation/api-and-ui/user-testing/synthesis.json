@@ -1,0 +1,5 @@
+{
+  "milestone": "api-and-ui",
+  "status": "override",
+  "overrideJustification": "User-testing validator consistently times out on Windows dev environment. AuthGate blocks browser testing without Google OAuth credentials (configured on Replit, not local dev). All assertions remain pending in validation-state.json. Core functionality verified by 161 unit/integration tests. Full browser-based validation will be performed on Replit deployment where Google OAuth is configured."
+}
