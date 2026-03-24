@@ -1,0 +1,39 @@
+{
+  "featureId": "interactions-api-routes",
+  "reviewedAt": "2026-03-24T09:53:23.2666003-04:00",
+  "commitId": "e572e4b",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "The feature mostly implements the required routes and test coverage, but there are blocking correctness/isolation gaps in interaction conflict handling and PATCH behavior.",
+    "issues": [
+      {
+        "file": "server/routes/relationships.ts",
+        "line": 103,
+        "severity": "blocking",
+        "description": "POST /api/interactions checks source_id conflicts with user-scoped lookup only (`getInteractionBySourceId(..., userId)`), but the DB enforces a global unique partial index on `(channel, source_id)` (`shared/schema.ts:263-265`). A duplicate from another user bypasses this pre-check and can fail at insert with a 500 (`server/routes/relationships.ts:111-113`) instead of the required 409 conflict response."
+      },
+      {
+        "file": "server/routes/relationships.ts",
+        "line": 135,
+        "severity": "blocking",
+        "description": "PATCH /api/interactions/:id accepts `contactId` via `updateInteractionBodySchema` (`createInteractionBodySchema.partial()` at line 25) and forwards it directly to storage without verifying the new contact belongs to the authenticated user. A user who owns an interaction can re-point it to another user's contact ID, breaking multi-user data isolation."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "conventions",
+      "observation": "AGENTS says all DB operations should go through `server/storage.ts`, but this feature added a direct Drizzle query inside `server/routes.ts` for dedup lookup. This suggests the convention is either being violated in practice or needs explicit exceptions documented.",
+      "evidence": "Mission AGENTS.md: \"ALL database operations go through server/storage.ts\"; implementation uses `db.select().from(contacts)...` in `server/routes.ts:338-341`."
+    },
+    {
+      "area": "skills",
+      "observation": "The backend-worker skill's strict \"Write Tests First (RED)\" procedure did not match actual execution flow for this feature; implementation edits were made before the new API test file was created.",
+      "evidence": "Transcript skeleton shows `Create server/routes/relationships.ts` and multiple `Edit server/routes.ts` calls before `Create server/__tests__/interactions-api.test.ts`; handoff skillFeedback also requests adjusting this guidance."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "Reviewed handoff, commit e572e4b diff, transcript skeleton, and skill/context docs. Marking FAIL due to two blocking issues: (1) source_id conflict handling can return 500 instead of 409 because route pre-check is user-scoped while DB uniqueness is global, and (2) PATCH allows cross-user contact reassignment via contactId without ownership validation."
+}

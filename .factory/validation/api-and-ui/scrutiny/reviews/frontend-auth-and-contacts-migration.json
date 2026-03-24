@@ -1,0 +1,39 @@
+{
+  "featureId": "frontend-auth-and-contacts-migration",
+  "reviewedAt": "2026-03-24T13:53:27.741426Z",
+  "commitId": "1420d1f",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "The feature mostly implements the requested auth gate, API-first contacts fetch, sidebar item, and tests, but the migrated bulk import path in useContacts drops API result/error information and can report successful imports when records fail server-side.",
+    "issues": [
+      {
+        "file": "client/src/hooks/useContacts.ts",
+        "line": 85,
+        "severity": "blocking",
+        "description": "bulkCreate() ignores the /api/contacts/bulk-import response payload and always returns [], while also swallowing request failures. This hides partial/full import failures from callers. The server returns per-item success/failed/error details (server/routes.ts:416-450), but callers show success toasts after await bulkCreate(...) (client/src/pages/contacts.tsx:792-793, client/src/components/import-modal.tsx:213-214), so UI can claim imports succeeded when they did not."
+      },
+      {
+        "file": "client/src/App.tsx",
+        "line": 139,
+        "severity": "non_blocking",
+        "description": "AuthGate has no error-state handling for non-401 /auth/me failures. If getQueryFn throws (e.g., 500/network error), user remains undefined and the component stays on LoadingScreen indefinitely instead of surfacing an error/retry path."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "conventions",
+      "observation": "Mission AGENTS.md appears stale about TypeScript baseline health and may cause workers to skip meaningful full typecheck verification.",
+      "evidence": "Mission AGENTS.md says `npm run check` has 10 pre-existing errors (line 82), but this feature handoff records `npm run check` exitCode 0 with no errors (handoff ...a809a241...json lines 21-23)."
+    },
+    {
+      "area": "skills",
+      "observation": "frontend-worker skill procedure is rigid about RED-first and does not explicitly describe the inherited-worktree case where implementation already exists from a prior worker session.",
+      "evidence": "Skill states `Write Tests First (RED)` (./.factory/skills/frontend-worker/SKILL.md:33). Handoff skillFeedback explicitly requests this nuance be documented for partially pre-implemented features (handoff ...a809a241...json lines 107-108)."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "Review failed due to a blocking data-flow issue in migrated useContacts bulkCreate: API import result/failure information is discarded, enabling false-success UI messaging on failed imports."
+}
