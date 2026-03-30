@@ -29,6 +29,13 @@
       "when": 1774889077261,
       "tag": "0003_ordinary_iron_patriot",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1774900000000,
+      "tag": "0005_relationship_os_triggers",
+      "breakpoints": true
     }
   ]
 }
