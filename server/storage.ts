@@ -22,10 +22,9 @@ export interface IStorage {
 
   // Contacts
   getContacts(userId: string, options?: { sort?: string; order?: string }): Promise<Contact[]>;
-  getContact(id: string, userId?: string): Promise<Contact | undefined>;
+  getContact(id: string, userId: string): Promise<Contact | undefined>;
   createContact(contact: InsertContact): Promise<Contact>;
   updateContact(id: string, userId: string, contact: Partial<InsertContact>): Promise<Contact | undefined>;
-  updateContact(id: string, contact: Partial<InsertContact>): Promise<Contact | undefined>;
   upsertContact(contact: Contact, userId: string): Promise<Contact>;
   deleteContact(id: string, userId: string): Promise<boolean>;
   deleteContacts(ids: string[], userId: string): Promise<number>;
@@ -128,14 +127,9 @@ export class DatabaseStorage implements IStorage {
       .orderBy(contacts.createdAt);
   }
 
-  async getContact(id: string, userId?: string): Promise<Contact | undefined> {
-    if (userId !== undefined) {
-      const [contact] = await db.select().from(contacts)
-        .where(and(eq(contacts.id, id), eq(contacts.userId, userId)));
-      return contact;
-    }
+  async getContact(id: string, userId: string): Promise<Contact | undefined> {
     const [contact] = await db.select().from(contacts)
-      .where(eq(contacts.id, id));
+      .where(and(eq(contacts.id, id), eq(contacts.userId, userId)));
     return contact;
   }
 
@@ -154,22 +148,10 @@ export class DatabaseStorage implements IStorage {
     return contact;
   }
 
-  async updateContact(id: string, userIdOrData: string | Partial<InsertContact>, data?: Partial<InsertContact>): Promise<Contact | undefined> {
-    let userId: string | undefined;
-    let updateData: Partial<InsertContact>;
-    if (typeof userIdOrData === "string") {
-      userId = userIdOrData;
-      updateData = data!;
-    } else {
-      userId = undefined;
-      updateData = userIdOrData;
-    }
-    const whereClause = userId !== undefined
-      ? and(eq(contacts.id, id), eq(contacts.userId, userId))
-      : eq(contacts.id, id);
+  async updateContact(id: string, userId: string, contact: Partial<InsertContact>): Promise<Contact | undefined> {
     const [updated] = await db.update(contacts)
-      .set({ ...updateData, updatedAt: new Date() })
-      .where(whereClause)
+      .set({ ...contact, updatedAt: new Date() })
+      .where(and(eq(contacts.id, id), eq(contacts.userId, userId)))
       .returning();
     return updated;
   }

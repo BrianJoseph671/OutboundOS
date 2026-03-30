@@ -109,7 +109,7 @@ describe("createInteraction", () => {
     );
     testIds.interactionIds.push(result.id);
 
-    const contact = await storage.getContact(freshContact.id);
+    const contact = await storage.getContact(freshContact.id, userId);
     expect(contact).toBeDefined();
     expect(contact!.lastInteractionAt).toBeInstanceOf(Date);
     // Should be equal to occurred (allow 1 second tolerance for timestamp precision)
@@ -134,7 +134,7 @@ describe("createInteraction", () => {
     testIds.interactionIds.push(olderInteraction.id);
 
     // Contact's last_interaction_at should still be the newer date
-    const contact = await storage.getContact(contactId);
+    const contact = await storage.getContact(contactId, userId);
     expect(contact!.lastInteractionAt).toBeDefined();
     expect(contact!.lastInteractionAt!.getTime()).toBeGreaterThanOrEqual(newer.getTime() - 1000);
     // The channel should still be "email" from the newer interaction, not "whatsapp"
@@ -481,7 +481,7 @@ describe("updateContact — updated_at always set", () => {
     // Small delay to ensure clock advances
     await new Promise(resolve => setTimeout(resolve, 50));
 
-    const updated = await storage.updateContact(contact.id, { notes: "Updated notes" });
+    const updated = await storage.updateContact(contact.id, userId, { notes: "Updated notes" });
     expect(updated).toBeDefined();
     expect(updated!.updatedAt).toBeInstanceOf(Date);
     if (originalUpdatedAt) {
@@ -496,7 +496,7 @@ describe("updateContact — updated_at always set", () => {
     await new Promise(resolve => setTimeout(resolve, 50));
 
     const staleDate = new Date("2020-01-01T00:00:00Z");
-    const updated = await storage.updateContact(contact.id, {
+    const updated = await storage.updateContact(contact.id, userId, {
       notes: "New notes",
       updatedAt: staleDate,
     });

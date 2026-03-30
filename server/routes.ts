@@ -17,9 +17,6 @@ import integrationsRouter from "./routes/integrations";
 import { relationshipsRouter } from "./routes/relationships";
 import { appendResearchedTag } from "./utils/contactTags";
 import { isAuthenticated } from "./auth";
-import { db } from "./db";
-import { users } from "@shared/schema";
-import { eq as eqDrizzle } from "drizzle-orm";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -113,29 +110,10 @@ async function parseWithOpenAI(text: string): Promise<any> {
 //   return parsed;
 // }
 
-// ── Seed user ID cache (for unprotected legacy routes) ────────────────────────
-let _seedUserId: string | null = null;
-async function getSeedUserId(): Promise<string> {
-  if (_seedUserId) return _seedUserId;
-  // Use the first user in the DB (consistent with what legacy routes and tests expect)
-  const [first] = await db.select({ id: users.id }).from(users).limit(1);
-  if (first) {
-    _seedUserId = first.id;
-    return _seedUserId;
-  }
-  throw new Error("No seed user found — run migrations and scripts/seed.ts first");
-}
-
 export async function registerRoutes(
   httpServer: Server,
   app: Express,
 ): Promise<Server> {
-  // NOTE: The legacy /api/* catch-all auth middleware has been removed.
-  // /api/interactions/* requires auth (handled by requireAuth in relationshipsRouter).
-  // Legacy endpoints (contacts, outreach-attempts, experiments, settings) remain
-  // unprotected for backward compatibility — unauthenticated requests fall back
-  // to the seed user's ID.
-
   // Webhook secret middleware: validates X-Webhook-Secret header for /api/webhooks/*
   const validateWebhookSecret = (req: Request, res: Response, next: NextFunction) => {
     const secret = process.env.WEBHOOK_SECRET;
@@ -159,6 +137,25 @@ export async function registerRoutes(
 
   // Relationships / interactions routes (auth required — enforced inside router)
   app.use("/api/interactions", relationshipsRouter);
+
+  // ── Catch-all authentication for all /api/* routes ────────────────────────
+  // Every /api/* endpoint requires authentication EXCEPT the whitelisted paths:
+  //   /api/auth/*               — public auth endpoints (login, register, Google OAuth)
+  //   /api/cert/*               — health/debug endpoints (no user context needed)
+  //   /api/webhooks/*           — n8n callbacks (auth via X-Webhook-Secret header)
+  //   /api/integrations/callback/* — OAuth callbacks (handled by integrationsRouter)
+  app.use("/api", (req: Request, res: Response, next: NextFunction) => {
+    const path = req.path;
+    if (
+      path.startsWith("/auth/") ||
+      path.startsWith("/cert/") ||
+      path.startsWith("/webhooks/") ||
+      path.startsWith("/integrations/callback/")
+    ) {
+      return next();
+    }
+    return isAuthenticated(req, res, next);
+  });
 
   // =========================
   // CERT: Level 3 proof (simple, deterministic)
@@ -234,7 +231,7 @@ export async function registerRoutes(
   // Contacts
   app.get("/api/contacts", async (req, res) => {
     try {
-      const userId = req.user?.id ?? await getSeedUserId();
+      const userId = req.user!.id;
       const sort = typeof req.query.sort === "string" ? req.query.sort : undefined;
       const order = typeof req.query.order === "string" ? req.query.order : undefined;
       const contactList = await storage.getContacts(userId, { sort, order });
@@ -246,7 +243,7 @@ export async function registerRoutes(
 
   app.get("/api/contacts/:id", async (req, res) => {
     try {
-      const userId = req.user?.id ?? await getSeedUserId();
+      const userId = req.user!.id;
       const contact = await storage.getContact(req.params.id, userId);
       if (!contact) {
         return res.status(404).json({ error: "Contact not found" });
@@ -259,32 +256,28 @@ export async function registerRoutes(
 
   app.post("/api/contacts", async (req, res) => {
     try {
-      // Authenticated users get dedup check; unauthenticated use seed user (no dedup)
-      const authenticatedUserId = req.user?.id;
-      const userId = authenticatedUserId ?? await getSeedUserId();
+      const userId = req.user!.id;
       const validatedData = insertContactSchema.parse({ ...req.body, userId });
 
-      // Dedup check — only for authenticated users
-      if (authenticatedUserId) {
-        const inputEmail: string | undefined = validatedData.email ?? undefined;
-        const inputLinkedin: string | undefined = validatedData.linkedinUrl ?? undefined;
-        if (inputEmail || inputLinkedin) {
-          const existing = await storage.getContacts(authenticatedUserId);
-          const match = existing.find((c) => {
-            if (inputEmail && c.email) {
-              if (c.email.toLowerCase() === inputEmail.toLowerCase()) return true;
-            }
-            if (inputLinkedin && c.linkedinUrl) {
-              if (c.linkedinUrl === inputLinkedin) return true;
-            }
-            return false;
-          });
-          if (match) {
-            return res.status(409).json({
-              error: "Contact with this email or LinkedIn URL already exists",
-              existingId: match.id,
-            });
+      // Dedup check — all authenticated users
+      const inputEmail: string | undefined = validatedData.email ?? undefined;
+      const inputLinkedin: string | undefined = validatedData.linkedinUrl ?? undefined;
+      if (inputEmail || inputLinkedin) {
+        const existing = await storage.getContacts(userId);
+        const match = existing.find((c) => {
+          if (inputEmail && c.email) {
+            if (c.email.toLowerCase() === inputEmail.toLowerCase()) return true;
           }
+          if (inputLinkedin && c.linkedinUrl) {
+            if (c.linkedinUrl === inputLinkedin) return true;
+          }
+          return false;
+        });
+        if (match) {
+          return res.status(409).json({
+            error: "Contact with this email or LinkedIn URL already exists",
+            existingId: match.id,
+          });
         }
       }
 
@@ -297,7 +290,7 @@ export async function registerRoutes(
 
   app.patch("/api/contacts/:id", async (req, res) => {
     try {
-      const userId = req.user?.id ?? await getSeedUserId();
+      const userId = req.user!.id;
       // Convert string timestamp fields to Date objects for Drizzle ORM
       const body = { ...req.body };
       if (typeof body.lastInteractionAt === "string") {
@@ -316,7 +309,7 @@ export async function registerRoutes(
 
   app.delete("/api/contacts/:id", async (req, res) => {
     try {
-      const userId = req.user?.id ?? await getSeedUserId();
+      const userId = req.user!.id;
       const deleted = await storage.deleteContact(req.params.id, userId);
       if (!deleted) {
         return res.status(404).json({ error: "Contact not found" });
@@ -329,7 +322,7 @@ export async function registerRoutes(
 
   app.post("/api/contacts/bulk-delete", async (req, res) => {
     try {
-      const userId = req.user?.id ?? await getSeedUserId();
+      const userId = req.user!.id;
       const { ids } = req.body;
       if (!Array.isArray(ids)) {
         return res.status(400).json({ error: "Expected array of ids" });
@@ -1442,7 +1435,7 @@ export async function registerRoutes(
   // Settings
   app.get("/api/settings", async (req, res) => {
     try {
-      const userId = req.user?.id ?? await getSeedUserId();
+      const userId = req.user!.id;
       const settingsData = await storage.getSettings(userId);
       res.json(settingsData || {});
     } catch (error) {
