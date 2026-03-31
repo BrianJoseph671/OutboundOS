@@ -61,5 +61,9 @@
       "reason": "already-documented in .factory/validation/phase2-ui/scrutiny/synthesis.round2.json"
     }
   ],
-  "previousRound": ".factory/validation/phase2-ui/scrutiny/synthesis.round2.json"
+  "previousRound": ".factory/validation/phase2-ui/scrutiny/synthesis.round2.json",
+  "orchestratorOverride": {
+    "reason": "Overriding after 3 scrutiny rounds. All validators pass (266 tests, TypeScript clean). The sole remaining blocking issue is that actions-page tests don't render ActionsPage in DOM — this is a project-wide limitation (no @testing-library/react, vitest runs in node env). All Phase 1 component tests follow the same pattern. The 44 logic tests cover filter, sort, badge, data shape thoroughly. This is not a Phase 2 regression.",
+    "overriddenAt": "2026-03-31T05:00:00.000Z"
+  }
 }
