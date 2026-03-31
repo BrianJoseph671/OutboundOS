@@ -9,10 +9,12 @@ import {
   meetings, type Meeting, type InsertMeeting,
   contactMeetings, type ContactMeeting, type InsertContactMeeting,
   interactions, type Interaction, type InsertInteraction,
+  actions, type Action, type InsertAction,
+  draftsLog, type DraftsLog, type InsertDraftsLog,
   users, type User, type InsertUser
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, asc, inArray, and, sql as drizzleSql } from "drizzle-orm";
+import { eq, desc, asc, inArray, and, or, lte, gt, isNull, sql as drizzleSql } from "drizzle-orm";
 
 export interface IStorage {
   // Users
@@ -89,6 +91,19 @@ export interface IStorage {
   updateInteraction(id: string, userId: string, data: Partial<InsertInteraction>): Promise<Interaction | undefined>;
   deleteInteraction(id: string, userId: string): Promise<boolean>;
   getInteractionBySourceId(channel: string, sourceId: string, userId: string): Promise<Interaction | undefined>;
+
+  // Actions (Phase 2)
+  getActions(userId: string, filters?: { status?: string; type?: string; limit?: number; offset?: number }): Promise<Action[]>;
+  getAction(id: string, userId: string): Promise<Action | undefined>;
+  createAction(action: InsertAction): Promise<Action>;
+  updateAction(id: string, userId: string, data: Partial<InsertAction>): Promise<Action | undefined>;
+  deleteAction(id: string, userId: string): Promise<boolean>;
+
+  // DraftsLog (Phase 2)
+  getDraftsLogs(userId: string, contactId?: string): Promise<DraftsLog[]>;
+  getDraftsLog(id: string, userId: string): Promise<DraftsLog | undefined>;
+  createDraftsLog(draft: InsertDraftsLog): Promise<DraftsLog>;
+  updateDraftsLog(id: string, userId: string, data: Partial<InsertDraftsLog>): Promise<DraftsLog | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -659,6 +674,142 @@ export class DatabaseStorage implements IStorage {
       .from(interactions)
       .where(and(eq(interactions.channel, channel), eq(interactions.sourceId, sourceId), eq(interactions.userId, userId)));
     return interaction;
+  }
+
+  // ─── Actions (Phase 2) ─────────────────────────────────────────────────────
+
+  async getActions(
+    userId: string,
+    filters?: { status?: string; type?: string; limit?: number; offset?: number }
+  ): Promise<Action[]> {
+    const now = new Date();
+    const conditions: ReturnType<typeof eq>[] = [eq(actions.userId, userId)];
+
+    if (filters?.type) {
+      conditions.push(eq(actions.actionType, filters.type));
+    }
+
+    let query;
+    if (filters?.status === "pending") {
+      // pending: include status='pending' AND (snoozed actions where snoozed_until <= now)
+      // Exclude future-snoozed (status='snoozed' AND snoozed_until > now)
+      const statusCondition = or(
+        and(eq(actions.status, "pending")),
+        and(eq(actions.status, "snoozed"), lte(actions.snoozedUntil, now))
+      );
+      conditions.push(statusCondition!);
+    } else if (filters?.status) {
+      conditions.push(eq(actions.status, filters.status));
+    }
+
+    query = db
+      .select()
+      .from(actions)
+      .where(and(...conditions))
+      .orderBy(desc(actions.priority), desc(actions.createdAt));
+
+    if (filters?.limit !== undefined) {
+      query = query.limit(filters.limit) as typeof query;
+    }
+    if (filters?.offset !== undefined) {
+      query = query.offset(filters.offset) as typeof query;
+    }
+
+    return await query;
+  }
+
+  async getAction(id: string, userId: string): Promise<Action | undefined> {
+    const [action] = await db
+      .select()
+      .from(actions)
+      .where(and(eq(actions.id, id), eq(actions.userId, userId)));
+    return action;
+  }
+
+  async createAction(action: InsertAction): Promise<Action> {
+    const [created] = await db.insert(actions).values(action).returning();
+    return created;
+  }
+
+  async updateAction(
+    id: string,
+    userId: string,
+    data: Partial<InsertAction>
+  ): Promise<Action | undefined> {
+    const updateData: Partial<InsertAction> & { completedAt?: Date | null; snoozedUntil?: Date | null } = { ...data };
+
+    // Auto-set completedAt when transitioning to completed or dismissed
+    if (data.status === "completed" || data.status === "dismissed") {
+      updateData.completedAt = new Date();
+    }
+
+    // Clear snoozedUntil when transitioning away from snoozed to another status
+    // (but not when explicitly setting snoozedUntil in the same update)
+    if (data.status && data.status !== "snoozed" && !("snoozedUntil" in data)) {
+      // Check if the action was snoozed before
+      const existing = await this.getAction(id, userId);
+      if (existing?.status === "snoozed") {
+        updateData.snoozedUntil = null;
+      }
+    }
+
+    const [updated] = await db
+      .update(actions)
+      .set(updateData)
+      .where(and(eq(actions.id, id), eq(actions.userId, userId)))
+      .returning();
+    return updated;
+  }
+
+  async deleteAction(id: string, userId: string): Promise<boolean> {
+    const [deleted] = await db
+      .delete(actions)
+      .where(and(eq(actions.id, id), eq(actions.userId, userId)))
+      .returning();
+    return !!deleted;
+  }
+
+  // ─── DraftsLog (Phase 2) ──────────────────────────────────────────────────
+
+  async getDraftsLogs(userId: string, contactId?: string): Promise<DraftsLog[]> {
+    if (contactId !== undefined) {
+      return await db
+        .select()
+        .from(draftsLog)
+        .where(and(eq(draftsLog.userId, userId), eq(draftsLog.contactId, contactId)))
+        .orderBy(desc(draftsLog.createdAt));
+    }
+    return await db
+      .select()
+      .from(draftsLog)
+      .where(eq(draftsLog.userId, userId))
+      .orderBy(desc(draftsLog.createdAt));
+  }
+
+  async getDraftsLog(id: string, userId: string): Promise<DraftsLog | undefined> {
+    const [draft] = await db
+      .select()
+      .from(draftsLog)
+      .where(and(eq(draftsLog.id, id), eq(draftsLog.userId, userId)));
+    return draft;
+  }
+
+  async createDraftsLog(draft: InsertDraftsLog): Promise<DraftsLog> {
+    const [created] = await db.insert(draftsLog).values(draft).returning();
+    return created;
+  }
+
+  async updateDraftsLog(
+    id: string,
+    userId: string,
+    data: Partial<InsertDraftsLog>
+  ): Promise<DraftsLog | undefined> {
+    const [updated] = await db
+      .update(draftsLog)
+      .set(data)
+      .where(and(eq(draftsLog.id, id), eq(draftsLog.userId, userId)))
+      .returning();
+    return updated;
   }
 }
 
