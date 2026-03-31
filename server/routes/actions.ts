@@ -188,20 +188,24 @@ actionsRouter.delete("/:id", async (req: Request, res: Response) => {
 
 // ── POST /api/sync (sync route) ───────────────────────────────────────────────
 // Exported separately so routes.ts can mount it directly on app.
-// TODO: Wire to LangGraph agent in phase2-agent-skeleton feature
 
 export const syncRouter = Router();
 
 /**
  * POST /api/sync
- * Trigger a sync of recent interactions.
- * Currently returns a mock response — agent wiring is in phase2-agent-skeleton.
+ * Trigger a sync of recent interactions via the LangGraph agent.
+ * The agent uses MCP tool adapters (TODO placeholders) to pull data from
+ * Superhuman, Granola, and Google Calendar.
+ *
  * Returns 200 with { newInteractions: number, newActions: number, errors: string[] }
+ * Partial failure: if some MCP sources fail, successful results are still returned.
  */
 syncRouter.post("/", async (req: Request, res: Response) => {
   try {
-    // TODO: Wire to LangGraph agent in phase2-agent-skeleton feature
-    res.json({ newInteractions: 0, newActions: 0, errors: [] });
+    const userId = req.user!.id;
+    const { runSync } = await import("../agent/index");
+    const result = await runSync(userId);
+    res.json(result);
   } catch (error) {
     console.error("[POST /sync] Error:", error);
     res.status(500).json({ error: "Sync failed" });
