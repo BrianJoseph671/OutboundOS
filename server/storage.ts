@@ -107,6 +107,7 @@ export interface IStorage {
   // Actions (Phase 2)
   getActions(userId: string, filters?: { status?: string; type?: string; limit?: number; offset?: number }): Promise<ActionWithContact[]>;
   getAction(id: string, userId: string): Promise<Action | undefined>;
+  getActionWithContact(id: string, userId: string): Promise<ActionWithContact | undefined>;
   createAction(action: InsertAction): Promise<Action>;
   updateAction(id: string, userId: string, data: Partial<InsertAction>): Promise<Action | undefined>;
   deleteAction(id: string, userId: string): Promise<boolean>;
@@ -742,6 +743,20 @@ export class DatabaseStorage implements IStorage {
       .from(actions)
       .where(and(eq(actions.id, id), eq(actions.userId, userId)));
     return action;
+  }
+
+  async getActionWithContact(id: string, userId: string): Promise<ActionWithContact | undefined> {
+    const [result] = await db
+      .select({
+        ...getTableColumns(actions),
+        contactName: contacts.name,
+        contactCompany: contacts.company,
+        contactEmail: contacts.email,
+      })
+      .from(actions)
+      .leftJoin(contacts, eq(actions.contactId, contacts.id))
+      .where(and(eq(actions.id, id), eq(actions.userId, userId)));
+    return result;
   }
 
   async createAction(action: InsertAction): Promise<Action> {

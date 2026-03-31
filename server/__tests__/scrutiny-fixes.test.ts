@@ -116,16 +116,13 @@ describe("Fix 1: POST /api/interactions — cross-user (channel, source_id) conf
   });
 
   it(
-    "returns 409 (not 500) when User B tries to create an interaction with the same " +
-      "(channel, source_id) that User A already owns",
+    "returns 201 when User B creates an interaction with the same (channel, source_id) " +
+      "that User A already owns — unique index is now user-scoped",
     async () => {
       const sharedSourceId = `cross_user_src_${Date.now()}`;
       const channel = "email";
 
-      // Directly insert User A's interaction into the DB, bypassing the API.
-      // This simulates a race condition (or another user inserting first) where
-      // the pre-check getInteractionBySourceId is user-scoped and would find nothing
-      // for User B — but the global DB unique index will fire on insert.
+      // Insert User A's interaction directly into the DB.
       const [directInsert] = await db
         .insert(interactions)
         .values({
@@ -139,8 +136,8 @@ describe("Fix 1: POST /api/interactions — cross-user (channel, source_id) conf
         .returning();
       testIds.interactionIds.push(directInsert.id);
 
-      // User B's API request: pre-check finds nothing (user-scoped),
-      // but the DB insert hits the global unique constraint.
+      // User B's API request: the user-scoped unique index allows different
+      // users to have the same (channel, source_id) combination.
       const agentB = request.agent(app);
       await agentB.post("/test/login").send({ user: userB }).expect(200);
 
@@ -152,9 +149,9 @@ describe("Fix 1: POST /api/interactions — cross-user (channel, source_id) conf
         sourceId: sharedSourceId,
       });
 
-      // Must be 409, NOT 500 — the constraint catch is working
-      expect(res.status).toBe(409);
-      expect(res.body).toHaveProperty("error");
+      // User-scoped index: User B can write the same source_id as User A
+      expect(res.status).toBe(201);
+      if (res.body?.id) testIds.interactionIds.push(res.body.id);
     },
   );
 

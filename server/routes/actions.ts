@@ -107,17 +107,33 @@ actionsRouter.get("/", async (req: Request, res: Response) => {
 
 /**
  * GET /api/actions/:id
- * Get a single action by ID.
+ * Get a single action by ID, enriched with contact info and trigger interaction.
  * Returns 404 if not found or if it belongs to a different user.
  */
 actionsRouter.get("/:id", async (req: Request, res: Response) => {
   try {
     const userId = req.user!.id;
-    const action = await storage.getAction(req.params.id, userId);
-    if (!action) {
+    const actionWithContact = await storage.getActionWithContact(req.params.id, userId);
+    if (!actionWithContact) {
       return res.status(404).json({ error: "Action not found" });
     }
-    res.json(action);
+
+    // Enrich with trigger interaction summary if available
+    let triggerInteractionSummary: string | null = null;
+    let triggerInteractionChannel: string | null = null;
+    if (actionWithContact.triggerInteractionId) {
+      const interaction = await storage.getInteraction(actionWithContact.triggerInteractionId, userId);
+      if (interaction) {
+        triggerInteractionSummary = interaction.summary;
+        triggerInteractionChannel = interaction.channel;
+      }
+    }
+
+    res.json({
+      ...actionWithContact,
+      triggerInteractionSummary,
+      triggerInteractionChannel,
+    });
   } catch (error) {
     console.error("[GET /actions/:id] Error:", error);
     res.status(500).json({ error: "Failed to fetch action" });
