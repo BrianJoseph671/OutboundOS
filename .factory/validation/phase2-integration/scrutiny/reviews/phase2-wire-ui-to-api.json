@@ -1,0 +1,39 @@
+{
+  "featureId": "phase2-wire-ui-to-api",
+  "reviewedAt": "2026-03-31T06:35:51.786486+00:00",
+  "commitId": "b97a88b",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "UI wiring and the new hook are mostly in place, but end-to-end contract coverage is incomplete: /api/actions data does not match the ActionCard shape consumed by the page, and the requested component-test migration to mocked useActions wiring was not implemented.",
+    "issues": [
+      {
+        "file": "server/storage.ts",
+        "line": 707,
+        "severity": "blocking",
+        "description": "getActions selects only from the actions table and returns Action rows without joined contact fields. The wired UI expects ActionCard fields (contactName/contactCompany/contactEmail), so cards can render without contact identity data after replacing mocks. Evidence: shared/types/actions.ts:30-32 require these fields; client/src/hooks/useActions.ts:44 types query data as ActionCard[]; client/src/pages/actions.tsx:126-131 reads action.contactName/contactCompany."
+      },
+      {
+        "file": "client/src/__tests__/actions-page.test.ts",
+        "line": 498,
+        "severity": "blocking",
+        "description": "The required component-test update was not completed: the file does not render ActionsPage or mock useActions to assert dismiss/snooze mutation wiring. Instead, it adds apiRequest call-pattern tests and still keeps mock-data-focused assertions (lines 102-146), leaving the page-hook integration unverified against the stated feature requirement."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "skills",
+      "observation": "frontend-worker procedure compliance is overstated for this run.",
+      "evidence": "frontend-worker/SKILL.md lines 33-37 require writing tests first and lines 53-61 require manual agent-browser verification. In worker-transcripts.jsonl for session 59c87e9c-30b3-48ec-9236-fa71ce7f166f, implementation starts with creating client/src/hooks/useActions.ts and editing client/src/pages/actions.tsx before creating new tests, and there is no agent-browser invocation, yet handoff.skillFeedback.followedProcedure is true."
+    },
+    {
+      "area": "conventions",
+      "observation": "Shared contract artifacts are inconsistent about the GET /api/actions response shape, which can mask integration defects.",
+      "evidence": "validation-contract.md line 238 states useActions returns typed Action[], while shared/types/actions.ts lines 17-32 define ActionCard with required joined contact fields (contactName/contactCompany/contactEmail)."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "Review failed with two blocking findings: API-to-UI action shape mismatch and incomplete test migration for useActions-based page wiring."
+}

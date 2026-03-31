@@ -1,0 +1,59 @@
+{
+  "milestone": "phase2-integration",
+  "round": 1,
+  "status": "fail",
+  "validatorsRun": {
+    "test": {
+      "passed": true,
+      "command": "npm --prefix \"C:\\Users\\josep\\downloads\\projects\\outbound os\\outboundos\" exec vitest run",
+      "exitCode": 0
+    },
+    "typecheck": {
+      "passed": true,
+      "command": "npm --prefix \"C:\\Users\\josep\\downloads\\projects\\outbound os\\outboundos\" run check",
+      "exitCode": 0
+    },
+    "lint": {
+      "passed": true,
+      "command": "",
+      "exitCode": 0
+    }
+  },
+  "reviewsSummary": {
+    "total": 1,
+    "passed": 0,
+    "failed": 1,
+    "failedFeatures": [
+      "phase2-wire-ui-to-api"
+    ]
+  },
+  "blockingIssues": [
+    {
+      "featureId": "phase2-wire-ui-to-api",
+      "severity": "blocking",
+      "description": "GET /api/actions currently returns bare actions rows without joined contact fields, but the wired Actions page consumes ActionCard fields (contactName/contactCompany/contactEmail), creating an API/UI contract mismatch."
+    },
+    {
+      "featureId": "phase2-wire-ui-to-api",
+      "severity": "blocking",
+      "description": "The required component-test migration to mock useActions and verify ActionsPage dismiss/snooze wiring was not implemented; tests remain focused on apiRequest patterns and mock-data assertions instead of page-hook integration."
+    }
+  ],
+  "appliedUpdates": [],
+  "suggestedGuidanceUpdates": [
+    {
+      "target": "skills/frontend-worker",
+      "suggestion": "Enforce stricter evidence requirements in skill feedback: if required manual agent-browser checks are skipped or TDD order is not followed, handoff.skillFeedback.followedProcedure should not be marked true.",
+      "evidence": "Review of feature phase2-wire-ui-to-api found no agent-browser execution and tests were not written first, while handoff still reported followedProcedure=true.",
+      "isSystemic": false
+    },
+    {
+      "target": "AGENTS.md",
+      "suggestion": "Add an explicit contract-alignment rule for integration milestones: endpoint response shapes used by UI hooks/tests must be consistent across validation-contract assertions and shared typed models.",
+      "evidence": "validation-contract describes useActions returning Action[] while shared/types/actions.ts defines ActionCard with required contact identity fields, masking the missing join in /api/actions.",
+      "isSystemic": false
+    }
+  ],
+  "rejectedObservations": [],
+  "previousRound": null
+}
