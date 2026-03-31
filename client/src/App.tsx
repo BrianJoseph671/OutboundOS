@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Loader2, LogOut } from "lucide-react";
 import Dashboard from "@/pages/dashboard";
 import Contacts from "@/pages/contacts";
+import ActionsPage from "@/pages/actions";
 import OutreachLog from "@/pages/outreach-log";
 import ProspectResearch from "@/pages/prospect-research";
 import ResearchSetup from "@/pages/research-setup";
@@ -33,6 +34,7 @@ type AuthUser = {
 function Router() {
   return (
     <Switch>
+      <Route path="/actions" component={ActionsPage} />
       <Route path="/" component={Dashboard} />
       <Route path="/contacts" component={Contacts} />
       <Route path="/outreach-log" component={OutreachLog} />
