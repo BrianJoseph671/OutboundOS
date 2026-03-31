@@ -209,6 +209,30 @@ describe("GET /api/actions — list actions (authenticated)", () => {
     }
   });
 
+  it("response includes joined contactName, contactCompany, contactEmail fields", async () => {
+    const res = await getAsUser();
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
+    expect(res.body.length).toBeGreaterThan(0);
+    for (const action of res.body) {
+      // contactName must be present (contacts.name is NOT NULL)
+      expect(action).toHaveProperty("contactName");
+      expect(typeof action.contactName).toBe("string");
+      expect(action.contactName.length).toBeGreaterThan(0);
+      // contactCompany and contactEmail are nullable
+      expect(action).toHaveProperty("contactCompany");
+      expect(action).toHaveProperty("contactEmail");
+    }
+  });
+
+  it("contactName matches the contact created for this test", async () => {
+    const res = await getAsUser();
+    expect(res.status).toBe(200);
+    const names = res.body.map((a: { contactName: string }) => a.contactName);
+    // The test contact name contains "Actions API Test Contact"
+    expect(names.some((n: string) => n.includes("Actions API Test Contact"))).toBe(true);
+  });
+
   it("GET /api/actions?status=pending returns only pending", async () => {
     const res = await getAsUser("?status=pending");
     expect(res.status).toBe(200);

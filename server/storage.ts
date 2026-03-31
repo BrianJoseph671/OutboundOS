@@ -14,7 +14,19 @@ import {
   users, type User, type InsertUser
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, asc, inArray, and, or, lte, gt, isNull, sql as drizzleSql } from "drizzle-orm";
+import { eq, desc, asc, inArray, and, or, lte, gt, isNull, sql as drizzleSql, getTableColumns } from "drizzle-orm";
+
+/**
+ * ActionWithContact — an Action row with joined contact fields
+ * (name, company, email) from the contacts table.
+ * Returned by getActions() so the UI can render contact info without
+ * a separate API call.
+ */
+export type ActionWithContact = Action & {
+  contactName: string | null;
+  contactCompany: string | null;
+  contactEmail: string | null;
+};
 
 export interface IStorage {
   // Users
@@ -93,7 +105,7 @@ export interface IStorage {
   getInteractionBySourceId(channel: string, sourceId: string, userId: string): Promise<Interaction | undefined>;
 
   // Actions (Phase 2)
-  getActions(userId: string, filters?: { status?: string; type?: string; limit?: number; offset?: number }): Promise<Action[]>;
+  getActions(userId: string, filters?: { status?: string; type?: string; limit?: number; offset?: number }): Promise<ActionWithContact[]>;
   getAction(id: string, userId: string): Promise<Action | undefined>;
   createAction(action: InsertAction): Promise<Action>;
   updateAction(id: string, userId: string, data: Partial<InsertAction>): Promise<Action | undefined>;
@@ -681,7 +693,7 @@ export class DatabaseStorage implements IStorage {
   async getActions(
     userId: string,
     filters?: { status?: string; type?: string; limit?: number; offset?: number }
-  ): Promise<Action[]> {
+  ): Promise<ActionWithContact[]> {
     const now = new Date();
     const conditions: ReturnType<typeof eq>[] = [eq(actions.userId, userId)];
 
@@ -689,7 +701,6 @@ export class DatabaseStorage implements IStorage {
       conditions.push(eq(actions.actionType, filters.type));
     }
 
-    let query;
     if (filters?.status === "pending") {
       // pending: include status='pending' AND (snoozed actions where snoozed_until <= now)
       // Exclude future-snoozed (status='snoozed' AND snoozed_until > now)
@@ -702,9 +713,16 @@ export class DatabaseStorage implements IStorage {
       conditions.push(eq(actions.status, filters.status));
     }
 
-    query = db
-      .select()
+    // Join contacts table to include contactName, contactCompany, contactEmail
+    let query = db
+      .select({
+        ...getTableColumns(actions),
+        contactName: contacts.name,
+        contactCompany: contacts.company,
+        contactEmail: contacts.email,
+      })
       .from(actions)
+      .leftJoin(contacts, eq(actions.contactId, contacts.id))
       .where(and(...conditions))
       .orderBy(desc(actions.priority), desc(actions.createdAt));
 
