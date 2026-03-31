@@ -15,6 +15,7 @@ import {
 import batchRouter from "./routes/batch";
 import integrationsRouter from "./routes/integrations";
 import { relationshipsRouter } from "./routes/relationships";
+import { actionsRouter, syncRouter } from "./routes/actions";
 import { appendResearchedTag } from "./utils/contactTags";
 import { isAuthenticated } from "./auth";
 
@@ -157,6 +158,12 @@ export async function registerRoutes(
 
   // Relationships / interactions routes (auth also enforced inside router)
   app.use("/api/interactions", relationshipsRouter);
+
+  // Actions routes (Phase 2)
+  app.use("/api/actions", actionsRouter);
+
+  // Sync route (Phase 2) — POST /api/sync
+  app.use("/api/sync", syncRouter);
 
   // =========================
   // CERT: Level 3 proof (simple, deterministic)
