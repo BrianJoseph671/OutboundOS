@@ -1,0 +1,39 @@
+{
+  "featureId": "phase2-types-and-mock-data",
+  "reviewedAt": "2026-03-31T04:31:58Z",
+  "commitId": "6e39b36cc6941c20057aa44b26c7cbdf0aedbeb3",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "The feature delivers the requested type files and realistic mock dataset coverage, but the declared and instantiated timestamp fields use Date objects rather than JSON-serialized strings, so the mock shape is not an exact match for GET /api/actions responses. The commit also includes unrelated documentation artifacts.",
+    "issues": [
+      {
+        "file": "shared/types/actions.ts",
+        "line": 25,
+        "severity": "blocking",
+        "description": "ActionCard declares snoozedUntil/createdAt/completedAt as Date values (see lines 25, 27, 28), and mock-actions instantiates Date objects. GET /api/actions is a JSON response, so timestamp fields serialize to strings. This violates the feature requirement that mock data shape must exactly match the API response shape."
+      },
+      {
+        "file": ".factory/docs/phase2-backend-validation-assertions.md",
+        "line": 1,
+        "severity": "non_blocking",
+        "description": "This feature commit includes additional .factory documentation files unrelated to the scope (also .factory/validation/phase2-cross-area/assertions.md). Requested scope was types plus mock data only."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "skills",
+      "observation": "The backend-worker skill enforces a strict RED-first step, but this feature is static type and data work with no behavioral logic. The worker deviated and documented it as intentional.",
+      "evidence": "Handoff skillFeedback.followedProcedure=false with deviation on step 2 Write Tests First RED; backend-worker SKILL.md currently has no explicit exception for types-only or static-data features."
+    },
+    {
+      "area": "conventions",
+      "observation": "Feature commits can pick up unrelated mission and documentation artifacts, and mission-level guidance does not explicitly constrain this for narrow-scope implementation features.",
+      "evidence": "git show --stat 6e39b36 includes .factory/docs/phase2-backend-validation-assertions.md and .factory/validation/phase2-cross-area/assertions.md in addition to the three requested implementation files."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "Review failed due to API-shape mismatch in timestamp typing and mock representation (Date objects vs JSON string response shape). Core coverage of requested types and realistic mock records is otherwise present."
+}
