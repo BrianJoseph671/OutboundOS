@@ -129,17 +129,9 @@ export async function registerRoutes(
     next();
   };
 
-  // Batch processing routes
-  app.use("/api/batch", batchRouter);
-
-  // Integration routes (OAuth, meetings)
-  app.use("/api/integrations", integrationsRouter);
-
-  // Relationships / interactions routes (auth required — enforced inside router)
-  app.use("/api/interactions", relationshipsRouter);
-
   // ── Catch-all authentication for all /api/* routes ────────────────────────
-  // Every /api/* endpoint requires authentication EXCEPT the whitelisted paths:
+  // Must be registered BEFORE sub-routers so every /api/* request is gated.
+  // Whitelisted paths bypass auth:
   //   /api/auth/*               — public auth endpoints (login, register, Google OAuth)
   //   /api/cert/*               — health/debug endpoints (no user context needed)
   //   /api/webhooks/*           — n8n callbacks (auth via X-Webhook-Secret header)
@@ -156,6 +148,15 @@ export async function registerRoutes(
     }
     return isAuthenticated(req, res, next);
   });
+
+  // Batch processing routes
+  app.use("/api/batch", batchRouter);
+
+  // Integration routes (OAuth, meetings)
+  app.use("/api/integrations", integrationsRouter);
+
+  // Relationships / interactions routes (auth also enforced inside router)
+  app.use("/api/interactions", relationshipsRouter);
 
   // =========================
   // CERT: Level 3 proof (simple, deterministic)
