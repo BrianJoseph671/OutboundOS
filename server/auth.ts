@@ -137,11 +137,15 @@ export async function findOrCreateGoogleUser(profile: {
     ? email.split("@")[0]
     : `google_${googleId.slice(0, 8)}`;
   const username = await generateUniqueUsername(usernameBase);
+  // Keep Google-only accounts compatible with older DBs that still enforce
+  // users.password NOT NULL locally.
+  const generatedPassword = await hashPassword(randomBytes(24).toString("hex"));
 
   const [created] = await db
     .insert(users)
     .values({
       username,
+      password: generatedPassword,
       email,
       googleId,
       fullName: displayName,
