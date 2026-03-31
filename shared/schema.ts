@@ -257,9 +257,9 @@ export const interactions = pgTable("interactions", {
   openThreads: text("open_threads"),
   ingestedAt: timestamp("ingested_at").notNull().defaultNow(),
 }, (table) => [
-  // Partial unique index: prevent duplicate external interactions per channel+source_id
-  uniqueIndex("interactions_channel_source_id_unique")
-    .on(table.channel, table.sourceId)
+  // Partial unique index: prevent duplicate interactions per (user, channel, source_id)
+  uniqueIndex("interactions_user_channel_source_id_unique")
+    .on(table.userId, table.channel, table.sourceId)
     .where(sql`${table.sourceId} IS NOT NULL`),
   // Performance index for contact detail lookups
   index("interactions_user_contact_idx").on(table.userId, table.contactId),

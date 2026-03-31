@@ -1,128 +1,173 @@
 /**
- * Agent entry point — LangGraph ReAct agent for RelationshipOS sync.
+ * Agent entry point — sync orchestration for RelationshipOS.
  *
  * Architecture:
- * - Uses createReactAgent from @langchain/langgraph/prebuilt
- * - ChatAnthropic model: claude-sonnet-4-20250514
- * - Tools: Superhuman, Granola, Calendar MCP adapters (TODO placeholders)
- * - LangSmith tracing: automatic via env vars (LANGCHAIN_TRACING_V2, LANGCHAIN_API_KEY, LANGCHAIN_PROJECT)
+ * - Adapter layer: Superhuman, Granola, Calendar adapters in ./adapters/
+ *   Each adapter has a fetchAndMap*() function that returns RawInteraction[].
+ *   Adapter bodies are TODO placeholders until Brian wires live MCP connections.
+ * - interactionWriter: deduplicates and writes to DB
+ * - actionDetector: creates pending actions from new interactions
+ * - LangGraph agent (in ./tools/) is preserved for future use but NOT used for sync.
  *
  * runSync(userId) orchestrates:
- *   1. Agent invokes MCP tools to pull recent interactions (TODO: returns empty)
- *   2. interactionWriter deduplicates and writes to DB
- *   3. actionDetector creates pending actions
- *   4. Returns SyncResponse with counts
+ *   1. Compute sync window (90-day first sync, incremental thereafter)
+ *   2. Call adapters to fetch raw MCP data and map to RawInteraction[]
+ *   3. Write interactions via interactionWriter (with dedup)
+ *   4. Detect new actions via actionDetector
+ *   5. Update lastSyncedAt only on contacts that had newly written interactions
+ *   6. Return SyncResponse with counts
  */
-import { createReactAgent } from "@langchain/langgraph/prebuilt";
-import { ChatAnthropic } from "@langchain/anthropic";
 import type { SyncResponse } from "@shared/types/actions";
-import { listEmailsTool, getEmailThreadTool } from "./tools/superhuman";
-import { listMeetingsTool, getMeetingsTool } from "./tools/granola";
-import { listEventsTool } from "./tools/calendar";
-import { writeInteractions, type RawInteraction } from "./services/interactionWriter";
+import type { RawInteraction } from "./services/interactionWriter";
+import { writeInteractions } from "./services/interactionWriter";
 import { detectActions } from "./services/actionDetector";
+import {
+  fetchAndMapEmails as defaultFetchAndMapEmails,
+} from "./adapters/superhuman";
+import {
+  fetchAndMapMeetings as defaultFetchAndMapMeetings,
+} from "./adapters/granola";
+import {
+  fetchAndMapEvents as defaultFetchAndMapEvents,
+} from "./adapters/calendar";
 import { storage } from "../storage";
 
-// ── Model ─────────────────────────────────────────────────────────────────────
+const NINETY_DAYS_MS = 90 * 24 * 60 * 60 * 1000;
 
-const model = new ChatAnthropic({
-  model: "claude-sonnet-4-20250514",
-  temperature: 0.3,
-  maxTokens: 4096,
-  // ANTHROPIC_API_KEY read from env automatically
-});
+// ── Adapter result shape ──────────────────────────────────────────────────────
 
-// ── System prompt ─────────────────────────────────────────────────────────────
+interface AdapterResult {
+  interactions: RawInteraction[];
+  errors: string[];
+}
 
-const SYSTEM_PROMPT = `You are a relationship management assistant for RelationshipOS.
+// ── Dependency injection interface ────────────────────────────────────────────
 
-Your job is to pull recent interactions from the user's communication sources and prepare them for ingestion:
+export interface RunSyncDeps {
+  fetchAndMapEmails: (
+    startDate: string,
+    endDate: string,
+    userId: string,
+    userEmail: string,
+  ) => Promise<AdapterResult>;
+  fetchAndMapMeetings: (
+    startDate: Date,
+    userId: string,
+  ) => Promise<AdapterResult>;
+  fetchAndMapEvents: (
+    startDate: string,
+    endDate: string,
+    userId: string,
+    userEmail: string,
+  ) => Promise<AdapterResult>;
+}
 
-1. Use list_emails to fetch recent emails from Superhuman (last 30 days)
-2. Use list_meetings to fetch recent meetings from Granola (last_30_days)
-3. Use list_events to fetch recent calendar events from Google Calendar
-4. For each email thread of interest, use get_email_thread to get full details
-5. For interesting meeting IDs, use get_meetings to get full details
-
-Focus on interactions that involve known contacts. Return a summary of what you found.
-
-Note: MCP adapters are currently TODO placeholders that return empty data. This is expected behavior during development.`;
-
-// ── Agent ─────────────────────────────────────────────────────────────────────
-
-const agent = createReactAgent({
-  llm: model,
-  tools: [listEmailsTool, getEmailThreadTool, listMeetingsTool, getMeetingsTool, listEventsTool],
-  prompt: SYSTEM_PROMPT,
-});
-
-// ── runSync ───────────────────────────────────────────────────────────────────
+const defaultDeps: RunSyncDeps = {
+  fetchAndMapEmails: defaultFetchAndMapEmails,
+  fetchAndMapMeetings: defaultFetchAndMapMeetings,
+  fetchAndMapEvents: defaultFetchAndMapEvents,
+};
 
 /**
- * runSync — Orchestrate a full sync for a user.
- *
- * Flow:
- * 1. Invoke the ReAct agent to pull MCP data (TODO adapters return empty)
- * 2. Process agent output into RawInteraction[] (currently empty — adapters are TODO)
- * 3. Write interactions via interactionWriter (with dedup)
- * 4. Detect new actions via actionDetector
- * 5. Persist new actions to storage
- * 6. Return SyncResponse with counts
- *
- * Errors are caught per-step and surfaced in the errors array (partial failure support).
+ * Compute the sync start date for a user.
+ * First sync (all contacts have lastSyncedAt = null): 90-day lookback.
+ * Subsequent: earliest lastSyncedAt across the user's contacts (fallback 90 days).
  */
+export async function computeSyncWindow(userId: string): Promise<{ startDate: Date; endDate: Date }> {
+  const endDate = new Date();
+  const contacts = await storage.getContacts(userId);
+
+  if (contacts.length === 0) {
+    return { startDate: new Date(endDate.getTime() - NINETY_DAYS_MS), endDate };
+  }
+
+  const syncedDates = contacts
+    .map((c) => c.lastSyncedAt)
+    .filter((d): d is Date => d !== null && d !== undefined);
+
+  if (syncedDates.length === 0) {
+    return { startDate: new Date(endDate.getTime() - NINETY_DAYS_MS), endDate };
+  }
+
+  const earliest = syncedDates.reduce((min, d) => (d.getTime() < min.getTime() ? d : min));
+  return { startDate: earliest, endDate };
+}
+
+// ── runSync (production entry point — uses default adapters) ─────────────────
+
 export async function runSync(userId: string): Promise<SyncResponse> {
+  return runSyncWithDeps(userId, defaultDeps);
+}
+
+// ── runSyncWithDeps (testable — accepts injected adapters) ───────────────────
+
+export async function runSyncWithDeps(
+  userId: string,
+  deps: RunSyncDeps,
+): Promise<SyncResponse> {
   const errors: string[] = [];
   let newInteractions = 0;
   let newActions = 0;
 
-  // ── Step 1: Invoke agent to pull MCP data ─────────────────────────────────
-  let rawInteractions: RawInteraction[] = [];
+  const userEmail = process.env.BRIAN_EMAIL ?? "";
+
+  // ── Step 1: Compute sync window ──────────────────────────────────────────
+  const { startDate, endDate } = await computeSyncWindow(userId);
+  const startISO = startDate.toISOString();
+  const endISO = endDate.toISOString();
+
+  // ── Step 2: Call adapters (partial failure — each wrapped independently) ──
+  const rawInteractions: RawInteraction[] = [];
 
   try {
-    if (!process.env.ANTHROPIC_API_KEY) {
-      // Skip agent invocation if no API key — return early with empty result
-      console.warn("[Agent] ANTHROPIC_API_KEY not set — skipping agent invocation");
-    } else {
-      await agent.invoke({
-        messages: [
-          {
-            role: "user",
-            content: `Please pull recent interactions for user ${userId}. Use all available MCP tools to gather emails, meetings, and calendar events from the last 30 days.`,
-          },
-        ],
-      });
-      // TODO: Parse agent output into RawInteraction[] once MCP adapters are wired
-      // For now, agent returns empty data via TODO adapters
-      rawInteractions = [];
-    }
+    const emailResult = await deps.fetchAndMapEmails(startISO, endISO, userId, userEmail);
+    rawInteractions.push(...emailResult.interactions);
+    errors.push(...emailResult.errors);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error("[Agent] Error during agent invocation:", msg);
-    errors.push(`Agent invocation failed: ${msg}`);
-    // Continue with empty interactions (partial failure support)
+    errors.push(`Superhuman adapter failed: ${msg}`);
   }
 
-  // ── Step 2: Write interactions with dedup ────────────────────────────────
+  try {
+    const meetingResult = await deps.fetchAndMapMeetings(startDate, userId);
+    rawInteractions.push(...meetingResult.interactions);
+    errors.push(...meetingResult.errors);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    errors.push(`Granola adapter failed: ${msg}`);
+  }
+
+  try {
+    const calendarResult = await deps.fetchAndMapEvents(startISO, endISO, userId, userEmail);
+    rawInteractions.push(...calendarResult.interactions);
+    errors.push(...calendarResult.errors);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    errors.push(`Calendar adapter failed: ${msg}`);
+  }
+
+  // ── Step 3: Write interactions with dedup ────────────────────────────────
+  let writtenContactIds: string[] = [];
+  let writtenInteractionIds: string[] = [];
   try {
     const writeResult = await writeInteractions(userId, rawInteractions);
     newInteractions = writeResult.written;
+    writtenContactIds = writeResult.writtenContactIds;
+    writtenInteractionIds = writeResult.writtenInteractionIds;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error("[Agent] Error writing interactions:", msg);
+    console.error("[Sync] Error writing interactions:", msg);
     errors.push(`Interaction write failed: ${msg}`);
   }
 
-  // ── Step 3: Detect and create actions ────────────────────────────────────
+  // ── Step 4: Detect and create actions ────────────────────────────────────
   try {
-    // Fetch the newly written interactions to pass to action detector
-    // Since our TODO adapters return empty, this will be an empty array
-    // but the actionDetector will still scan contacts for reconnect actions
+    // Use the exact IDs of interactions written in this sync batch
+    // (avoids fragile time-window filtering that can break with DB/Node clock skew)
+    const writtenIdSet = new Set(writtenInteractionIds);
     const recentInteractions = await storage.getInteractions(userId);
-    // Only pass interactions written in this sync (those with ingestedAt close to now)
-    const syncStart = new Date(Date.now() - 5 * 60 * 1000); // 5-minute window
     const newlySyncedInteractions = recentInteractions.filter(
-      (i) => i.ingestedAt >= syncStart
+      (i) => writtenIdSet.has(i.id),
     );
 
     const actionsToCreate = await detectActions(userId, newlySyncedInteractions);
@@ -132,14 +177,28 @@ export async function runSync(userId: string): Promise<SyncResponse> {
         newActions++;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        console.error("[Agent] Error creating action:", msg);
+        console.error("[Sync] Error creating action:", msg);
         errors.push(`Action creation failed: ${msg}`);
       }
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error("[Agent] Error in action detection:", msg);
+    console.error("[Sync] Error in action detection:", msg);
     errors.push(`Action detection failed: ${msg}`);
+  }
+
+  // ── Step 5: Update lastSyncedAt only on contacts with newly written interactions
+  if (writtenContactIds.length > 0) {
+    try {
+      const now = new Date();
+      for (const contactId of writtenContactIds) {
+        await storage.updateContact(contactId, userId, { lastSyncedAt: now });
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[Sync] Error updating lastSyncedAt:", msg);
+      errors.push(`lastSyncedAt update failed: ${msg}`);
+    }
   }
 
   return { newInteractions, newActions, errors };

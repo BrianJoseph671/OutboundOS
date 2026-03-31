@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { ActionCard, ActionType } from "@shared/types/actions";
@@ -85,9 +86,10 @@ interface ActionCardProps {
   action: ActionCard;
   onDismiss: (id: string) => void;
   onSnooze: (id: string, until: Date) => void;
+  onClick: (id: string) => void;
 }
 
-function ActionCardComponent({ action, onDismiss, onSnooze }: ActionCardProps) {
+function ActionCardComponent({ action, onDismiss, onSnooze, onClick }: ActionCardProps) {
   const [snoozeOpen, setSnoozeOpen] = useState(false);
   const config = ACTION_TYPE_CONFIG[action.actionType];
 
@@ -116,7 +118,11 @@ function ActionCardComponent({ action, onDismiss, onSnooze }: ActionCardProps) {
   return (
     <div
       data-testid={`action-card-${action.id}`}
-      className="flex flex-col gap-2 rounded-lg border bg-card p-4 shadow-sm hover:shadow-md transition-shadow"
+      className="flex flex-col gap-2 rounded-lg border bg-card p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+      onClick={() => onClick(action.id)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onClick(action.id); }}
     >
       {/* Header: name, company, badge, time */}
       <div className="flex items-start justify-between gap-3">
@@ -148,7 +154,7 @@ function ActionCardComponent({ action, onDismiss, onSnooze }: ActionCardProps) {
         </div>
 
         {/* Actions: dismiss + snooze */}
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
           {/* Snooze */}
           <Popover open={snoozeOpen} onOpenChange={setSnoozeOpen}>
             <PopoverTrigger asChild>
@@ -402,6 +408,7 @@ const ACTION_TYPE_OPTIONS: { label: string; value: ActionType | "all" }[] = [
 
 export default function ActionsPage() {
   const { toast } = useToast();
+  const [, navigate] = useLocation();
 
   const [typeFilter, setTypeFilter] = useState<ActionType | "all">("all");
   const [companyFilter, setCompanyFilter] = useState("");
@@ -575,6 +582,7 @@ export default function ActionsPage() {
                   action={action}
                   onDismiss={handleDismiss}
                   onSnooze={handleSnooze}
+                  onClick={(id) => navigate(`/actions/${id}`)}
                 />
               ))}
             </div>

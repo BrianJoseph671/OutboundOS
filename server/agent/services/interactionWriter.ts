@@ -42,12 +42,23 @@ export interface RawInteraction {
  * @param rawInteractions - Array of raw interaction data to write
  * @returns { written: number, skipped: number }
  */
+export interface WriteResult {
+  written: number;
+  skipped: number;
+  /** Contact IDs that had at least one interaction newly written this batch. */
+  writtenContactIds: string[];
+  /** IDs of the interaction rows created in this batch. */
+  writtenInteractionIds: string[];
+}
+
 export async function writeInteractions(
   userId: string,
   rawInteractions: RawInteraction[]
-): Promise<{ written: number; skipped: number }> {
+): Promise<WriteResult> {
   let written = 0;
   let skipped = 0;
+  const writtenContactIdSet = new Set<string>();
+  const writtenInteractionIds: string[] = [];
 
   // Pre-fetch Granola interactions for Calendar dedup check
   // (lazily built on first calendar interaction)
@@ -90,7 +101,7 @@ export async function writeInteractions(
     }
 
     // ── Write the interaction ─────────────────────────────────────────────
-    await storage.createInteraction({
+    const created = await storage.createInteraction({
       userId,
       contactId: raw.contactId,
       channel: raw.channel,
@@ -102,7 +113,14 @@ export async function writeInteractions(
       openThreads: raw.openThreads,
     });
     written++;
+    writtenContactIdSet.add(raw.contactId);
+    writtenInteractionIds.push(created.id);
   }
 
-  return { written, skipped };
+  return {
+    written,
+    skipped,
+    writtenContactIds: Array.from(writtenContactIdSet),
+    writtenInteractionIds,
+  };
 }
