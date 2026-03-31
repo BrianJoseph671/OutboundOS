@@ -22,10 +22,10 @@ export interface ActionCard {
   triggerInteractionId: string | null;
   priority: number;
   status: ActionStatus;
-  snoozedUntil: Date | null;
+  snoozedUntil: string | null;
   reason: string;
-  createdAt: Date;
-  completedAt: Date | null;
+  createdAt: string;
+  completedAt: string | null;
   // Joined contact fields
   contactName: string;
   contactCompany: string | null;

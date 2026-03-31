@@ -141,7 +141,7 @@ function ActionCardComponent({ action, onDismiss, onSnooze }: ActionCardProps) {
               {config.label}
             </Badge>
             <span className="text-xs text-muted-foreground">
-              {formatDistanceToNow(action.createdAt, { addSuffix: true })}
+              {formatDistanceToNow(new Date(action.createdAt), { addSuffix: true })}
             </span>
             <SourceIcon channel={channel} />
           </div>
@@ -409,7 +409,7 @@ export default function ActionsPage() {
   const [typeFilter, setTypeFilter] = useState<ActionType | "all">("all");
   const [companyFilter, setCompanyFilter] = useState("");
 
-  // Filter and sort actions
+  // Filter and sort actions — priority DESC, then createdAt DESC
   const filteredActions = useMemo(() => {
     let result = actions;
     if (typeFilter !== "all") {
@@ -422,7 +422,10 @@ export default function ActionsPage() {
           .includes(companyFilter.toLowerCase()),
       );
     }
-    return result;
+    return [...result].sort((a, b) => {
+      if (b.priority !== a.priority) return b.priority - a.priority;
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
   }, [actions, typeFilter, companyFilter]);
 
   // Dismiss handler
@@ -514,7 +517,13 @@ export default function ActionsPage() {
 
         {/* Actions tab */}
         <TabsContent value="actions" className="flex-1 overflow-auto mt-4">
-          {filteredActions.length === 0 ? (
+          {isSyncing ? (
+            <div className="flex flex-col gap-3 pb-4" data-testid="actions-skeleton">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <ActionCardSkeleton key={i} />
+              ))}
+            </div>
+          ) : filteredActions.length === 0 ? (
             <EmptyState onSyncClick={handleSync} isSyncing={isSyncing} />
           ) : (
             <div className="flex flex-col gap-3 pb-4">

@@ -9,16 +9,16 @@ import type { ActionCard } from '@shared/types/actions';
 // Reference date: 2026-03-31 (today)
 const now = new Date('2026-03-31T00:00:00.000Z');
 
-const daysAgo = (n: number): Date => {
+const daysAgo = (n: number): string => {
   const d = new Date(now);
   d.setDate(d.getDate() - n);
-  return d;
+  return d.toISOString();
 };
 
-const daysFromNow = (n: number): Date => {
+const daysFromNow = (n: number): string => {
   const d = new Date(now);
   d.setDate(d.getDate() + n);
-  return d;
+  return d.toISOString();
 };
 
 export const mockActions: ActionCard[] = [
@@ -207,9 +207,9 @@ export const pendingMockActions: ActionCard[] = mockActions
   .filter(
     (a) =>
       a.status === 'pending' &&
-      (a.snoozedUntil === null || a.snoozedUntil <= new Date()),
+      (a.snoozedUntil === null || new Date(a.snoozedUntil) <= new Date()),
   )
   .sort((a, b) => {
     if (b.priority !== a.priority) return b.priority - a.priority;
-    return b.createdAt.getTime() - a.createdAt.getTime();
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });

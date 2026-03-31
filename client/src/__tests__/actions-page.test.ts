@@ -29,7 +29,7 @@ function makeAction(
     status: "pending" as ActionStatus,
     snoozedUntil: null,
     reason: "Test reason",
-    createdAt: new Date("2026-03-25T00:00:00.000Z"),
+    createdAt: "2026-03-25T00:00:00.000Z",
     completedAt: null,
     contactName: "Test User",
     contactCompany: "Test Corp",
@@ -58,7 +58,7 @@ function filterByCompany(actions: ActionCard[], company: string): ActionCard[] {
 function sortActions(actions: ActionCard[]): ActionCard[] {
   return [...actions].sort((a, b) => {
     if (b.priority !== a.priority) return b.priority - a.priority;
-    return b.createdAt.getTime() - a.createdAt.getTime();
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
 }
 
@@ -67,7 +67,7 @@ function getPendingActions(actions: ActionCard[]): ActionCard[] {
   return actions.filter(
     (a) =>
       a.status === "pending" &&
-      (a.snoozedUntil === null || a.snoozedUntil <= now),
+      (a.snoozedUntil === null || new Date(a.snoozedUntil) <= now),
   );
 }
 
@@ -110,7 +110,7 @@ describe("Mock data — ActionCard shape", () => {
     for (const action of pendingMockActions) {
       expect(action.status).toBe("pending");
       if (action.snoozedUntil !== null) {
-        expect(action.snoozedUntil.getTime()).toBeLessThanOrEqual(now.getTime());
+        expect(new Date(action.snoozedUntil).getTime()).toBeLessThanOrEqual(now.getTime());
       }
     }
   });
@@ -235,8 +235,8 @@ describe("Filter by company", () => {
 // =============================================================================
 
 describe("Sort order — priority DESC, createdAt DESC", () => {
-  const base = new Date("2026-03-25T00:00:00.000Z");
-  const earlier = new Date("2026-03-20T00:00:00.000Z");
+  const base = "2026-03-25T00:00:00.000Z";
+  const earlier = "2026-03-20T00:00:00.000Z";
 
   const actions: ActionCard[] = [
     makeAction({ id: "low-old", actionType: "reconnect", priority: 1, createdAt: earlier }),
@@ -339,7 +339,7 @@ describe("Empty state detection", () => {
   });
 
   it("excludes future-snoozed actions from pending", () => {
-    const future = new Date(Date.now() + 86400000);
+    const future = new Date(Date.now() + 86400000).toISOString();
     const actions = [
       makeAction({ id: "1", actionType: "follow_up", status: "snoozed", snoozedUntil: future }),
     ];
@@ -347,7 +347,7 @@ describe("Empty state detection", () => {
   });
 
   it("includes past-snoozed actions in pending (resurfaced)", () => {
-    const past = new Date(Date.now() - 86400000);
+    const past = new Date(Date.now() - 86400000).toISOString();
     const actions = [
       makeAction({ id: "1", actionType: "follow_up", status: "pending", snoozedUntil: past }),
     ];
