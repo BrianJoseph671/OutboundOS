@@ -1,0 +1,9 @@
+
+> rest-express@1.0.0 dev
+> cross-env NODE_ENV=development tsx server/index.ts
+
+openai service loaded
+[WebSocket] Server initialized on /ws
+[Auth] Google OAuth callback URL: http://localhost:5000/api/auth/google/callback
+1:53:48 AM [express] serving on port 5000
+1:53:48 AM [express] Open in your browser: http://127.0.0.1:5000 (use a system browser like Chrome or Edge, not Cursor's embedded browser)

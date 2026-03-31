@@ -1,0 +1,39 @@
+﻿{
+    "featureId":  "phase2-actions-api-routes",
+    "reviewedAt":  "2026-03-31T01:35:58.9965106-04:00",
+    "commitId":  "8e968ec2d2158bf483514e69847528c96c0860dc",
+    "transcriptSkeletonReviewed":  true,
+    "diffReviewed":  true,
+    "status":  "fail",
+    "codeReview":  {
+                       "summary":  "Actions and sync routes are mostly implemented and mounted correctly, but malformed pagination parameters are not validated and can bypass 400 handling, violating the feature\u0027s invalid-params behavior requirement.",
+                       "issues":  [
+                                      {
+                                          "file":  "server/routes/actions.ts",
+                                          "line":  66,
+                                          "severity":  "blocking",
+                                          "description":  "GET /api/actions parses limit/offset with parseInt but never validates NaN/negative values. Invalid inputs (e.g., limit=abc, offset=-1) are forwarded to storage.getActions and can surface as 500/database errors instead of 400, which violates expected behavior that invalid params return 400."
+                                      },
+                                      {
+                                          "file":  "server/routes/actions.ts",
+                                          "line":  153,
+                                          "severity":  "non_blocking",
+                                          "description":  "PATCH /api/actions/:id converts snoozedUntil via new Date(...) without validating parseability, and does not type-check priority/reason. Malformed bodies can fall through to storage and fail as 500s instead of clean 400 validation errors."
+                                      }
+                                  ]
+                   },
+    "sharedStateObservations":  [
+                                    {
+                                        "area":  "skills",
+                                        "observation":  "The backend-worker skill requires RED-\u003eGREEN (tests before implementation) and manual API verification, but this run implemented routes before creating tests and reported no manual endpoint verification while still marking followedProcedure=true.",
+                                        "evidence":  "worker-transcripts.jsonl line 32 shows Create server/routes/actions.ts before Create server/__tests__/phase2-actions-api.test.ts; handoff.verification only lists npm run check and vitest commands; backend-worker/SKILL.md lines 33-41 and 53-60 require tests-first and manual API checks."
+                                    },
+                                    {
+                                        "area":  "conventions",
+                                        "observation":  "Mission AGENTS mandates Zod validation for API routes, but the actions router uses ad-hoc checks and typed casts instead of schema validation; this likely contributed to missed invalid-input handling.",
+                                        "evidence":  "mission AGENTS.md line 66 says \u0027Use Zod for validation\u0027; server/routes/actions.ts lines 44-60 and 128-155 implement manual validation/casting without Zod schemas."
+                                    }
+                                ],
+    "addressesFailureFrom":  null,
+    "summary":  "Review failed due to a blocking input-validation gap: invalid pagination params are not rejected with 400. Non-blocking gap: PATCH body lacks robust validation for malformed values. Shared-state observations noted around skill-procedure compliance and validation-convention enforcement."
+}

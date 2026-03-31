@@ -51,6 +51,8 @@ export const contacts = pgTable("contacts", {
   lastInteractionAt: timestamp("last_interaction_at"),
   lastInteractionChannel: text("last_interaction_channel"),
   updatedAt: timestamp("updated_at").defaultNow(),
+  // Phase 2 columns
+  lastSyncedAt: timestamp("last_synced_at"),
 }, (table) => [
   index("contacts_user_id_idx").on(table.userId),
 ]);
@@ -270,3 +272,43 @@ export const insertInteractionSchema = createInsertSchema(interactions, {
 }).omit({ id: true, ingestedAt: true });
 export type InsertInteraction = z.infer<typeof insertInteractionSchema>;
 export type Interaction = typeof interactions.$inferSelect;
+
+// Actions table (Phase 2)
+export const actions = pgTable("actions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  contactId: varchar("contact_id").notNull().references(() => contacts.id, { onDelete: "cascade" }),
+  actionType: text("action_type").notNull(),
+  triggerInteractionId: varchar("trigger_interaction_id").references(() => interactions.id, { onDelete: "set null" }),
+  priority: integer("priority").notNull().default(0),
+  status: text("status").notNull().default("pending"),
+  snoozedUntil: timestamp("snoozed_until"),
+  reason: text("reason").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  completedAt: timestamp("completed_at"),
+}, (table) => [
+  index("actions_user_id_idx").on(table.userId),
+  index("actions_user_id_status_idx").on(table.userId, table.status),
+]);
+
+export const insertActionSchema = createInsertSchema(actions).omit({ id: true });
+export type InsertAction = z.infer<typeof insertActionSchema>;
+export type Action = typeof actions.$inferSelect;
+
+// Drafts log table (Phase 2)
+export const draftsLog = pgTable("drafts_log", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  contactId: varchar("contact_id").notNull().references(() => contacts.id, { onDelete: "cascade" }),
+  actionId: varchar("action_id").references(() => actions.id, { onDelete: "set null" }),
+  superhumanDraftId: text("superhuman_draft_id"),
+  instructions: text("instructions"),
+  generatedBody: text("generated_body"),
+  finalBody: text("final_body"),
+  playType: text("play_type"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertDraftsLogSchema = createInsertSchema(draftsLog).omit({ id: true });
+export type InsertDraftsLog = z.infer<typeof insertDraftsLogSchema>;
+export type DraftsLog = typeof draftsLog.$inferSelect;

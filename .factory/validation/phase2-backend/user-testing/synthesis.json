@@ -1,0 +1,93 @@
+{
+  "milestone": "phase2-backend",
+  "round": 1,
+  "status": "fail",
+  "assertionsSummary": {
+    "total": 46,
+    "passed": 40,
+    "failed": 6,
+    "blocked": 0
+  },
+  "passedAssertions": [
+    "VAL-AGENT-001",
+    "VAL-AGENT-003",
+    "VAL-AGENT-010",
+    "VAL-AGENT-011",
+    "VAL-AGENT-012",
+    "VAL-AGENT-020",
+    "VAL-AGENT-030",
+    "VAL-AGENT-031",
+    "VAL-AGENT-032",
+    "VAL-AGENT-033",
+    "VAL-AGENT-034",
+    "VAL-AGENT-040",
+    "VAL-API-AUTH-001",
+    "VAL-API-AUTH-002",
+    "VAL-API-AUTH-003",
+    "VAL-API-GET-001",
+    "VAL-API-GET-003",
+    "VAL-API-GET-004",
+    "VAL-API-GET-005",
+    "VAL-API-ISO-001",
+    "VAL-API-PATCH-001",
+    "VAL-API-PATCH-004",
+    "VAL-API-PATCH-007",
+    "VAL-API-SCH-020",
+    "VAL-API-SCH-022",
+    "VAL-API-STG-001",
+    "VAL-API-STG-002",
+    "VAL-API-STG-006",
+    "VAL-API-STG-007",
+    "VAL-API-STG-008",
+    "VAL-API-STG-017",
+    "VAL-API-STG-030",
+    "VAL-API-SYNC-001",
+    "VAL-API-SYNC-007",
+    "VAL-ERR-001",
+    "VAL-ERR-002",
+    "VAL-ERR-003",
+    "VAL-ERR-004",
+    "VAL-ERR-005",
+    "VAL-INT-006"
+  ],
+  "failedAssertions": [
+    {
+      "id": "VAL-AGENT-002",
+      "reason": "MCP interface/tool coverage and contract naming are not fully aligned with the stated PRD interface set."
+    },
+    {
+      "id": "VAL-AGENT-004",
+      "reason": "Tracing env var configuration is not explicitly implemented in agent setup code (only documented in comments)."
+    },
+    {
+      "id": "VAL-API-SCH-001",
+      "reason": "Type mismatch vs contract: expected TIMESTAMPTZ, found timestamp for contacts.last_synced_at."
+    },
+    {
+      "id": "VAL-API-SCH-010",
+      "reason": "Schema type mismatch vs contract (UUID/TIMESTAMPTZ expected, varchar/timestamp found)."
+    },
+    {
+      "id": "VAL-API-SCH-030",
+      "reason": "Schema type mismatch vs contract (UUID/TIMESTAMPTZ expected, varchar/timestamp found)."
+    },
+    {
+      "id": "VAL-API-SCH-040",
+      "reason": "Contract requires a single new Phase 2 migration file; repository currently has multiple 0005 migration files."
+    }
+  ],
+  "blockedAssertions": [],
+  "appliedUpdates": [
+    {
+      "target": "user-testing.md",
+      "description": "Added terminal surface concurrency guidance and Flow Validator Guidance section for safe serialized backend assertion validation.",
+      "source": "setup"
+    },
+    {
+      "target": "user-testing.md",
+      "description": "Added Windows-specific testing notes (curl.exe alias and Vitest-context guidance for sync/runtime checks).",
+      "source": "flow-report"
+    }
+  ],
+  "previousRound": null
+}

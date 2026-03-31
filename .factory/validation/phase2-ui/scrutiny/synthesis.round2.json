@@ -1,0 +1,77 @@
+{
+  "milestone": "phase2-ui",
+  "round": 2,
+  "status": "fail",
+  "validatorsRun": {
+    "test": {
+      "passed": true,
+      "command": "npm --prefix \"C:\\Users\\josep\\downloads\\projects\\outbound os\\outboundos\" exec vitest run",
+      "exitCode": 0
+    },
+    "typecheck": {
+      "passed": true,
+      "command": "npm --prefix \"C:\\Users\\josep\\downloads\\projects\\outbound os\\outboundos\" run check",
+      "exitCode": 0
+    },
+    "lint": {
+      "passed": true,
+      "command": "",
+      "exitCode": 0
+    }
+  },
+  "reviewsSummary": {
+    "total": 2,
+    "passed": 0,
+    "failed": 2,
+    "failedFeatures": [
+      "phase2-types-and-mock-data",
+      "phase2-actions-page-ui"
+    ]
+  },
+  "blockingIssues": [
+    {
+      "featureId": "phase2-types-and-mock-data",
+      "severity": "blocking",
+      "description": "ActionCard timestamp fields and mock data values still use Date objects instead of JSON timestamp strings, so the mock shape still does not match GET /api/actions response serialization."
+    },
+    {
+      "featureId": "phase2-actions-page-ui",
+      "severity": "blocking",
+      "description": "actions-page tests still do not import/render ActionsPage (node-only helper tests), so required component behavior assertions remain unverified."
+    },
+    {
+      "featureId": "phase2-actions-page-ui",
+      "severity": "blocking",
+      "description": "Actions tab runtime list logic still does not enforce required ordering by priority DESC then createdAt DESC."
+    }
+  ],
+  "appliedUpdates": [],
+  "suggestedGuidanceUpdates": [
+    {
+      "target": "backend-worker skill",
+      "suggestion": "Add an explicit exception path for declaration/static-data-only features where strict RED-first testing is not applicable.",
+      "evidence": "phase2-types-and-mock-data still reports RED-first deviation while only touching shared types/mock records.",
+      "isSystemic": true
+    },
+    {
+      "target": "AGENTS.md",
+      "suggestion": "Add or enforce a commit-scope rule that implementation features must not include unrelated .factory artifacts unless explicitly requested.",
+      "evidence": "Commit 6e39b36 still includes unrelated .factory/docs and validation assertion files outside the feature scope.",
+      "isSystemic": true
+    },
+    {
+      "target": "frontend-worker skill",
+      "suggestion": "Require explicit agent-browser validation (or a documented exemption) and accurate skillFeedback when manual UI checks are skipped.",
+      "evidence": "phase2-actions-page-ui review found no agent-browser usage while handoff indicated followedProcedure=true.",
+      "isSystemic": true
+    },
+    {
+      "target": "AGENTS.md",
+      "suggestion": "Clarify UI testing standards: either require DOM-capable tooling for component-level assertions or explicitly allow contract-aligned logic-only tests.",
+      "evidence": "VAL-UI-014 expects component tests, but vitest config is node-only and current tests remain helper-only.",
+      "isSystemic": true
+    }
+  ],
+  "rejectedObservations": [],
+  "previousRound": ".factory/validation/phase2-ui/scrutiny/synthesis.json@round1"
+}

@@ -29,10 +29,12 @@ import {
   Brain,
   Heart,
   LogOut,
+  ListTodo,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
 const menuItems = [
+  { title: "Actions", url: "/actions", icon: ListTodo },
   { title: "Prospect Research", url: "/prospect-research", icon: FlaskConical },
   { title: "Import Prospects", url: "/research-setup", icon: Upload },
   { title: "Contacts", url: "/contacts", icon: Users },

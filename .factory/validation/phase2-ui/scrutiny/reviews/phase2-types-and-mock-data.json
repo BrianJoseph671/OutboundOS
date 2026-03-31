@@ -1,0 +1,45 @@
+{
+  "featureId": "phase2-types-and-mock-data",
+  "reviewedAt": "2026-03-31T04:40:17Z",
+  "commitId": "6e39b36cc6941c20057aa44b26c7cbdf0aedbeb3",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "Compared to the prior failed round, the same blocking API-shape mismatch remains: ActionCard timestamps and mock values are still Date objects instead of JSON-serialized timestamp strings. Required type/mcp exports and realistic dataset coverage are otherwise present.",
+    "issues": [
+      {
+        "file": "shared/types/actions.ts",
+        "line": 25,
+        "severity": "blocking",
+        "description": "Previous blocking issue is unresolved. ActionCard still types snoozedUntil/createdAt/completedAt as Date (lines 25, 27, 28), which does not exactly match GET /api/actions JSON response shape where timestamps serialize as strings."
+      },
+      {
+        "file": "client/src/data/mock-actions.ts",
+        "line": 12,
+        "severity": "blocking",
+        "description": "Mock data still uses Date-producing helpers (daysAgo/daysFromNow) and assigns Date values to timestamp fields (e.g., lines 38, 152, 174, 194). This preserves the prior API-shape mismatch flagged in the previous scrutiny round."
+      },
+      {
+        "file": ".factory/docs/phase2-backend-validation-assertions.md",
+        "line": 1,
+        "severity": "non_blocking",
+        "description": "Commit 6e39b36 includes unrelated .factory documentation artifacts (also .factory/validation/phase2-cross-area/assertions.md) beyond the requested scope of types and mock data."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "skills",
+      "observation": "The backend-worker skill's mandatory RED-first step does not account for types/static-data-only features, and this feature again shows an intentional deviation.",
+      "evidence": "Handoff skillFeedback.followedProcedure=false with deviation on 'Write Tests First (RED)'; .factory/skills/backend-worker/SKILL.md has no explicit exception path for declaration-only work."
+    },
+    {
+      "area": "conventions",
+      "observation": "Mission guidance still lacks an explicit narrow-scope commit rule preventing unrelated .factory artifacts from being included in implementation commits.",
+      "evidence": "git show --stat 6e39b36 includes .factory/docs/phase2-backend-validation-assertions.md and .factory/validation/phase2-cross-area/assertions.md alongside the 3 feature files."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "Re-review result: fail. The prior blocking timestamp-shape issue is still not resolved (Date objects remain in shared ActionCard typings and mock action records), so the feature still does not meet the exact GET /api/actions response-shape requirement."
+}
