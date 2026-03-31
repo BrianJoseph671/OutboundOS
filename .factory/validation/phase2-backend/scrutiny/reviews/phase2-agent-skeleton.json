@@ -1,0 +1,39 @@
+{
+  "featureId": "phase2-agent-skeleton",
+  "reviewedAt": "2026-03-31T05:36:53.821246Z",
+  "commitId": "b3a959b",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "Feature scope is largely implemented (agent skeleton, MCP tools, services, /api/sync wiring, tests), but action dedup has a functional gap that can generate duplicate actions within a single detectActions run.",
+    "issues": [
+      {
+        "file": "server/agent/services/actionDetector.ts",
+        "line": 51,
+        "severity": "blocking",
+        "description": "Duplicate-action prevention checks only persisted pending actions (pendingActionExists) and does not account for actions queued earlier in the same detectActions call. If multiple new interactions for the same contact/actionType are processed in one batch, duplicate follow_up/open_thread actions can be returned and then persisted."
+      },
+      {
+        "file": "server/agent/index.ts",
+        "line": 123,
+        "severity": "non_blocking",
+        "description": "runSync derives newlySyncedInteractions using a fixed 5-minute ingestedAt window instead of the exact rows written in this sync. This can include unrelated recent interactions (or miss long-running sync writes), causing action detection to run on an imprecise set."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "skills",
+      "observation": "backend-worker skill procedure says to do RED TDD first and manual endpoint verification, but this worker flow appears implementation-first with command-based verification only; the skill guidance may not match actual mission expectations/enforcement.",
+      "evidence": "Skill: .factory/skills/backend-worker/SKILL.md lines 33-41 (Write Tests First/confirm FAIL) and 53-61 (Verify Manually). Transcript skeleton (workerSessionId 2ed9a247-0cb6-4bb3-b5b7-7526843ae872) shows file creation steps (server/agent/tools/*, services/*, index.ts) before test execution and only npm run check + npx vitest run verification in handoff."
+    },
+    {
+      "area": "knowledge",
+      "observation": "Shared architecture docs record the calendar/granola dedup rule but not the current implementation caveat that persisted interactions do not store MCP source, so granola-vs-calendar distinction is approximate.",
+      "evidence": "Doc: .factory/library/architecture.md lines 55-59 states the rule. Code: server/agent/services/interactionWriter.ts lines 68-74 and 80-87 uses raw.source for incoming calendar rows but checks existing rows via broad meeting filter (channel===meeting && sourceId!=null). Worker handoff discoveredIssues also notes this limitation."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "Reviewed commit b3a959b and transcript/handoff evidence for phase2-agent-skeleton. Implementation is comprehensive, but detectActions can produce duplicate actions within a single batch, so this review fails pending that fix."
+}
