@@ -441,3 +441,77 @@ describe("detectActions — no duplicate actions", () => {
     expect(reconnects.length).toBe(1);
   });
 });
+
+// ── In-batch dedup (single detectActions() call) ─────────────────────────────
+
+describe("detectActions — in-batch duplicate prevention", () => {
+  let userId: string;
+
+  beforeAll(async () => {
+    const user = await createTestUser("inbatch_dedup");
+    userId = user.id;
+  });
+
+  it("3 inbound interactions from the same contact → exactly 1 follow_up action", async () => {
+    // Fresh contact with no existing pending actions in DB
+    const contact = await createTestContact(userId, { tier: "cool" });
+
+    // Create 3 inbound interactions for the same contact
+    const inbound1 = await createTestInteraction(userId, contact.id, {
+      direction: "inbound",
+      occurredAt: new Date("2025-01-10T09:00:00Z"),
+      sourceId: `inbatch-inbound-1-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    });
+    const inbound2 = await createTestInteraction(userId, contact.id, {
+      direction: "inbound",
+      occurredAt: new Date("2025-01-10T10:00:00Z"),
+      sourceId: `inbatch-inbound-2-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    });
+    const inbound3 = await createTestInteraction(userId, contact.id, {
+      direction: "inbound",
+      occurredAt: new Date("2025-01-10T11:00:00Z"),
+      sourceId: `inbatch-inbound-3-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    });
+
+    // Pass all 3 interactions in a single detectActions() call
+    const result = await detectActions(userId, [inbound1, inbound2, inbound3]);
+
+    const followUps = result.filter(
+      (a) => a.actionType === "follow_up" && a.contactId === contact.id
+    );
+    // Should produce exactly 1 follow_up, not 3
+    expect(followUps.length).toBe(1);
+  });
+
+  it("3 inbound interactions from different contacts → 3 follow_up actions", async () => {
+    const contact1 = await createTestContact(userId, { tier: "cool" });
+    const contact2 = await createTestContact(userId, { tier: "cool" });
+    const contact3 = await createTestContact(userId, { tier: "cool" });
+
+    const inbound1 = await createTestInteraction(userId, contact1.id, {
+      direction: "inbound",
+      occurredAt: new Date("2025-01-11T09:00:00Z"),
+      sourceId: `inbatch-diff-1-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    });
+    const inbound2 = await createTestInteraction(userId, contact2.id, {
+      direction: "inbound",
+      occurredAt: new Date("2025-01-11T10:00:00Z"),
+      sourceId: `inbatch-diff-2-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    });
+    const inbound3 = await createTestInteraction(userId, contact3.id, {
+      direction: "inbound",
+      occurredAt: new Date("2025-01-11T11:00:00Z"),
+      sourceId: `inbatch-diff-3-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    });
+
+    const result = await detectActions(userId, [inbound1, inbound2, inbound3]);
+
+    // Each different contact should produce exactly 1 follow_up
+    const fu1 = result.filter((a) => a.actionType === "follow_up" && a.contactId === contact1.id);
+    const fu2 = result.filter((a) => a.actionType === "follow_up" && a.contactId === contact2.id);
+    const fu3 = result.filter((a) => a.actionType === "follow_up" && a.contactId === contact3.id);
+    expect(fu1.length).toBe(1);
+    expect(fu2.length).toBe(1);
+    expect(fu3.length).toBe(1);
+  });
+});

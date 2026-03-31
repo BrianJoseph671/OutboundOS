@@ -63,14 +63,31 @@ actionsRouter.get("/", async (req: Request, res: Response) => {
     const limitParam = req.query.limit;
     const offsetParam = req.query.offset;
 
-    const limit =
-      limitParam !== undefined && typeof limitParam === "string"
-        ? parseInt(limitParam, 10)
-        : 50;
-    const offset =
-      offsetParam !== undefined && typeof offsetParam === "string"
-        ? parseInt(offsetParam, 10)
-        : 0;
+    const MAX_LIMIT = 100;
+
+    let limit = 50;
+    if (limitParam !== undefined && typeof limitParam === "string") {
+      const parsed = parseInt(limitParam, 10);
+      if (isNaN(parsed) || String(parsed) !== limitParam.trim()) {
+        return res.status(400).json({ error: "Invalid limit: must be a non-negative integer" });
+      }
+      if (parsed < 0) {
+        return res.status(400).json({ error: "Invalid limit: must be a non-negative integer" });
+      }
+      limit = Math.min(parsed, MAX_LIMIT);
+    }
+
+    let offset = 0;
+    if (offsetParam !== undefined && typeof offsetParam === "string") {
+      const parsed = parseInt(offsetParam, 10);
+      if (isNaN(parsed) || String(parsed) !== offsetParam.trim()) {
+        return res.status(400).json({ error: "Invalid offset: must be a non-negative integer" });
+      }
+      if (parsed < 0) {
+        return res.status(400).json({ error: "Invalid offset: must be a non-negative integer" });
+      }
+      offset = parsed;
+    }
 
     const result = await storage.getActions(userId, {
       status: typeof statusParam === "string" ? statusParam : undefined,

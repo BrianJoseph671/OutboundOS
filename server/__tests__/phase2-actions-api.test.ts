@@ -582,3 +582,61 @@ describe("Error response hygiene — no stack traces in responses", () => {
     expect(body).not.toContain("at Object.");
   });
 });
+
+// =============================================================================
+// PAGINATION PARAM VALIDATION — limit and offset
+// =============================================================================
+
+describe("GET /api/actions — pagination param validation", () => {
+  let app: express.Application;
+  let testUser: typeof users.$inferSelect;
+
+  beforeAll(async () => {
+    app = await createFullApp();
+    testUser = await createTestUser("pagination_val");
+  });
+
+  async function getAsUser(query: string) {
+    const agent = request.agent(app);
+    await agent.post("/test/login").send({ user: testUser }).expect(200);
+    return agent.get(`/api/actions${query}`);
+  }
+
+  it("limit=-1 returns 400", async () => {
+    const res = await getAsUser("?limit=-1");
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBeTruthy();
+  });
+
+  it("limit=abc returns 400", async () => {
+    const res = await getAsUser("?limit=abc");
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBeTruthy();
+  });
+
+  it("offset=-5 returns 400", async () => {
+    const res = await getAsUser("?offset=-5");
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBeTruthy();
+  });
+
+  it("limit=200 is capped to 100 and returns 200", async () => {
+    const res = await getAsUser("?limit=200");
+    expect(res.status).toBe(200);
+    // Response is a valid array — limit was silently capped to 100 on the server
+    expect(Array.isArray(res.body)).toBe(true);
+    expect(res.body.length).toBeLessThanOrEqual(100);
+  });
+
+  it("valid limit=10 and offset=0 returns 200", async () => {
+    const res = await getAsUser("?limit=10&offset=0");
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
+  });
+
+  it("offset=abc returns 400", async () => {
+    const res = await getAsUser("?offset=abc");
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBeTruthy();
+  });
+});

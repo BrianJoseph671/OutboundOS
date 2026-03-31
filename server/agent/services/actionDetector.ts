@@ -36,6 +36,28 @@ export async function detectActions(
 ): Promise<InsertAction[]> {
   const actionsToCreate: InsertAction[] = [];
 
+  // In-memory dedup set for this batch: keys are "contactId:actionType"
+  // Prevents proposing the same (contactId, actionType) pair more than once
+  // within a single detectActions() call even if the DB hasn't been updated yet.
+  const proposedThisBatch = new Set<string>();
+
+  /**
+   * Check both the DB (for pre-existing pending actions) and the in-memory
+   * batch set (for actions already proposed in this same call).
+   */
+  async function isDuplicate(contactId: string, actionType: string): Promise<boolean> {
+    const batchKey = `${contactId}:${actionType}`;
+    if (proposedThisBatch.has(batchKey)) return true;
+    return pendingActionExists(userId, contactId, actionType);
+  }
+
+  /**
+   * Mark a (contactId, actionType) pair as proposed for this batch.
+   */
+  function markProposed(contactId: string, actionType: string): void {
+    proposedThisBatch.add(`${contactId}:${actionType}`);
+  }
+
   // ── Step 1: Handle each new interaction ────────────────────────────────────
 
   for (const interaction of newInteractions) {
@@ -48,8 +70,8 @@ export async function detectActions(
     if (interaction.direction === "inbound") {
       const shouldCreate = await shouldCreateFollowUp(userId, interaction.contactId, interaction.occurredAt);
       if (shouldCreate) {
-        const isDuplicate = await pendingActionExists(userId, interaction.contactId, "follow_up");
-        if (!isDuplicate) {
+        if (!(await isDuplicate(interaction.contactId, "follow_up"))) {
+          markProposed(interaction.contactId, "follow_up");
           actionsToCreate.push({
             userId,
             contactId: interaction.contactId,
@@ -66,8 +88,8 @@ export async function detectActions(
 
     // ── open_thread: interaction has openThreads set ─────────────────────────
     if (interaction.openThreads && interaction.openThreads.trim().length > 0) {
-      const isDuplicate = await pendingActionExists(userId, interaction.contactId, "open_thread");
-      if (!isDuplicate) {
+      if (!(await isDuplicate(interaction.contactId, "open_thread"))) {
+        markProposed(interaction.contactId, "open_thread");
         actionsToCreate.push({
           userId,
           contactId: interaction.contactId,
@@ -95,8 +117,8 @@ export async function detectActions(
         now.getTime() - contact.lastInteractionAt.getTime() > FOURTEEN_DAYS_MS;
 
       if (isStale) {
-        const isDuplicate = await pendingActionExists(userId, contact.id, "reconnect");
-        if (!isDuplicate) {
+        if (!(await isDuplicate(contact.id, "reconnect"))) {
+          markProposed(contact.id, "reconnect");
           const reason =
             contact.lastInteractionAt
               ? `No interaction with ${contact.name} for over 14 days`
