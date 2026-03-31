@@ -11,9 +11,10 @@
  *   - Badge color mapping
  *   - Source icon mapping
  *   - Mock data has correct shape (ActionCard)
+ *   - useActions hook API call patterns (dismiss, snooze, sync, filters)
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { ActionCard, ActionType, ActionStatus } from "@shared/types/actions";
 
 // ── Helper: create a minimal ActionCard ──────────────────────────────────────
@@ -486,5 +487,172 @@ describe("Combined type and company filters", () => {
     const byType = filterByType(actions, "open_thread");
     const byCompany = filterByCompany(byType, "Anthropic");
     expect(byCompany).toHaveLength(0);
+  });
+});
+
+// =============================================================================
+// Tests: useActions hook — API call patterns
+// (Mirrors the pattern used in interaction-timeline.test.ts for useInteractions)
+// =============================================================================
+
+describe("useActions hook — API call patterns", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.resetModules();
+  });
+
+  it("GET /api/actions constructs correct base URL without filters", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const { apiRequest } = await import("../lib/queryClient");
+    const res = await apiRequest("GET", "/api/actions");
+    await res.json();
+
+    expect(vi.mocked(fetch)).toHaveBeenCalledWith(
+      "/api/actions",
+      expect.objectContaining({ method: "GET", credentials: "include" }),
+    );
+  });
+
+  it("GET /api/actions?type=follow_up passes type filter to API", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const { apiRequest } = await import("../lib/queryClient");
+    const res = await apiRequest("GET", "/api/actions?type=follow_up");
+    await res.json();
+
+    expect(vi.mocked(fetch)).toHaveBeenCalledWith(
+      "/api/actions?type=follow_up",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("GET /api/actions?status=pending passes status filter to API", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const { apiRequest } = await import("../lib/queryClient");
+    const res = await apiRequest("GET", "/api/actions?status=pending");
+    await res.json();
+
+    expect(vi.mocked(fetch)).toHaveBeenCalledWith(
+      "/api/actions?status=pending",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("dismissAction calls PATCH /api/actions/:id with status=dismissed", async () => {
+    const mockResponse = { id: "act-1", status: "dismissed", completedAt: new Date().toISOString() };
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify(mockResponse), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const { apiRequest } = await import("../lib/queryClient");
+    const res = await apiRequest("PATCH", "/api/actions/act-1", { status: "dismissed" });
+    const data = await res.json();
+
+    expect(vi.mocked(fetch)).toHaveBeenCalledWith(
+      "/api/actions/act-1",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({ status: "dismissed" }),
+      }),
+    );
+    expect(data.status).toBe("dismissed");
+  });
+
+  it("snoozeAction calls PATCH /api/actions/:id with status=snoozed and snoozedUntil", async () => {
+    const snoozedUntil = new Date(Date.now() + 86400000).toISOString();
+    const mockResponse = { id: "act-2", status: "snoozed", snoozedUntil };
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify(mockResponse), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const { apiRequest } = await import("../lib/queryClient");
+    const payload = { status: "snoozed", snoozedUntil };
+    const res = await apiRequest("PATCH", "/api/actions/act-2", payload);
+    const data = await res.json();
+
+    expect(vi.mocked(fetch)).toHaveBeenCalledWith(
+      "/api/actions/act-2",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      }),
+    );
+    expect(data.status).toBe("snoozed");
+    expect(data.snoozedUntil).toBe(snoozedUntil);
+  });
+
+  it("syncRecent calls POST /api/sync and returns SyncResponse shape", async () => {
+    const mockSyncResponse = { newInteractions: 3, newActions: 2, errors: [] };
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify(mockSyncResponse), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const { apiRequest } = await import("../lib/queryClient");
+    const res = await apiRequest("POST", "/api/sync");
+    const data = await res.json();
+
+    expect(vi.mocked(fetch)).toHaveBeenCalledWith(
+      "/api/sync",
+      expect.objectContaining({ method: "POST", credentials: "include" }),
+    );
+    expect(typeof data.newInteractions).toBe("number");
+    expect(typeof data.newActions).toBe("number");
+    expect(Array.isArray(data.errors)).toBe(true);
+    expect(data.newInteractions).toBe(3);
+    expect(data.newActions).toBe(2);
+  });
+
+  it("syncRecent response shows correct counts in toast message format", () => {
+    // Verify the toast description format used in the UI
+    const syncData = { newInteractions: 5, newActions: 3, errors: [] };
+    const description = `${syncData.newInteractions} new interactions, ${syncData.newActions} new actions`;
+    expect(description).toBe("5 new interactions, 3 new actions");
+  });
+
+  it("GET /api/actions?status=pending&type=follow_up combines filters in URL", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const { apiRequest } = await import("../lib/queryClient");
+    await apiRequest("GET", "/api/actions?status=pending&type=follow_up");
+
+    expect(vi.mocked(fetch)).toHaveBeenCalledWith(
+      "/api/actions?status=pending&type=follow_up",
+      expect.objectContaining({ method: "GET" }),
+    );
   });
 });

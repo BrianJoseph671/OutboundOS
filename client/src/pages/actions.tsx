@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { ActionCard, ActionType } from "@shared/types/actions";
-import { pendingMockActions } from "@/data/mock-actions";
+import { useActions } from "@/hooks/useActions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -403,18 +403,28 @@ const ACTION_TYPE_OPTIONS: { label: string; value: ActionType | "all" }[] = [
 export default function ActionsPage() {
   const { toast } = useToast();
 
-  // Local state for mock data (will be replaced by useActions hook in phase2-wire-ui-to-api)
-  const [actions, setActions] = useState<ActionCard[]>(pendingMockActions);
-  const [isSyncing, setIsSyncing] = useState(false);
   const [typeFilter, setTypeFilter] = useState<ActionType | "all">("all");
   const [companyFilter, setCompanyFilter] = useState("");
 
-  // Filter and sort actions — priority DESC, then createdAt DESC
+  // Fetch actions from API — type filter is applied server-side
+  const {
+    actions,
+    isLoading,
+    isError,
+    dismissAction,
+    snoozeAction,
+    syncRecent,
+  } = useActions({
+    status: "pending",
+    type: typeFilter !== "all" ? typeFilter : undefined,
+  });
+
+  // isSyncing reflects whether the sync mutation is in-flight
+  const isSyncing = syncRecent.isPending;
+
+  // Company filter is applied client-side (not supported by the API)
   const filteredActions = useMemo(() => {
     let result = actions;
-    if (typeFilter !== "all") {
-      result = result.filter((a) => a.actionType === typeFilter);
-    }
     if (companyFilter) {
       result = result.filter((a) =>
         (a.contactCompany ?? "")
@@ -426,32 +436,55 @@ export default function ActionsPage() {
       if (b.priority !== a.priority) return b.priority - a.priority;
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
-  }, [actions, typeFilter, companyFilter]);
+  }, [actions, companyFilter]);
 
-  // Dismiss handler
+  // Dismiss handler — calls PATCH /api/actions/:id with status=dismissed
   const handleDismiss = (id: string) => {
-    setActions((prev) => prev.filter((a) => a.id !== id));
+    dismissAction.mutate(id, {
+      onError: () => {
+        toast({
+          title: "Failed to dismiss",
+          description: "Could not dismiss action. Please try again.",
+          variant: "destructive",
+        });
+      },
+    });
   };
 
-  // Snooze handler (removes from visible list)
-  const handleSnooze = (id: string, _until: Date) => {
-    setActions((prev) => prev.filter((a) => a.id !== id));
+  // Snooze handler — calls PATCH /api/actions/:id with status=snoozed
+  const handleSnooze = (id: string, until: Date) => {
+    snoozeAction.mutate(
+      { id, snoozedUntil: until.toISOString() },
+      {
+        onError: () => {
+          toast({
+            title: "Failed to snooze",
+            description: "Could not snooze action. Please try again.",
+            variant: "destructive",
+          });
+        },
+      },
+    );
   };
 
-  // Sync Recent handler
-  const handleSync = async () => {
+  // Sync Recent handler — calls POST /api/sync, shows real counts in toast
+  const handleSync = () => {
     if (isSyncing) return;
-    setIsSyncing(true);
-    try {
-      // Simulate 2s delay (will be replaced by real POST /api/sync in phase2-wire-ui-to-api)
-      await new Promise<void>((resolve) => setTimeout(resolve, 2000));
-      toast({
-        title: "Sync complete",
-        description: "3 new interactions, 2 new actions",
-      });
-    } finally {
-      setIsSyncing(false);
-    }
+    syncRecent.mutate(undefined, {
+      onSuccess: (data) => {
+        toast({
+          title: "Sync complete",
+          description: `${data.newInteractions} new interactions, ${data.newActions} new actions`,
+        });
+      },
+      onError: () => {
+        toast({
+          title: "Sync failed",
+          description: "Failed to sync recent activity. Please try again.",
+          variant: "destructive",
+        });
+      },
+    });
   };
 
   return (
@@ -517,11 +550,20 @@ export default function ActionsPage() {
 
         {/* Actions tab */}
         <TabsContent value="actions" className="flex-1 overflow-auto mt-4">
-          {isSyncing ? (
+          {isLoading || isSyncing ? (
             <div className="flex flex-col gap-3 pb-4" data-testid="actions-skeleton">
               {Array.from({ length: 3 }).map((_, i) => (
                 <ActionCardSkeleton key={i} />
               ))}
+            </div>
+          ) : isError ? (
+            <div
+              className="flex flex-col items-center justify-center py-20 gap-3 text-center"
+              data-testid="actions-error"
+            >
+              <p className="text-sm text-destructive">
+                Failed to load actions. Please refresh the page.
+              </p>
             </div>
           ) : filteredActions.length === 0 ? (
             <EmptyState onSyncClick={handleSync} isSyncing={isSyncing} />
