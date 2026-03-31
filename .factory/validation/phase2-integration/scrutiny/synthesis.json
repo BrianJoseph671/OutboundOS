@@ -1,6 +1,6 @@
 {
   "milestone": "phase2-integration",
-  "round": 1,
+  "round": 2,
   "status": "fail",
   "validatorsRun": {
     "test": {
@@ -24,36 +24,27 @@
     "passed": 0,
     "failed": 1,
     "failedFeatures": [
-      "phase2-wire-ui-to-api"
+      "fix-actions-api-join-contact-fields"
     ]
   },
   "blockingIssues": [
     {
-      "featureId": "phase2-wire-ui-to-api",
+      "featureId": "fix-actions-api-join-contact-fields",
       "severity": "blocking",
-      "description": "GET /api/actions currently returns bare actions rows without joined contact fields, but the wired Actions page consumes ActionCard fields (contactName/contactCompany/contactEmail), creating an API/UI contract mismatch."
-    },
-    {
-      "featureId": "phase2-wire-ui-to-api",
-      "severity": "blocking",
-      "description": "The required component-test migration to mock useActions and verify ActionsPage dismiss/snooze wiring was not implemented; tests remain focused on apiRequest patterns and mock-data assertions instead of page-hook integration."
+      "description": "The required ActionsPage component-test migration remains unresolved: client/src/__tests__/actions-page.test.ts still does not render ActionsPage or mock useActions to verify dismiss/snooze mutation wiring, leaving the page-hook integration blocker open."
     }
   ],
   "appliedUpdates": [],
-  "suggestedGuidanceUpdates": [
+  "suggestedGuidanceUpdates": [],
+  "rejectedObservations": [
     {
-      "target": "skills/frontend-worker",
-      "suggestion": "Enforce stricter evidence requirements in skill feedback: if required manual agent-browser checks are skipped or TDD order is not followed, handoff.skillFeedback.followedProcedure should not be marked true.",
-      "evidence": "Review of feature phase2-wire-ui-to-api found no agent-browser execution and tests were not written first, while handoff still reported followedProcedure=true.",
-      "isSystemic": false
+      "observation": "frontend-worker procedure compliance is overstated for this run.",
+      "reason": "already-documented in round 1 synthesis; no new corroborating evidence from the fix review."
     },
     {
-      "target": "AGENTS.md",
-      "suggestion": "Add an explicit contract-alignment rule for integration milestones: endpoint response shapes used by UI hooks/tests must be consistent across validation-contract assertions and shared typed models.",
-      "evidence": "validation-contract describes useActions returning Action[] while shared/types/actions.ts defines ActionCard with required contact identity fields, masking the missing join in /api/actions.",
-      "isSystemic": false
+      "observation": "Shared contract artifacts are inconsistent about the GET /api/actions response shape, which can mask integration defects.",
+      "reason": "already-documented in round 1 synthesis; current fix review contained no new shared-state observations."
     }
   ],
-  "rejectedObservations": [],
-  "previousRound": null
+  "previousRound": ".factory/validation/phase2-integration/scrutiny/synthesis.round1.json"
 }

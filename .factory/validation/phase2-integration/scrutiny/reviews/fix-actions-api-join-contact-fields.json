@@ -1,0 +1,22 @@
+{
+  "featureId": "fix-actions-api-join-contact-fields",
+  "reviewedAt": "2026-03-31T06:48:04Z",
+  "commitId": "e3749f9",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "The fix commit correctly adds joined contact fields to GET /api/actions and validates them with API tests, resolving the original API/UI shape mismatch; however, the second prior blocking issue (required ActionsPage component-test migration to mocked useActions wiring) remains unresolved.",
+    "issues": [
+      {
+        "file": "client/src/__tests__/actions-page.test.ts",
+        "line": 498,
+        "severity": "blocking",
+        "description": "The prior blocking test-coverage gap remains: this file still does not render ActionsPage or mock ../hooks/useActions to verify dismiss/snooze mutation wiring. Evidence in current file: no render( calls, no vi.mock(...) for the hook, and tests at/after line 498 focus on apiRequest call patterns rather than page-hook integration."
+      }
+    ]
+  },
+  "sharedStateObservations": [],
+  "addressesFailureFrom": ".factory/validation/phase2-integration/scrutiny/reviews/phase2-wire-ui-to-api.json",
+  "summary": "This fix addresses only one of the two prior blockers: API join fields are now present, but the required component-test migration blocker from the original review is still open, so the fix review fails."
+}
