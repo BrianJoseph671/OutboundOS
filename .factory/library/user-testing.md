@@ -20,11 +20,24 @@ Testing surface, tools, and resource cost classification.
 - **Dev server:** ~200MB RAM
 - **agent-browser:** ~300MB per instance
 - **Max concurrent validators:** 5 (well within 70% of ~26GB usable headroom)
+- **Terminal/API validators (vitest + typecheck):** run serially (`max concurrent: 1`) because they share the same DB and can mutate overlapping test state.
+
+## Flow Validator Guidance: terminal
+
+- Use PowerShell-compatible commands only.
+- Stay within repository root: `C:\Users\josep\downloads\projects\outbound os\outboundos`.
+- Use only shared local services already started for this run (PostgreSQL + dev server on port 5000).
+- Do not start additional app instances or alternate ports.
+- Treat DB and test fixtures as shared global state; if multiple groups are assigned, execute one group at a time.
+- Write flow report JSON to `.factory/validation/<milestone>/user-testing/flows/<group-id>.json`.
+- Save any command evidence files under mission evidence path only.
 
 ## Testing Notes
 
 - Windows environment: use PowerShell syntax (semicolons, Invoke-RestMethod)
+- In PowerShell, prefer `curl.exe` (not `curl`) to avoid alias conflicts with `Invoke-WebRequest`.
 - The dev server takes ~10-15 seconds to start
 - WebSocket available at /ws for real-time features
 - Auth testing requires Google OAuth credentials configured in .env
 - For auth flow testing: can test redirect URL and session behavior but cannot complete real Google OAuth flow in automated testing — test the redirect URL structure and session handling with mock/seed data
+- For agent sync/runtime checks, prefer running through Vitest context so test DB environment variables are populated.

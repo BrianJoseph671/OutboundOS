@@ -1,0 +1,702 @@
+{
+  "groupId": "backend-tests",
+  "testedAt": "2026-03-31T06:04:47.1535306Z",
+  "isolation": {
+    "surface": "terminal",
+    "appUrl": "http://127.0.0.1:5000",
+    "missionDir": "C:\\Users\\josep\\.factory\\missions\\c1a7d1d0-5e9b-443d-ba5f-cdb1acba01d8",
+    "repoRoot": "C:\\Users\\josep\\downloads\\projects\\outbound os\\outboundos",
+    "sharedAppInstanceOnly": true
+  },
+  "toolsUsed": [
+    "PowerShell",
+    "npx vitest run",
+    "Read/Grep (code evidence)"
+  ],
+  "assertions": [
+    {
+      "id": "VAL-API-AUTH-001",
+      "title": "GET /api/actions requires authentication",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run targeted vitest suite for phase2 actions API",
+          "expected": "Unauthenticated GET /api/actions returns 401",
+          "observed": "Test `GET /api/actions returns 401 without session` passed"
+        }
+      ],
+      "evidence": {
+        "terminalLogs": [
+          "phase2-backend/backend-tests/vitest-targeted.log:153"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-API-AUTH-002",
+      "title": "PATCH /api/actions/:id requires authentication",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run targeted vitest suite for phase2 actions API",
+          "expected": "Unauthenticated PATCH /api/actions/:id returns 401",
+          "observed": "Test `PATCH /api/actions/:id returns 401 without session` passed"
+        }
+      ],
+      "evidence": {
+        "terminalLogs": [
+          "phase2-backend/backend-tests/vitest-targeted.log:155"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-API-AUTH-003",
+      "title": "POST /api/sync requires authentication",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run targeted vitest suite for phase2 actions API",
+          "expected": "Unauthenticated POST /api/sync returns 401",
+          "observed": "Test `POST /api/sync returns 401 without session` passed"
+        }
+      ],
+      "evidence": {
+        "terminalLogs": [
+          "phase2-backend/backend-tests/vitest-targeted.log:157"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-API-GET-001",
+      "title": "GET /api/actions returns user's actions",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run targeted actions API tests",
+          "expected": "Authenticated GET returns 200 JSON array scoped to user",
+          "observed": "Tests `returns 200 with JSON array` and `returns only the authenticated user's actions` passed"
+        }
+      ],
+      "evidence": {
+        "terminalLogs": [
+          "phase2-backend/backend-tests/vitest-targeted.log:158",
+          "phase2-backend/backend-tests/vitest-targeted.log:159"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-API-GET-003",
+      "title": "GET /api/actions supports status filter",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run targeted actions API tests with status filter assertions",
+          "expected": "status=pending returns only pending-compatible actions",
+          "observed": "Test `GET /api/actions?status=pending returns only pending` passed"
+        }
+      ],
+      "evidence": {
+        "terminalLogs": [
+          "phase2-backend/backend-tests/vitest-targeted.log:160"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-API-GET-004",
+      "title": "GET /api/actions supports type filter",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run targeted actions API tests with type filter assertions",
+          "expected": "type=follow_up returns only follow_up actions",
+          "observed": "Test `GET /api/actions?type=follow_up returns only follow_up actions` passed"
+        }
+      ],
+      "evidence": {
+        "terminalLogs": [
+          "phase2-backend/backend-tests/vitest-targeted.log:162"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-API-GET-005",
+      "title": "GET /api/actions supports pagination",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run targeted actions API pagination tests",
+          "expected": "limit/offset pages return bounded and offset results",
+          "observed": "Tests for `limit=2&offset=0` and `limit=2&offset=2` passed"
+        }
+      ],
+      "evidence": {
+        "terminalLogs": [
+          "phase2-backend/backend-tests/vitest-targeted.log:163",
+          "phase2-backend/backend-tests/vitest-targeted.log:164"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-API-ISO-001",
+      "title": "User isolation on actions",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run user isolation tests for GET/PATCH cross-user access",
+          "expected": "User A cannot read/update User B actions",
+          "observed": "Isolation tests for GET exclusion and PATCH 404 passed"
+        }
+      ],
+      "evidence": {
+        "terminalLogs": [
+          "phase2-backend/backend-tests/vitest-targeted.log:204",
+          "phase2-backend/backend-tests/vitest-targeted.log:205"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-API-PATCH-001",
+      "title": "PATCH /api/actions/:id updates action status",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run targeted PATCH transition tests",
+          "expected": "Valid status transitions return 200 with updated action",
+          "observed": "Tests for completed and snoozed transitions passed"
+        }
+      ],
+      "evidence": {
+        "terminalLogs": [
+          "phase2-backend/backend-tests/vitest-targeted.log:170",
+          "phase2-backend/backend-tests/vitest-targeted.log:174"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-API-PATCH-004",
+      "title": "PATCH snoozed requires snoozed_until",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run targeted PATCH validation tests",
+          "expected": "status=snoozed without snoozedUntil returns 400",
+          "observed": "Test `PATCH with {status:'snoozed'} without snoozedUntil returns 400` passed"
+        }
+      ],
+      "evidence": {
+        "terminalLogs": [
+          "phase2-backend/backend-tests/vitest-targeted.log:175"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-API-PATCH-007",
+      "title": "PATCH returns 404 for other user's action",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run targeted PATCH ownership tests",
+          "expected": "Cross-user PATCH returns 404",
+          "observed": "Test `PATCH another user's action returns 404` passed"
+        }
+      ],
+      "evidence": {
+        "terminalLogs": [
+          "phase2-backend/backend-tests/vitest-targeted.log:177"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-API-STG-001",
+      "title": "IStorage has actions CRUD methods",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Inspect storage interface declarations",
+          "expected": "IStorage defines getActions/getAction/createAction/updateAction/deleteAction with user scoping",
+          "observed": "Interface includes required actions CRUD signatures"
+        }
+      ],
+      "evidence": {
+        "codeRefs": [
+          "server/storage.ts:96-99"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-API-STG-002",
+      "title": "getActions returns only user's actions",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run storage and API user-isolation tests",
+          "expected": "Queries only return rows matching requesting user",
+          "observed": "Storage isolation test and API scoped list test both passed"
+        }
+      ],
+      "evidence": {
+        "terminalLogs": [
+          "phase2-backend/backend-tests/vitest-targeted.log:111",
+          "phase2-backend/backend-tests/vitest-targeted.log:159"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-API-STG-006",
+      "title": "getActions ordered by priority DESC, created_at DESC",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run storage ordering tests",
+          "expected": "Highest priority first; newest first within same priority",
+          "observed": "Both ordering tests passed"
+        }
+      ],
+      "evidence": {
+        "terminalLogs": [
+          "phase2-backend/backend-tests/vitest-targeted.log:107",
+          "phase2-backend/backend-tests/vitest-targeted.log:108"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-API-STG-007",
+      "title": "Snoozed actions excluded from pending query",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run storage snoozed behavior tests",
+          "expected": "Future snoozed actions excluded from pending",
+          "observed": "Future-snoozed exclusion test passed"
+        }
+      ],
+      "evidence": {
+        "terminalLogs": [
+          "phase2-backend/backend-tests/vitest-targeted.log:109"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-API-STG-008",
+      "title": "Snoozed actions resurface after snoozed_until passes",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run storage snoozed resurfacing tests",
+          "expected": "Past snoozed actions included in pending query",
+          "observed": "Past-snoozed resurfacing test passed"
+        }
+      ],
+      "evidence": {
+        "terminalLogs": [
+          "phase2-backend/backend-tests/vitest-targeted.log:110"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-API-STG-017",
+      "title": "updateAction sets completed_at on complete/dismiss",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run storage updateAction completion timestamp tests",
+          "expected": "completedAt auto-set for completed/dismissed transitions",
+          "observed": "Both completedAt transition tests passed"
+        }
+      ],
+      "evidence": {
+        "terminalLogs": [
+          "phase2-backend/backend-tests/vitest-targeted.log:66",
+          "phase2-backend/backend-tests/vitest-targeted.log:67"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-API-STG-030",
+      "title": "IStorage has drafts_log CRUD methods",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Inspect storage interface declarations for drafts_log",
+          "expected": "IStorage defines getDraftsLogs/getDraftsLog/createDraftsLog/updateDraftsLog with userId scoping",
+          "observed": "Required drafts_log CRUD signatures are present"
+        }
+      ],
+      "evidence": {
+        "codeRefs": [
+          "server/storage.ts:103-106"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-API-SYNC-001",
+      "title": "POST /api/sync returns summary",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run sync endpoint tests",
+          "expected": "200 with `{ newInteractions, newActions, errors }` shape",
+          "observed": "Sync summary shape test passed"
+        }
+      ],
+      "evidence": {
+        "terminalLogs": [
+          "phase2-backend/backend-tests/vitest-targeted.log:195"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-API-SYNC-007",
+      "title": "Sync deduplicates by source_id",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run dedup/idempotency tests for repeated sync-like writes",
+          "expected": "Re-sync with same source IDs writes zero duplicates",
+          "observed": "Source-id duplicate and full sync-cycle idempotency tests passed"
+        }
+      ],
+      "evidence": {
+        "terminalLogs": [
+          "phase2-backend/backend-tests/vitest-targeted.log:32",
+          "phase2-backend/backend-tests/vitest-targeted.log:144"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-AGENT-010",
+      "title": "interactionWriter deduplicates by source_id",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run interactionWriter and dedup suites",
+          "expected": "Same (channel, source_id, user) is skipped",
+          "observed": "Duplicate source_id tests passed in writer and comprehensive dedup suite"
+        }
+      ],
+      "evidence": {
+        "terminalLogs": [
+          "phase2-backend/backend-tests/vitest-targeted.log:12",
+          "phase2-backend/backend-tests/vitest-targeted.log:32"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-AGENT-011",
+      "title": "Calendar/Granola dedup rule",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run calendar-vs-granola dedup test cases",
+          "expected": "Calendar write skipped when Granola meeting exists same contact/date",
+          "observed": "Calendar skip test passed"
+        }
+      ],
+      "evidence": {
+        "terminalLogs": [
+          "phase2-backend/backend-tests/vitest-targeted.log:55"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-AGENT-012",
+      "title": "Interaction mapping follows PRD table",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run mapping correctness tests across Superhuman/Granola/Calendar",
+          "expected": "Mapped channel/direction/sourceId/summary fields align with expected source mappings",
+          "observed": "All mapping correctness tests (including inbound direction) passed"
+        }
+      ],
+      "evidence": {
+        "terminalLogs": [
+          "phase2-backend/backend-tests/vitest-targeted.log:58",
+          "phase2-backend/backend-tests/vitest-targeted.log:59",
+          "phase2-backend/backend-tests/vitest-targeted.log:60",
+          "phase2-backend/backend-tests/vitest-targeted.log:63"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-AGENT-020",
+      "title": "contactMatcher matches by email case-insensitive",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run contact matcher tests",
+          "expected": "Uppercase/mixed-case emails resolve same contact",
+          "observed": "Case-insensitive uppercase match test passed"
+        }
+      ],
+      "evidence": {
+        "terminalLogs": [
+          "phase2-backend/backend-tests/vitest-targeted.log:16"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-AGENT-030",
+      "title": "actionDetector creates follow_up actions",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run action detector follow_up tests",
+          "expected": "Inbound without outbound reply creates follow_up action",
+          "observed": "Follow_up creation test passed"
+        }
+      ],
+      "evidence": {
+        "terminalLogs": [
+          "phase2-backend/backend-tests/vitest-targeted.log:4"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-AGENT-031",
+      "title": "actionDetector creates reconnect actions",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run action detector reconnect tests",
+          "expected": "Warm/VIP stale/no-interaction contacts create reconnect action",
+          "observed": "Warm-tier no-interaction reconnect test passed"
+        }
+      ],
+      "evidence": {
+        "terminalLogs": [
+          "phase2-backend/backend-tests/vitest-targeted.log:20"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-AGENT-032",
+      "title": "actionDetector creates open_thread actions",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run action detector open_thread tests",
+          "expected": "Interactions with openThreads create open_thread action",
+          "observed": "Open_thread creation test passed"
+        }
+      ],
+      "evidence": {
+        "terminalLogs": [
+          "phase2-backend/backend-tests/vitest-targeted.log:26"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-AGENT-033",
+      "title": "actionDetector auto-completes follow-ups",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run action detector auto-completion tests",
+          "expected": "Outbound interaction completes pending follow_up",
+          "observed": "Auto-complete follow_up test passed"
+        }
+      ],
+      "evidence": {
+        "terminalLogs": [
+          "phase2-backend/backend-tests/vitest-targeted.log:29"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-AGENT-034",
+      "title": "actionDetector does not create duplicate actions",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run no-duplicate action detector tests",
+          "expected": "Pending same (contact, action_type) prevents duplicate creation",
+          "observed": "Duplicate follow_up suppression test passed"
+        }
+      ],
+      "evidence": {
+        "terminalLogs": [
+          "phase2-backend/backend-tests/vitest-targeted.log:80"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-AGENT-040",
+      "title": "50+ dedup test cases exist",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Verify dedup suite case count from final vitest run and file-level count",
+          "expected": "At least 50 dedup cases are present and executed",
+          "observed": "phase2-dedup suite executed 55 tests; static count confirms 55 explicit `test-*` cases"
+        }
+      ],
+      "evidence": {
+        "terminalLogs": [
+          "phase2-backend/backend-tests/vitest-final.log:15",
+          "phase2-backend/backend-tests/dedup-case-count.txt"
+        ],
+        "codeRefs": [
+          "server/__tests__/phase2-dedup.test.ts:3"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-ERR-001",
+      "title": "Sync partial failure returns successful results",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run POST /api/sync tests in environment with upstream agent invocation error",
+          "expected": "Sync still returns 200 summary while failure is captured in errors",
+          "observed": "Agent invocation logged 400 error while `returns 200 with mock summary` test still passed; runSync code records errors and continues"
+        }
+      ],
+      "evidence": {
+        "terminalLogs": [
+          "phase2-backend/backend-tests/vitest-targeted.log:190",
+          "phase2-backend/backend-tests/vitest-targeted.log:195"
+        ],
+        "codeRefs": [
+          "server/agent/index.ts:72",
+          "server/agent/index.ts:102-103",
+          "server/agent/index.ts:145"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-ERR-002",
+      "title": "Sync total failure returns error",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Validate failure-handling path and zero-count response behavior",
+          "expected": "On complete upstream failure, sync returns zero counts with surfaced errors",
+          "observed": "Observed upstream agent failure logs with zero-count sync response test passing; runSync always returns `{newInteractions,newActions,errors}` and pushes failure messages"
+        }
+      ],
+      "evidence": {
+        "terminalLogs": [
+          "phase2-backend/backend-tests/vitest-targeted.log:198",
+          "phase2-backend/backend-tests/vitest-targeted.log:203"
+        ],
+        "codeRefs": [
+          "server/agent/index.ts:102",
+          "server/agent/index.ts:113",
+          "server/agent/index.ts:142",
+          "server/agent/index.ts:145"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-ERR-003",
+      "title": "Sync with no new data returns zeros",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run sync zero-data shape test",
+          "expected": "Response contains `newInteractions: 0`, `newActions: 0`",
+          "observed": "Test `returns correct shape with zero counts` passed"
+        }
+      ],
+      "evidence": {
+        "terminalLogs": [
+          "phase2-backend/backend-tests/vitest-targeted.log:203"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-ERR-004",
+      "title": "PATCH invalid status returns 400",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run PATCH invalid-status test",
+          "expected": "Invalid status payload rejected with 400",
+          "observed": "Test `PATCH with invalid status returns 400` passed"
+        }
+      ],
+      "evidence": {
+        "terminalLogs": [
+          "phase2-backend/backend-tests/vitest-targeted.log:176"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-ERR-005",
+      "title": "No stack traces in error responses",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run error-hygiene tests for 404 and 400 responses",
+          "expected": "Responses do not leak stack traces or SQL internals",
+          "observed": "Both no-stack-trace tests passed"
+        }
+      ],
+      "evidence": {
+        "terminalLogs": [
+          "phase2-backend/backend-tests/vitest-targeted.log:208",
+          "phase2-backend/backend-tests/vitest-targeted.log:209"
+        ]
+      },
+      "issues": null
+    }
+  ],
+  "frictions": [
+    {
+      "description": "Attempting a standalone `npx tsx -e` runtime check for runSync initially failed due top-level await in CJS eval mode.",
+      "resolved": true,
+      "resolution": "Switched to async IIFE form for eval command.",
+      "affectedAssertions": [
+        "VAL-ERR-001",
+        "VAL-ERR-002",
+        "VAL-ERR-003"
+      ]
+    },
+    {
+      "description": "Standalone runSync eval (outside vitest) failed because DATABASE_URL was not populated in that shell context.",
+      "resolved": true,
+      "resolution": "Used vitest-backed runtime evidence and direct code inspection for sync error-handling paths instead of standalone invocation.",
+      "affectedAssertions": [
+        "VAL-ERR-001",
+        "VAL-ERR-002",
+        "VAL-ERR-003"
+      ]
+    }
+  ],
+  "blockers": [],
+  "summary": "Validated 35 assigned backend assertions. Final `npx vitest run` passed (18 files, 455 tests), targeted backend assertion suites passed (6 files, 189 tests), and VAL-AGENT-040 was explicitly confirmed with 55 dedup test cases."
+}

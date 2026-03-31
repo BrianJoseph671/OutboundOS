@@ -1,0 +1,234 @@
+{
+  "groupId": "schema-static",
+  "testedAt": "2026-03-31T05:59:17Z",
+  "isolation": {
+    "surface": "terminal",
+    "appUrl": "http://127.0.0.1:5000",
+    "repoRoot": "C:\\\\Users\\\\josep\\\\downloads\\\\projects\\\\outbound os\\\\outboundos",
+    "missionDir": "C:\\\\Users\\\\josep\\\\.factory\\\\missions\\\\c1a7d1d0-5e9b-443d-ba5f-cdb1acba01d8"
+  },
+  "toolsUsed": [
+    "Execute",
+    "Read",
+    "Grep",
+    "LS",
+    "Glob"
+  ],
+  "assertions": [
+    {
+      "id": "VAL-API-SCH-001",
+      "status": "fail",
+      "steps": [
+        {
+          "action": "Run npm run check",
+          "expected": "Typecheck passes",
+          "observed": "Passed (tsc exited 0)."
+        },
+        {
+          "action": "Inspect shared/schema.ts and migration for contacts.last_synced_at",
+          "expected": "TIMESTAMPTZ nullable column",
+          "observed": "Column exists but is timestamp (without timezone) in schema and migration."
+        }
+      ],
+      "evidence": {
+        "terminal": "phase2-backend/schema-static/npm-run-check.txt",
+        "snippets": "phase2-backend/schema-static/inspection-snippets.txt"
+      },
+      "issues": "Type mismatch vs contract: expected TIMESTAMPTZ, found timestamp for contacts.last_synced_at."
+    },
+    {
+      "id": "VAL-API-SCH-010",
+      "status": "fail",
+      "steps": [
+        {
+          "action": "Inspect actions table in shared/schema.ts",
+          "expected": "UUID PK/FKs and TIMESTAMPTZ columns as specified",
+          "observed": "Table exists with required column names, but id/user_id/contact_id/trigger_interaction_id are varchar and time columns are timestamp."
+        },
+        {
+          "action": "Inspect migration creating actions table",
+          "expected": "Migration aligns with required schema types",
+          "observed": "0005_lowly_dormammu.sql creates varchar IDs and timestamp columns."
+        }
+      ],
+      "evidence": {
+        "snippets": "phase2-backend/schema-static/inspection-snippets.txt",
+        "terminal": "phase2-backend/schema-static/npm-run-check.txt"
+      },
+      "issues": "Schema type mismatch vs contract (UUID/TIMESTAMPTZ expected, varchar/timestamp found)."
+    },
+    {
+      "id": "VAL-API-SCH-020",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Inspect exports in shared/schema.ts",
+          "expected": "InsertAction, Action, InsertDraftsLog, DraftsLog and insert schemas exported",
+          "observed": "All required types and schemas are exported."
+        }
+      ],
+      "evidence": {
+        "snippets": "phase2-backend/schema-static/inspection-snippets.txt",
+        "terminal": "phase2-backend/schema-static/npm-run-check.txt"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-API-SCH-022",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Inspect actions indexes in schema and migration",
+          "expected": "Indexes on actions(user_id) and actions(user_id,status)",
+          "observed": "Both indexes are present in shared/schema.ts and 0005_lowly_dormammu.sql."
+        }
+      ],
+      "evidence": {
+        "snippets": "phase2-backend/schema-static/inspection-snippets.txt"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-API-SCH-030",
+      "status": "fail",
+      "steps": [
+        {
+          "action": "Inspect drafts_log table in shared/schema.ts",
+          "expected": "UUID PK/FKs and TIMESTAMPTZ created_at per contract",
+          "observed": "Table exists with required column names, but id/user_id/contact_id/action_id are varchar and created_at is timestamp."
+        },
+        {
+          "action": "Inspect migration creating drafts_log table",
+          "expected": "Migration types align with contract",
+          "observed": "0005_lowly_dormammu.sql creates varchar IDs and timestamp created_at."
+        }
+      ],
+      "evidence": {
+        "snippets": "phase2-backend/schema-static/inspection-snippets.txt",
+        "terminal": "phase2-backend/schema-static/npm-run-check.txt"
+      },
+      "issues": "Schema type mismatch vs contract (UUID/TIMESTAMPTZ expected, varchar/timestamp found)."
+    },
+    {
+      "id": "VAL-API-SCH-040",
+      "status": "fail",
+      "steps": [
+        {
+          "action": "List migration SQL files",
+          "expected": "Single new Phase 2 migration file",
+          "observed": "Multiple similarly-scoped files exist, including both 0005_lowly_dormammu.sql and 0005_relationship_os_triggers.sql (plus duplicated 0003 numbering)."
+        },
+        {
+          "action": "Check git status for migrations",
+          "expected": "No modification of existing migration files",
+          "observed": "No uncommitted migration edits detected."
+        }
+      ],
+      "evidence": {
+        "migrationInventory": "phase2-backend/schema-static/migration-inventory.txt",
+        "snippets": "phase2-backend/schema-static/inspection-snippets.txt"
+      },
+      "issues": "Contract requires a single new Phase 2 migration file; repository currently has multiple 0005 migration files."
+    },
+    {
+      "id": "VAL-AGENT-001",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Inspect server/agent directory and index.ts",
+          "expected": "LangGraph createReactAgent + ChatAnthropic model claude-sonnet-4-20250514 + TODO MCP adapters",
+          "observed": "All required skeleton elements are present; tool adapters are placeholder TODO implementations."
+        }
+      ],
+      "evidence": {
+        "snippets": "phase2-backend/schema-static/inspection-snippets.txt",
+        "terminal": "phase2-backend/schema-static/npm-run-check.txt"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-AGENT-002",
+      "status": "fail",
+      "steps": [
+        {
+          "action": "Inspect shared/types/mcp.ts and tool adapters",
+          "expected": "Fully typed interfaces for list_email/get_email_thread/draft_email, list_meetings/get_meetings, gcal_list_events matching PRD contracts",
+          "observed": "Data interfaces exist, but no draft_email tool adapter/interface is implemented; calendar tool is list_events not gcal_list_events; tool/input field naming differs from PRD contract naming."
+        }
+      ],
+      "evidence": {
+        "snippets": "phase2-backend/schema-static/inspection-snippets.txt"
+      },
+      "issues": "MCP interface/tool coverage and contract naming are not fully aligned with the stated PRD interface set."
+    },
+    {
+      "id": "VAL-AGENT-003",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Inspect MCP tool adapters in server/agent/tools/*.ts",
+          "expected": "Adapters use tool() with Zod schemas and TODO bodies",
+          "observed": "All existing adapters are implemented with tool() and schema: z.object(...), and include TODO placeholder behavior."
+        }
+      ],
+      "evidence": {
+        "snippets": "phase2-backend/schema-static/inspection-snippets.txt",
+        "terminal": "phase2-backend/schema-static/npm-run-check.txt"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-AGENT-004",
+      "status": "fail",
+      "steps": [
+        {
+          "action": "Inspect agent setup for tracing env usage",
+          "expected": "Agent setup reads LANGCHAIN_TRACING_V2, LANGCHAIN_API_KEY, LANGCHAIN_PROJECT from env vars with no hardcoded keys",
+          "observed": "Only a comment references these vars in server/agent/index.ts; no explicit runtime env read/configuration for these tracing vars was found in agent setup."
+        }
+      ],
+      "evidence": {
+        "snippets": "phase2-backend/schema-static/inspection-snippets.txt",
+        "terminal": "phase2-backend/schema-static/npm-run-check.txt"
+      },
+      "issues": "Tracing env var configuration is not explicitly implemented in agent setup code (only documented in comments)."
+    },
+    {
+      "id": "VAL-INT-006",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Inspect .env.example",
+          "expected": "Contains ANTHROPIC_API_KEY, LANGSMITH_API_KEY, LANGSMITH_PROJECT, LANGCHAIN_TRACING_V2, SUPERHUMAN_MCP_URL, GRANOLA_MCP_URL, GCAL_MCP_URL",
+          "observed": "All required env vars are present in .env.example."
+        }
+      ],
+      "evidence": {
+        "snippets": "phase2-backend/schema-static/inspection-snippets.txt"
+      },
+      "issues": null
+    }
+  ],
+  "frictions": [
+    {
+      "description": "PowerShell variable interpolation/escaping in this execution environment caused initial command-capture attempts to fail.",
+      "resolved": true,
+      "resolution": "Used python3 subprocess wrappers to run npm check and persist terminal output to mission evidence files.",
+      "affectedAssertions": [
+        "VAL-API-SCH-001",
+        "VAL-API-SCH-010",
+        "VAL-API-SCH-020",
+        "VAL-API-SCH-022",
+        "VAL-API-SCH-030",
+        "VAL-API-SCH-040",
+        "VAL-AGENT-001",
+        "VAL-AGENT-002",
+        "VAL-AGENT-003",
+        "VAL-AGENT-004",
+        "VAL-INT-006"
+      ]
+    }
+  ],
+  "blockers": [],
+  "summary": "Tested 11 assertions: 5 passed, 6 failed, 0 blocked."
+}
