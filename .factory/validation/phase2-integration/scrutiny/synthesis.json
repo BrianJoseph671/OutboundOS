@@ -46,5 +46,9 @@
       "reason": "already-documented in round 1 synthesis; current fix review contained no new shared-state observations."
     }
   ],
-  "previousRound": ".factory/validation/phase2-integration/scrutiny/synthesis.round1.json"
+  "previousRound": ".factory/validation/phase2-integration/scrutiny/synthesis.round1.json",
+  "orchestratorOverride": {
+    "reason": "Overriding after 2 scrutiny rounds. All validators pass (487 tests, TypeScript clean). The sole remaining blocker is the project-wide DOM testing limitation (no @testing-library/react). This same issue was overridden in phase2-ui scrutiny. 8 useActions API call pattern tests verify hook behavior. 30 integration tests verify end-to-end API flows. Contact fields join fix applied successfully.",
+    "overriddenAt": "2026-03-31T06:52:00.000Z"
+  }
 }
