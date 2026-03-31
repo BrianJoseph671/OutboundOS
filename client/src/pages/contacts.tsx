@@ -1,4 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
@@ -44,8 +47,16 @@ import {
   RefreshCw,
   Play,
   Sparkles,
+  Pencil,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import { useBatchProgress } from "@/hooks/useBatchProgress";
 import type { Contact, InsertContact, OutreachAttempt } from "@shared/schema";
@@ -361,17 +372,252 @@ function getTierBadgeClass(tier: string): string {
   }
 }
 
+// ── Edit contact form schema ──────────────────────────────────────────────────
+
+const editContactSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  company: z.string().optional(),
+  role: z.string().optional(),
+  email: z.string().optional(),
+  linkedinUrl: z.string().optional(),
+  tier: z.string().optional(),
+  source: z.string().optional(),
+  notes: z.string().optional(),
+  tags: z.string().optional(),
+});
+
+type EditContactFormData = z.infer<typeof editContactSchema>;
+
+function EditContactDialog({
+  contact,
+  open,
+  onOpenChange,
+  onSaved,
+}: {
+  contact: Contact;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSaved: (updated: Contact) => void;
+}) {
+  const { toast } = useToast();
+  const { updateContact } = useContacts();
+  const [isSaving, setIsSaving] = useState(false);
+
+  const form = useForm<EditContactFormData>({
+    resolver: zodResolver(editContactSchema),
+    defaultValues: {
+      name: contact.name,
+      company: contact.company ?? "",
+      role: contact.role ?? "",
+      email: contact.email ?? "",
+      linkedinUrl: contact.linkedinUrl ?? "",
+      tier: contact.tier ?? "cool",
+      source: contact.source ?? "",
+      notes: contact.notes ?? "",
+      tags: contact.tags ?? "",
+    },
+  });
+
+  // Reset form when contact changes
+  useEffect(() => {
+    form.reset({
+      name: contact.name,
+      company: contact.company ?? "",
+      role: contact.role ?? "",
+      email: contact.email ?? "",
+      linkedinUrl: contact.linkedinUrl ?? "",
+      tier: contact.tier ?? "cool",
+      source: contact.source ?? "",
+      notes: contact.notes ?? "",
+      tags: contact.tags ?? "",
+    });
+  }, [contact.id]);
+
+  const handleSubmit = form.handleSubmit(async (data) => {
+    setIsSaving(true);
+    try {
+      const updated = await updateContact(contact.id, {
+        name: data.name,
+        company: data.company || null,
+        role: data.role || null,
+        email: data.email || null,
+        linkedinUrl: data.linkedinUrl || null,
+        tier: data.tier || "cool",
+        source: data.source || null,
+        notes: data.notes || null,
+        tags: data.tags || null,
+      });
+      if (updated) {
+        toast({ title: "Contact updated successfully" });
+        onSaved(updated);
+        onOpenChange(false);
+      } else {
+        toast({ title: "Failed to update contact", variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "Failed to update contact", variant: "destructive" });
+    } finally {
+      setIsSaving(false);
+    }
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Edit Contact</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4 mt-2">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-name">Name *</Label>
+              <Input
+                id="edit-name"
+                {...form.register("name")}
+                placeholder="John Smith"
+                data-testid="input-edit-contact-name"
+              />
+              {form.formState.errors.name && (
+                <p className="text-sm text-destructive">{form.formState.errors.name.message}</p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-email">Email</Label>
+              <Input
+                id="edit-email"
+                type="email"
+                {...form.register("email")}
+                placeholder="john@company.com"
+                data-testid="input-edit-contact-email"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-company">Company</Label>
+              <Input
+                id="edit-company"
+                {...form.register("company")}
+                placeholder="Acme Inc"
+                data-testid="input-edit-contact-company"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-role">Role / Title</Label>
+              <Input
+                id="edit-role"
+                {...form.register("role")}
+                placeholder="VP of Sales"
+                data-testid="input-edit-contact-role"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-linkedinUrl">LinkedIn URL</Label>
+              <Input
+                id="edit-linkedinUrl"
+                {...form.register("linkedinUrl")}
+                placeholder="https://linkedin.com/in/..."
+                data-testid="input-edit-contact-linkedin"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-tier">Tier</Label>
+              <Select
+                value={form.watch("tier") ?? "cool"}
+                onValueChange={(v) => form.setValue("tier", v)}
+              >
+                <SelectTrigger id="edit-tier" data-testid="select-edit-contact-tier">
+                  <SelectValue placeholder="Select tier" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="warm">Warm</SelectItem>
+                  <SelectItem value="cool">Cool</SelectItem>
+                  <SelectItem value="cold">Cold</SelectItem>
+                  <SelectItem value="vip">VIP</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-source">Source</Label>
+              <Input
+                id="edit-source"
+                {...form.register("source")}
+                placeholder="linkedin_import, manual, ..."
+                data-testid="input-edit-contact-source"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-tags">Tags (comma-separated)</Label>
+              <Input
+                id="edit-tags"
+                {...form.register("tags")}
+                placeholder="Enterprise, Decision Maker"
+                data-testid="input-edit-contact-tags"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="edit-notes">Notes</Label>
+            <Textarea
+              id="edit-notes"
+              {...form.register("notes")}
+              placeholder="Additional notes..."
+              rows={3}
+              data-testid="input-edit-contact-notes"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={isSaving}
+              data-testid="button-save-edit-contact"
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save Changes"
+              )}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function ContactDetail({
   contact,
   onClose,
   onDelete,
+  onUpdate,
 }: {
   contact: Contact;
   onClose: () => void;
   onDelete: (id: string) => Promise<boolean>;
+  onUpdate?: (updated: Contact) => void;
 }) {
   const { toast } = useToast();
   const [isDeleting, setIsDeleting] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const { data: attempts = [] } = useQuery<OutreachAttempt[]>({
     queryKey: ["/api/outreach-attempts", { contactId: contact.id }],
   });
@@ -486,6 +732,14 @@ function ContactDetail({
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setEditOpen(true)}
+            data-testid="button-edit-contact"
+          >
+            <Pencil className="w-4 h-4" />
+          </Button>
           <Button
             variant="ghost"
             size="icon"
@@ -647,6 +901,13 @@ function ContactDetail({
           </div>
         )}
       </div>
+
+      <EditContactDialog
+        contact={contact}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        onSaved={(updated) => onUpdate?.(updated)}
+      />
     </div>
   );
 }
@@ -1486,7 +1747,12 @@ function AirtableCard({
 export default function Contacts() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
-  const { contacts, isLoading, deleteContact, deleteContacts, bulkCreate, updateContact, invalidate } = useContacts();
+  type SortOption = "newest" | "last_interaction";
+  const [sortBy, setSortBy] = useState<SortOption>("newest");
+  const sortParams = sortBy === "last_interaction"
+    ? { sort: "last_interaction_at", order: "desc" as const }
+    : undefined;
+  const { contacts, isLoading, deleteContact, deleteContacts, bulkCreate, updateContact, invalidate } = useContacts(sortParams);
   const [search, setSearch] = useState("");
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [addModalOpen, setAddModalOpen] = useState(false);
@@ -1941,6 +2207,18 @@ export default function Contacts() {
               data-testid="input-search-contacts"
             />
           </div>
+          <Select
+            value={sortBy}
+            onValueChange={(v) => setSortBy(v as SortOption)}
+          >
+            <SelectTrigger className="w-40" data-testid="select-sort-contacts">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="newest">Newest</SelectItem>
+              <SelectItem value="last_interaction">Last Interaction</SelectItem>
+            </SelectContent>
+          </Select>
           <div className="flex items-center gap-2 px-2 h-10 border rounded-md bg-muted/30">
             <Checkbox 
               checked={filteredContacts.length > 0 && selectedIds.size === filteredContacts.length}
@@ -2045,6 +2323,7 @@ export default function Contacts() {
               contact={selectedContact}
               onClose={() => setSelectedContact(null)}
               onDelete={deleteContact}
+              onUpdate={(updated) => setSelectedContact(updated)}
             />
           </CardContent>
         </Card>

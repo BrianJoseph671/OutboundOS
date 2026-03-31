@@ -14,6 +14,7 @@ import {
 } from "@shared/schema";
 import batchRouter from "./routes/batch";
 import integrationsRouter from "./routes/integrations";
+import { relationshipsRouter } from "./routes/relationships";
 import { appendResearchedTag } from "./utils/contactTags";
 import { isAuthenticated } from "./auth";
 
@@ -113,21 +114,6 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express,
 ): Promise<Server> {
-  // Protect all /api/ routes except auth, cert, and webhook routes.
-  // Webhooks use their own secret-based auth (validateWebhookSecret middleware).
-  app.use("/api", (req: Request, res: Response, next: NextFunction) => {
-    const publicPaths = [
-      "/api/auth/",
-      "/api/cert/",
-      "/api/webhooks/",
-      "/api/integrations/callback/",
-    ];
-    if (publicPaths.some((p) => req.path.startsWith(p.slice(4)))) {
-      return next();
-    }
-    return isAuthenticated(req, res, next);
-  });
-
   // Webhook secret middleware: validates X-Webhook-Secret header for /api/webhooks/*
   const validateWebhookSecret = (req: Request, res: Response, next: NextFunction) => {
     const secret = process.env.WEBHOOK_SECRET;
@@ -143,11 +129,34 @@ export async function registerRoutes(
     next();
   };
 
+  // ── Catch-all authentication for all /api/* routes ────────────────────────
+  // Must be registered BEFORE sub-routers so every /api/* request is gated.
+  // Whitelisted paths bypass auth:
+  //   /api/auth/*               — public auth endpoints (login, register, Google OAuth)
+  //   /api/cert/*               — health/debug endpoints (no user context needed)
+  //   /api/webhooks/*           — n8n callbacks (auth via X-Webhook-Secret header)
+  //   /api/integrations/callback/* — OAuth callbacks (handled by integrationsRouter)
+  app.use("/api", (req: Request, res: Response, next: NextFunction) => {
+    const path = req.path;
+    if (
+      path.startsWith("/auth/") ||
+      path.startsWith("/cert/") ||
+      path.startsWith("/webhooks/") ||
+      path.startsWith("/integrations/callback/")
+    ) {
+      return next();
+    }
+    return isAuthenticated(req, res, next);
+  });
+
   // Batch processing routes
   app.use("/api/batch", batchRouter);
 
   // Integration routes (OAuth, meetings)
   app.use("/api/integrations", integrationsRouter);
+
+  // Relationships / interactions routes (auth also enforced inside router)
+  app.use("/api/interactions", relationshipsRouter);
 
   // =========================
   // CERT: Level 3 proof (simple, deterministic)
@@ -224,8 +233,10 @@ export async function registerRoutes(
   app.get("/api/contacts", async (req, res) => {
     try {
       const userId = req.user!.id;
-      const contacts = await storage.getContacts(userId);
-      res.json(contacts);
+      const sort = typeof req.query.sort === "string" ? req.query.sort : undefined;
+      const order = typeof req.query.order === "string" ? req.query.order : undefined;
+      const contactList = await storage.getContacts(userId, { sort, order });
+      res.json(contactList);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch contacts" });
     }
@@ -248,6 +259,29 @@ export async function registerRoutes(
     try {
       const userId = req.user!.id;
       const validatedData = insertContactSchema.parse({ ...req.body, userId });
+
+      // Dedup check — all authenticated users
+      const inputEmail: string | undefined = validatedData.email ?? undefined;
+      const inputLinkedin: string | undefined = validatedData.linkedinUrl ?? undefined;
+      if (inputEmail || inputLinkedin) {
+        const existing = await storage.getContacts(userId);
+        const match = existing.find((c) => {
+          if (inputEmail && c.email) {
+            if (c.email.toLowerCase() === inputEmail.toLowerCase()) return true;
+          }
+          if (inputLinkedin && c.linkedinUrl) {
+            if (c.linkedinUrl === inputLinkedin) return true;
+          }
+          return false;
+        });
+        if (match) {
+          return res.status(409).json({
+            error: "Contact with this email or LinkedIn URL already exists",
+            existingId: match.id,
+          });
+        }
+      }
+
       const contact = await storage.createContact(validatedData);
       res.status(201).json(contact);
     } catch (error) {
@@ -258,7 +292,13 @@ export async function registerRoutes(
   app.patch("/api/contacts/:id", async (req, res) => {
     try {
       const userId = req.user!.id;
-      const contact = await storage.updateContact(req.params.id, userId, req.body);
+      // Convert string timestamp fields to Date objects for Drizzle ORM
+      const body = { ...req.body };
+      if (typeof body.lastInteractionAt === "string") {
+        const d = new Date(body.lastInteractionAt);
+        if (!isNaN(d.getTime())) body.lastInteractionAt = d;
+      }
+      const contact = await storage.updateContact(req.params.id, userId, body);
       if (!contact) {
         return res.status(404).json({ error: "Contact not found" });
       }
@@ -1397,10 +1437,11 @@ export async function registerRoutes(
   app.get("/api/settings", async (req, res) => {
     try {
       const userId = req.user!.id;
-      const settings = await storage.getSettings(userId);
-      res.json(settings || {});
+      const settingsData = await storage.getSettings(userId);
+      res.json(settingsData || {});
     } catch (error) {
-      res.status(500).json({ error: "Failed to fetch settings" });
+      // Return empty settings on error (e.g. missing user_id column in older DB)
+      res.json({});
     }
   });
 

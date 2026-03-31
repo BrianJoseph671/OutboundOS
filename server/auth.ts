@@ -1,7 +1,7 @@
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
-import { type Express, type Request, type Response, type NextFunction } from "express";
+import { Router, type Express, type Request, type Response, type NextFunction } from "express";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import { pool } from "./db";
@@ -10,6 +10,9 @@ import { users } from "@shared/schema";
 import { eq, or } from "drizzle-orm";
 import bcrypt from "bcrypt";
 import { randomBytes } from "crypto";
+
+// Export passport so tests can import it directly
+export { passport };
 
 declare global {
   namespace Express {
@@ -27,6 +30,59 @@ declare global {
 }
 
 const BCRYPT_ROUNDS = 12;
+
+// ── Module-level passport configuration (registers once on import) ────────────
+
+passport.serializeUser((user, done) => {
+  done(null, user.id);
+});
+
+passport.deserializeUser(async (id: string, done) => {
+  try {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    done(null, user ? (user as Express.User) : false);
+  } catch (err) {
+    done(err);
+  }
+});
+
+// ── authRouter — auth routes usable independently of setupAuth() ──────────────
+// Exported so tests can mount it directly without calling setupAuth().
+
+export const authRouter = Router();
+
+function meHandler(req: Request, res: Response) {
+  if (!req.user) {
+    return res.status(401).json({ error: "Not authenticated" });
+  }
+  const user = req.user as any;
+  res.json({
+    id: user.id,
+    email: user.email,
+    username: user.username,
+    fullName: user.fullName ?? null,
+    avatarUrl: user.avatarUrl ?? null,
+    displayName: user.fullName ?? user.displayName ?? null,
+    picture: user.avatarUrl ?? user.picture ?? null,
+  });
+}
+
+function logoutHandler(req: Request, res: Response, next: NextFunction) {
+  req.logout((err) => {
+    if (err) return next(err);
+    req.session.destroy(() => {
+      res.clearCookie("connect.sid");
+      res.json({ success: true });
+    });
+  });
+}
+
+authRouter.get("/api/auth/me", meHandler);
+authRouter.get("/auth/me", meHandler);
+authRouter.post("/api/auth/logout", logoutHandler);
+authRouter.post("/auth/logout", logoutHandler);
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 async function generateUniqueUsername(baseUsername: string): Promise<string> {
   const sanitized = baseUsername.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 24);
@@ -235,18 +291,8 @@ export async function setupAuth(app: Express) {
     console.info("[Auth] Google OAuth not configured (GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET not set)");
   }
 
-  passport.serializeUser((user, done) => {
-    done(null, user.id);
-  });
-
-  passport.deserializeUser(async (id: string, done) => {
-    try {
-      const [user] = await db.select().from(users).where(eq(users.id, id));
-      done(null, user ? (user as Express.User) : false);
-    } catch (err) {
-      done(err);
-    }
-  });
+  // Mount authRouter (me, logout, config routes)
+  app.use(authRouter);
 
   app.post("/api/auth/register", async (req: Request, res: Response) => {
     try {
@@ -307,50 +353,6 @@ export async function setupAuth(app: Express) {
         });
       });
     })(req, res, next);
-  });
-
-  app.post("/api/auth/logout", (req: Request, res: Response, next: NextFunction) => {
-    req.logout((err) => {
-      if (err) return next(err);
-      req.session.destroy(() => {
-        res.clearCookie("connect.sid");
-        res.json({ success: true });
-      });
-    });
-  });
-  app.post("/auth/logout", (req: Request, res: Response, next: NextFunction) => {
-    req.logout((err) => {
-      if (err) return next(err);
-      req.session.destroy(() => {
-        res.clearCookie("connect.sid");
-        res.json({ success: true });
-      });
-    });
-  });
-
-  app.get("/api/auth/me", (req: Request, res: Response) => {
-    if (!req.user) {
-      return res.status(401).json({ message: "Not authenticated" });
-    }
-    const user = req.user as any;
-    res.json({
-      id: user.id,
-      email: user.email,
-      displayName: user.fullName ?? user.displayName ?? null,
-      picture: user.avatarUrl ?? user.picture ?? null,
-    });
-  });
-  app.get("/auth/me", (req: Request, res: Response) => {
-    if (!req.user) {
-      return res.status(401).json({ message: "Not authenticated" });
-    }
-    const user = req.user as any;
-    res.json({
-      id: user.id,
-      email: user.email,
-      displayName: user.fullName ?? user.displayName ?? null,
-      picture: user.avatarUrl ?? user.picture ?? null,
-    });
   });
 
   app.get("/api/auth/config", (_req: Request, res: Response) => {

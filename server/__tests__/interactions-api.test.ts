@@ -694,19 +694,13 @@ describe("POST /api/contacts — dedup when authenticated", () => {
     testIds.contactIds.push(firstB.body.id);
   });
 
-  it("no dedup for unauthenticated POST /api/contacts (backward compatibility)", async () => {
+  it("returns 401 for unauthenticated POST /api/contacts (all /api/* requires auth)", async () => {
     const ts = Date.now();
     const email = `unauth_dedup_${ts}@example.com`;
 
-    // No session agent — unauthenticated
-    const first = await request(app).post("/api/contacts").send({ name: "Unauth Contact One", email });
-    expect(first.status).toBe(201);
-    testIds.contactIds.push(first.body.id);
-
-    // Second unauthenticated request with same email — should still succeed (no dedup)
-    const second = await request(app).post("/api/contacts").send({ name: "Unauth Contact Two", email });
-    expect(second.status).toBe(201);
-    testIds.contactIds.push(second.body.id);
+    // No session — unauthenticated request should be rejected
+    const res = await request(app).post("/api/contacts").send({ name: "Unauth Contact", email });
+    expect(res.status).toBe(401);
   });
 
   it("no 409 when contact has neither email nor linkedinUrl (cannot dedup)", async () => {
@@ -730,45 +724,45 @@ describe("POST /api/contacts — dedup when authenticated", () => {
 
 describe("GET /api/contacts — sort by last_interaction_at", () => {
   let app: express.Application;
+  let sortTestUser: typeof users.$inferSelect;
   let contactRecent: typeof contacts.$inferSelect;
   let contactOld: typeof contacts.$inferSelect;
   let contactNoInteraction: typeof contacts.$inferSelect;
 
   beforeAll(async () => {
     app = await createFullApp();
-
-    // We need a user to create contacts. Use the seed user's ID via storage
-    // (unauthenticated route uses seed user, but we'll create directly via storage).
-    const seedUserResult = await db.select().from(users).limit(1);
-    const seedUserId = seedUserResult[0]?.id ?? "unknown";
+    sortTestUser = await createTestUser("sort_test");
 
     // Create contacts with known last_interaction_at values for ordering tests
     const ts = Date.now();
 
     contactRecent = await storage.createContact({
       name: `Sort Contact Recent ${ts}`,
-      userId: seedUserId,
+      userId: sortTestUser.id,
     });
     testIds.contactIds.push(contactRecent.id);
-    await storage.updateContact(contactRecent.id, { lastInteractionAt: new Date("2099-06-15T00:00:00Z") });
+    await storage.updateContact(contactRecent.id, sortTestUser.id, { lastInteractionAt: new Date("2099-06-15T00:00:00Z") });
 
     contactOld = await storage.createContact({
       name: `Sort Contact Old ${ts}`,
-      userId: seedUserId,
+      userId: sortTestUser.id,
     });
     testIds.contactIds.push(contactOld.id);
-    await storage.updateContact(contactOld.id, { lastInteractionAt: new Date("1999-01-01T00:00:00Z") });
+    await storage.updateContact(contactOld.id, sortTestUser.id, { lastInteractionAt: new Date("1999-01-01T00:00:00Z") });
 
     contactNoInteraction = await storage.createContact({
       name: `Sort Contact NoInteraction ${ts}`,
-      userId: seedUserId,
+      userId: sortTestUser.id,
     });
     testIds.contactIds.push(contactNoInteraction.id);
     // lastInteractionAt stays null
   });
 
   it("sort=last_interaction_at&order=desc: returns contacts with recent first, nulls last", async () => {
-    const res = await request(app).get("/api/contacts?sort=last_interaction_at&order=desc");
+    const agent = request.agent(app);
+    await agent.post("/test/login").send({ user: sortTestUser }).expect(200);
+
+    const res = await agent.get("/api/contacts?sort=last_interaction_at&order=desc");
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body)).toBe(true);
 
@@ -787,7 +781,10 @@ describe("GET /api/contacts — sort by last_interaction_at", () => {
   });
 
   it("sort=last_interaction_at&order=asc: returns contacts with oldest first, nulls last", async () => {
-    const res = await request(app).get("/api/contacts?sort=last_interaction_at&order=asc");
+    const agent = request.agent(app);
+    await agent.post("/test/login").send({ user: sortTestUser }).expect(200);
+
+    const res = await agent.get("/api/contacts?sort=last_interaction_at&order=asc");
     expect(res.status).toBe(200);
 
     const ids = res.body.map((c: { id: string }) => c.id);
@@ -801,7 +798,10 @@ describe("GET /api/contacts — sort by last_interaction_at", () => {
   });
 
   it("without sort param returns contacts without error (default order)", async () => {
-    const res = await request(app).get("/api/contacts");
+    const agent = request.agent(app);
+    await agent.post("/test/login").send({ user: sortTestUser }).expect(200);
+
+    const res = await agent.get("/api/contacts");
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body)).toBe(true);
   });
@@ -813,21 +813,24 @@ describe("GET /api/contacts — sort by last_interaction_at", () => {
 
 describe("PATCH /api/contacts/:id — accepts new RelationshipOS fields", () => {
   let app: express.Application;
+  let patchTestUser: typeof users.$inferSelect;
   let testContact: typeof contacts.$inferSelect;
 
   beforeAll(async () => {
     app = await createFullApp();
-    const seedUserResult = await db.select().from(users).limit(1);
-    const seedUserId = seedUserResult[0]?.id ?? "unknown";
+    patchTestUser = await createTestUser("patch_relos");
     testContact = await storage.createContact({
       name: "Patch RelOS Contact",
-      userId: seedUserId,
+      userId: patchTestUser.id,
     });
     testIds.contactIds.push(testContact.id);
   });
 
   it("persists tier field", async () => {
-    const res = await request(app)
+    const agent = request.agent(app);
+    await agent.post("/test/login").send({ user: patchTestUser }).expect(200);
+
+    const res = await agent
       .patch(`/api/contacts/${testContact.id}`)
       .send({ tier: "warm" });
     expect(res.status).toBe(200);
@@ -835,7 +838,10 @@ describe("PATCH /api/contacts/:id — accepts new RelationshipOS fields", () => 
   });
 
   it("persists source field", async () => {
-    const res = await request(app)
+    const agent = request.agent(app);
+    await agent.post("/test/login").send({ user: patchTestUser }).expect(200);
+
+    const res = await agent
       .patch(`/api/contacts/${testContact.id}`)
       .send({ source: "linkedin_import" });
     expect(res.status).toBe(200);
@@ -843,8 +849,11 @@ describe("PATCH /api/contacts/:id — accepts new RelationshipOS fields", () => 
   });
 
   it("persists last_interaction_at field", async () => {
+    const agent = request.agent(app);
+    await agent.post("/test/login").send({ user: patchTestUser }).expect(200);
+
     const occurred = new Date("2025-03-15T12:00:00Z").toISOString();
-    const res = await request(app)
+    const res = await agent
       .patch(`/api/contacts/${testContact.id}`)
       .send({ lastInteractionAt: occurred });
     expect(res.status).toBe(200);
@@ -853,7 +862,10 @@ describe("PATCH /api/contacts/:id — accepts new RelationshipOS fields", () => 
   });
 
   it("persists last_interaction_channel field", async () => {
-    const res = await request(app)
+    const agent = request.agent(app);
+    await agent.post("/test/login").send({ user: patchTestUser }).expect(200);
+
+    const res = await agent
       .patch(`/api/contacts/${testContact.id}`)
       .send({ lastInteractionChannel: "email" });
     expect(res.status).toBe(200);
@@ -861,13 +873,14 @@ describe("PATCH /api/contacts/:id — accepts new RelationshipOS fields", () => 
   });
 
   it("existing fields remain unchanged after partial update", async () => {
-    // Set a known name first
-    await request(app)
-      .patch(`/api/contacts/${testContact.id}`)
-      .send({ tier: "vip" });
+    const agent = request.agent(app);
+    await agent.post("/test/login").send({ user: patchTestUser }).expect(200);
+
+    // Set a known tier first
+    await agent.patch(`/api/contacts/${testContact.id}`).send({ tier: "vip" });
 
     // Update only source — tier should still be "vip"
-    const res = await request(app)
+    const res = await agent
       .patch(`/api/contacts/${testContact.id}`)
       .send({ source: "manual" });
     expect(res.status).toBe(200);
@@ -877,34 +890,33 @@ describe("PATCH /api/contacts/:id — accepts new RelationshipOS fields", () => 
 });
 
 // =============================================================================
-// Legacy contacts endpoints remain unprotected (VAL-AUTH-008)
+// All /api/* endpoints require authentication
 // =============================================================================
 
-describe("Legacy endpoints work without auth (backward compatibility)", () => {
+describe("All /api/* endpoints require authentication (no legacy unprotected endpoints)", () => {
   let app: express.Application;
 
   beforeAll(async () => {
     app = await createFullApp();
   });
 
-  it("GET /api/contacts returns 200 without session", async () => {
+  it("GET /api/contacts returns 401 without session", async () => {
     const res = await request(app).get("/api/contacts");
-    expect(res.status).toBe(200);
-    expect(Array.isArray(res.body)).toBe(true);
+    expect(res.status).toBe(401);
   });
 
-  it("GET /api/outreach-attempts returns 200 without session", async () => {
+  it("GET /api/outreach-attempts returns 401 without session", async () => {
     const res = await request(app).get("/api/outreach-attempts");
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(401);
   });
 
-  it("GET /api/experiments returns 200 without session", async () => {
+  it("GET /api/experiments returns 401 without session", async () => {
     const res = await request(app).get("/api/experiments");
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(401);
   });
 
-  it("GET /api/settings returns 200 without session", async () => {
+  it("GET /api/settings returns 401 without session", async () => {
     const res = await request(app).get("/api/settings");
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(401);
   });
 });

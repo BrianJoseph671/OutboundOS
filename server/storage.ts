@@ -12,7 +12,7 @@ import {
   users, type User, type InsertUser
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, inArray, and } from "drizzle-orm";
+import { eq, desc, asc, inArray, and, sql as drizzleSql } from "drizzle-orm";
 
 export interface IStorage {
   // Users
@@ -21,7 +21,7 @@ export interface IStorage {
   createUser(user: InsertUser): Promise<User>;
 
   // Contacts
-  getContacts(userId: string): Promise<Contact[]>;
+  getContacts(userId: string, options?: { sort?: string; order?: string }): Promise<Contact[]>;
   getContact(id: string, userId: string): Promise<Contact | undefined>;
   createContact(contact: InsertContact): Promise<Contact>;
   updateContact(id: string, userId: string, contact: Partial<InsertContact>): Promise<Contact | undefined>;
@@ -109,7 +109,19 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Contacts
-  async getContacts(userId: string): Promise<Contact[]> {
+  async getContacts(userId: string, options?: { sort?: string; order?: string }): Promise<Contact[]> {
+    if (options?.sort === "last_interaction_at") {
+      // Sort by lastInteractionAt with NULLS LAST
+      if (options.order === "asc") {
+        return await db.select().from(contacts)
+          .where(eq(contacts.userId, userId))
+          .orderBy(drizzleSql`${contacts.lastInteractionAt} ASC NULLS LAST`);
+      } else {
+        return await db.select().from(contacts)
+          .where(eq(contacts.userId, userId))
+          .orderBy(drizzleSql`${contacts.lastInteractionAt} DESC NULLS LAST`);
+      }
+    }
     return await db.select().from(contacts)
       .where(eq(contacts.userId, userId))
       .orderBy(contacts.createdAt);
@@ -137,7 +149,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateContact(id: string, userId: string, contact: Partial<InsertContact>): Promise<Contact | undefined> {
-    const [updated] = await db.update(contacts).set({ ...contact, updatedAt: new Date() })
+    const [updated] = await db.update(contacts)
+      .set({ ...contact, updatedAt: new Date() })
       .where(and(eq(contacts.id, id), eq(contacts.userId, userId)))
       .returning();
     return updated;
@@ -181,6 +194,7 @@ export class DatabaseStorage implements IStorage {
           tags: contact.tags,
           researchStatus: contact.researchStatus,
           researchData: contact.researchData,
+          updatedAt: new Date(),
         })
         .where(and(eq(contacts.id, contact.id), eq(contacts.userId, userId)))
         .returning();

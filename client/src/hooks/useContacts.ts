@@ -19,13 +19,22 @@ function writeToLocalStorage(contacts: Contact[]): void {
 }
 export type ContactInput = Partial<Omit<Contact, "id" | "createdAt" | "userId">>;
 
-export function useContacts() {
+export function useContacts(options?: { sort?: string; order?: string }) {
   const queryClient = useQueryClient();
 
+  // Use a dynamic query key when sort options are provided so each sort has its own cache entry
+  const queryKey = options?.sort
+    ? ["/api/contacts", { sort: options.sort, order: options.order ?? "desc" }]
+    : CONTACTS_QUERY_KEY;
+
   const { data: contacts = [], isLoading } = useQuery<Contact[]>({
-    queryKey: CONTACTS_QUERY_KEY,
+    queryKey,
     queryFn: async () => {
-      const res = await apiRequest("GET", "/api/contacts");
+      let url = "/api/contacts";
+      if (options?.sort) {
+        url += `?sort=${encodeURIComponent(options.sort)}&order=${encodeURIComponent(options.order ?? "desc")}`;
+      }
+      const res = await apiRequest("GET", url);
       const data: Contact[] = await res.json();
       // Write-through: keep localStorage in sync so contactsStorage helpers
       // (getContact, updateContactStorage) still work for non-hook callers.
