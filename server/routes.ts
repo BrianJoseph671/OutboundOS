@@ -18,6 +18,8 @@ import { relationshipsRouter } from "./routes/relationships";
 import { actionsRouter, syncRouter } from "./routes/actions";
 import { briefsRouter } from "./routes/briefs";
 import { composeRouter } from "./routes/compose";
+import { weeklyBriefRouter } from "./routes/weeklyBrief";
+import { roiRouter } from "./routes/roi";
 import { seedRelationshipActionsForUser } from "./services/seedRelationshipActions";
 import { appendResearchedTag } from "./utils/contactTags";
 import { isAuthenticated } from "./auth";
@@ -173,6 +175,12 @@ export async function registerRoutes(
 
   // Compose routes (Phase 3) — POST /api/compose, POST /api/compose/revise
   app.use("/api/compose", composeRouter);
+
+  // Weekly Brief routes (Phase 4) — POST /api/briefs/weekly
+  app.use("/api/briefs", weeklyBriefRouter);
+
+  // ROI Dashboard routes (Phase 4) — GET /api/dashboard/roi, GET /api/dashboard/roi/export
+  app.use("/api/dashboard", roiRouter);
 
   // Dev-only: seed RelationshipOS actions for the *current session* user (avoids CLI user id mismatch)
   if (process.env.NODE_ENV === "development") {
