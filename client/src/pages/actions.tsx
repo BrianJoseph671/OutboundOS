@@ -33,6 +33,7 @@ import {
   Zap,
   Building2,
   Search,
+  BookOpen,
 } from "lucide-react";
 import type { Contact } from "@shared/schema";
 
@@ -511,6 +512,17 @@ export default function ActionsPage() {
               className={`h-4 w-4 mr-2 ${isSyncing ? "animate-spin" : ""}`}
             />
             {isSyncing ? "Syncing…" : "Sync Recent"}
+          </Button>
+
+          {/* Weekly Brief button */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate("/weekly-brief")}
+            data-testid="weekly-brief-button"
+          >
+            <BookOpen className="h-4 w-4 mr-2" />
+            Weekly Brief
           </Button>
 
           {/* Type filter */}

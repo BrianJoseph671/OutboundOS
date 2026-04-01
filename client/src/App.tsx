@@ -20,6 +20,7 @@ import ResearchSetup from "@/pages/research-setup";
 import ResearchQueue from "@/pages/research-queue";
 import Decisions from "@/pages/decisions";
 import Settings from "@/pages/settings";
+import WeeklyBriefPage from "@/pages/weekly-brief";
 import NotFound from "@/pages/not-found";
 
 /** Shape returned by GET /auth/me (password is omitted server-side) */
@@ -46,6 +47,7 @@ function Router() {
       <Route path="/research-setup" component={ResearchSetup} />
       <Route path="/research-queue" component={ResearchQueue} />
       <Route path="/decisions" component={Decisions} />
+      <Route path="/weekly-brief" component={WeeklyBriefPage} />
       <Route path="/settings" component={Settings} />
       <Route component={NotFound} />
     </Switch>
