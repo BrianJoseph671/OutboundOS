@@ -30,6 +30,7 @@ import {
   Heart,
   LogOut,
   ListTodo,
+  BarChart3,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -40,6 +41,7 @@ const menuItems = [
   { title: "Contacts", url: "/contacts", icon: Users },
   { title: "Relationships", url: "/contacts", icon: Heart },
   { title: "Outreach Log", url: "/outreach-log", icon: FileText },
+  { title: "ROI Dashboard", url: "/roi", icon: BarChart3 },
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Decisions", url: "/decisions", icon: Brain },
 ];
