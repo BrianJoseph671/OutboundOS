@@ -16,6 +16,9 @@ import batchRouter from "./routes/batch";
 import integrationsRouter from "./routes/integrations";
 import { relationshipsRouter } from "./routes/relationships";
 import { actionsRouter, syncRouter } from "./routes/actions";
+import { briefsRouter } from "./routes/briefs";
+import { composeRouter } from "./routes/compose";
+import { seedRelationshipActionsForUser } from "./services/seedRelationshipActions";
 import { appendResearchedTag } from "./utils/contactTags";
 import { isAuthenticated } from "./auth";
 
@@ -164,6 +167,26 @@ export async function registerRoutes(
 
   // Sync route (Phase 2) — POST /api/sync
   app.use("/api/sync", syncRouter);
+
+  // Brief routes (Phase 3) — GET /api/contacts/:id/brief, POST /api/contacts/:id/brief/regenerate
+  app.use("/api/contacts", briefsRouter);
+
+  // Compose routes (Phase 3) — POST /api/compose, POST /api/compose/revise
+  app.use("/api/compose", composeRouter);
+
+  // Dev-only: seed RelationshipOS actions for the *current session* user (avoids CLI user id mismatch)
+  if (process.env.NODE_ENV === "development") {
+    app.post("/api/dev/seed-relationship-actions", async (req: Request, res: Response) => {
+      try {
+        const result = await seedRelationshipActionsForUser(req.user!.id);
+        res.json(result);
+      } catch (error: unknown) {
+        console.error("[POST /api/dev/seed-relationship-actions]", error);
+        const message = error instanceof Error ? error.message : "Seed failed";
+        res.status(500).json({ error: message });
+      }
+    });
+  }
 
   // =========================
   // CERT: Level 3 proof (simple, deterministic)

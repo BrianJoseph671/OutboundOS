@@ -11,6 +11,7 @@ import {
   interactions, type Interaction, type InsertInteraction,
   actions, type Action, type InsertAction,
   draftsLog, type DraftsLog, type InsertDraftsLog,
+  contactBriefs, type ContactBriefRow, type InsertContactBrief,
   users, type User, type InsertUser
 } from "@shared/schema";
 import { db } from "./db";
@@ -117,6 +118,10 @@ export interface IStorage {
   getDraftsLog(id: string, userId: string): Promise<DraftsLog | undefined>;
   createDraftsLog(draft: InsertDraftsLog): Promise<DraftsLog>;
   updateDraftsLog(id: string, userId: string, data: Partial<InsertDraftsLog>): Promise<DraftsLog | undefined>;
+
+  // Contact Briefs (Phase 3)
+  getContactBrief(contactId: string, userId: string): Promise<ContactBriefRow | undefined>;
+  upsertContactBrief(contactId: string, userId: string, data: { briefData: Record<string, unknown>; modelVersion: string | null; generatedAt: Date }): Promise<ContactBriefRow>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -843,6 +848,42 @@ export class DatabaseStorage implements IStorage {
       .where(and(eq(draftsLog.id, id), eq(draftsLog.userId, userId)))
       .returning();
     return updated;
+  }
+
+  // ─── Contact Briefs (Phase 3) ─────────────────────────────────────────────
+
+  async getContactBrief(contactId: string, userId: string): Promise<ContactBriefRow | undefined> {
+    const [brief] = await db
+      .select()
+      .from(contactBriefs)
+      .where(and(eq(contactBriefs.contactId, contactId), eq(contactBriefs.userId, userId)));
+    return brief;
+  }
+
+  async upsertContactBrief(
+    contactId: string,
+    userId: string,
+    data: { briefData: Record<string, unknown>; modelVersion: string | null; generatedAt: Date }
+  ): Promise<ContactBriefRow> {
+    const [result] = await db
+      .insert(contactBriefs)
+      .values({
+        userId,
+        contactId,
+        briefData: data.briefData,
+        modelVersion: data.modelVersion,
+        generatedAt: data.generatedAt,
+      })
+      .onConflictDoUpdate({
+        target: [contactBriefs.userId, contactBriefs.contactId],
+        set: {
+          briefData: data.briefData,
+          modelVersion: data.modelVersion,
+          generatedAt: data.generatedAt,
+        },
+      })
+      .returning();
+    return result;
   }
 }
 

@@ -50,6 +50,13 @@
       "when": 1775174400000,
       "tag": "0006_fix_interaction_dedup_user_scope",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1775260800000,
+      "tag": "0007_contact_briefs",
+      "breakpoints": true
     }
   ]
 }

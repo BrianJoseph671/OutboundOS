@@ -582,7 +582,7 @@ export default function ActionsPage() {
                   action={action}
                   onDismiss={handleDismiss}
                   onSnooze={handleSnooze}
-                  onClick={(id) => navigate(`/actions/${id}`)}
+                  onClick={(id) => navigate(`/actions/${id}/draft`)}
                 />
               ))}
             </div>

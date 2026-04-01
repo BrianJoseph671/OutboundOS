@@ -10,7 +10,8 @@
     "check": "tsc",
     "test": "vitest run",
     "db:push": "drizzle-kit push",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "drizzle-kit migrate",
+    "dev:seed-actions": "cross-env NODE_ENV=development tsx script/seed-relationship-actions.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
