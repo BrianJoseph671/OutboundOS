@@ -312,3 +312,20 @@ export const draftsLog = pgTable("drafts_log", {
 export const insertDraftsLogSchema = createInsertSchema(draftsLog).omit({ id: true });
 export type InsertDraftsLog = z.infer<typeof insertDraftsLogSchema>;
 export type DraftsLog = typeof draftsLog.$inferSelect;
+
+// Contact briefs table (Phase 3 — Context Engine)
+export const contactBriefs = pgTable("contact_briefs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  contactId: varchar("contact_id").notNull().references(() => contacts.id, { onDelete: "cascade" }),
+  briefData: jsonb("brief_data").$type<Record<string, unknown>>().notNull(),
+  modelVersion: text("model_version"),
+  generatedAt: timestamp("generated_at").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("contact_briefs_user_contact_unique").on(table.userId, table.contactId),
+]);
+
+export const insertContactBriefSchema = createInsertSchema(contactBriefs).omit({ id: true });
+export type InsertContactBrief = z.infer<typeof insertContactBriefSchema>;
+export type ContactBriefRow = typeof contactBriefs.$inferSelect;
