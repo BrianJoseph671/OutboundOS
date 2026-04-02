@@ -92,6 +92,9 @@ export function generateAuthorizationUrl(provider: string): string {
       "Superhuman authorization must be started through the MCP OAuth flow. Use the Superhuman integration route wiring."
     );
   }
+  if (!config.clientId) {
+    throw new Error(`${provider} OAuth clientId is missing`);
+  }
   const state = crypto.randomBytes(32).toString("hex");
   stateStore.set(state, { provider, createdAt: Date.now() });
 
@@ -121,6 +124,9 @@ export async function exchangeCodeForTokens(provider: string, code: string): Pro
     throw new Error(
       "Superhuman token exchange is handled by the MCP OAuth flow. Use the Superhuman integration route wiring."
     );
+  }
+  if (!config.clientId || !config.clientSecret) {
+    throw new Error(`${provider} OAuth client credentials are missing`);
   }
 
   const body = new URLSearchParams({
@@ -161,6 +167,9 @@ export async function refreshAccessToken(provider: string, userId: string): Prom
     // MCP OAuth refresh is handled in the MCP client path where discovery metadata
     // is available. Keep this service behavior explicit for now.
     return null;
+  }
+  if (!config.clientId || !config.clientSecret) {
+    throw new Error(`${provider} OAuth client credentials are missing`);
   }
   const refreshToken = decrypt(connection.refreshToken);
 

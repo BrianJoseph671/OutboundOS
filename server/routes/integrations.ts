@@ -1,4 +1,5 @@
 import { Router, type Request } from "express";
+import crypto from "crypto";
 import { storage } from "../storage";
 import {
   generateAuthorizationUrl,
@@ -7,8 +8,29 @@ import {
   saveTokens,
 } from "../services/oauth";
 import { syncGoogleCalendarEvents } from "../services/googleIntegration";
+import { auth, type OAuthClientProvider, type OAuthDiscoveryState } from "@modelcontextprotocol/sdk/client/auth.js";
+import type { OAuthClientInformationMixed, OAuthClientMetadata, OAuthTokens as SdkOAuthTokens } from "@modelcontextprotocol/sdk/shared/auth.js";
+import { clearSuperhumanClient } from "../services/mcpClient";
 
 const router = Router();
+const SUPERHUMAN_MCP_URL =
+  process.env.SUPERHUMAN_MCP_URL || "https://mcp.mail.superhuman.com/mcp";
+const superhumanStateStore = new Map<string, {
+  userId: string;
+  createdAt: number;
+  clientInformation?: OAuthClientInformationMixed;
+  discoveryState?: OAuthDiscoveryState;
+  codeVerifier?: string;
+}>();
+
+setInterval(() => {
+  const now = Date.now();
+  superhumanStateStore.forEach((value, key) => {
+    if (now - value.createdAt > 10 * 60 * 1000) {
+      superhumanStateStore.delete(key);
+    }
+  });
+}, 60_000);
 
 // Extract userId from typed session; throws 401 error if not authenticated
 function getUserId(req: Request): string {
@@ -16,6 +38,94 @@ function getUserId(req: Request): string {
     throw Object.assign(new Error("Not authenticated"), { status: 401 });
   }
   return req.user.id;
+}
+
+function getBaseUrl(): string {
+  if (process.env.APP_BASE_URL) return process.env.APP_BASE_URL;
+  const replitDomains = process.env.REPLIT_DOMAINS;
+  if (replitDomains) {
+    const domain = replitDomains.split(",")[0].trim();
+    return `https://${domain}`;
+  }
+  return "http://localhost:5000";
+}
+
+function buildSuperhumanProvider(stateKey: string): OAuthClientProvider {
+  const session = superhumanStateStore.get(stateKey);
+  if (!session) {
+    throw new Error("Invalid or expired Superhuman OAuth state");
+  }
+
+  const redirectUrl = `${getBaseUrl()}/api/integrations/callback/superhuman`;
+  const clientMetadata: OAuthClientMetadata = {
+    redirect_uris: [redirectUrl],
+    grant_types: ["authorization_code", "refresh_token"],
+    response_types: ["code"],
+    token_endpoint_auth_method: "none",
+    client_name: "OutboundOS Superhuman MCP",
+  };
+
+  return {
+    get redirectUrl() {
+      return redirectUrl;
+    },
+    get clientMetadata() {
+      return clientMetadata;
+    },
+    state() {
+      return stateKey;
+    },
+    clientInformation() {
+      return session.clientInformation;
+    },
+    saveClientInformation(clientInformation: OAuthClientInformationMixed) {
+      session.clientInformation = clientInformation;
+    },
+    tokens() {
+      return undefined;
+    },
+    async saveTokens(tokens: SdkOAuthTokens) {
+      await saveTokens("superhuman", session.userId, {
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token,
+        expiresIn: tokens.expires_in,
+        tokenType: tokens.token_type,
+        scope: tokens.scope,
+      });
+      await storage.upsertIntegrationConnection("superhuman", session.userId, {
+        metadata: {
+          oauthDiscovery: session.discoveryState ?? null,
+          oauthClientInformation: session.clientInformation ?? null,
+        },
+        providerAccountId: process.env.BRIAN_EMAIL ?? undefined,
+      });
+    },
+    redirectToAuthorization(authorizationUrl: URL) {
+      session.createdAt = Date.now();
+      // Store on session object via closure side-effect for caller to read.
+      (session as { authorizationUrl?: string }).authorizationUrl = authorizationUrl.toString();
+    },
+    saveCodeVerifier(codeVerifier: string) {
+      session.codeVerifier = codeVerifier;
+    },
+    codeVerifier() {
+      if (!session.codeVerifier) {
+        throw new Error("Missing PKCE code verifier");
+      }
+      return session.codeVerifier;
+    },
+    saveDiscoveryState(state: OAuthDiscoveryState) {
+      session.discoveryState = state;
+    },
+    discoveryState() {
+      return session.discoveryState;
+    },
+    invalidateCredentials(scope: "all" | "client" | "tokens" | "verifier" | "discovery") {
+      if (scope === "all" || scope === "client") session.clientInformation = undefined;
+      if (scope === "all" || scope === "verifier") session.codeVerifier = undefined;
+      if (scope === "all" || scope === "discovery") session.discoveryState = undefined;
+    },
+  };
 }
 
 // List all integration connections (masks tokens)
@@ -90,6 +200,26 @@ router.post("/:provider/connect", async (req, res) => {
     const userId = getUserId(req);
     const { provider } = req.params;
 
+    if (provider === "superhuman") {
+      const stateKey = crypto.randomUUID();
+      superhumanStateStore.set(stateKey, { userId, createdAt: Date.now() });
+      const authProvider = buildSuperhumanProvider(stateKey);
+
+      const authResult = await auth(authProvider, {
+        serverUrl: SUPERHUMAN_MCP_URL,
+      });
+
+      if (authResult === "AUTHORIZED") {
+        return res.json({ connected: true, provider: "superhuman" });
+      }
+
+      const session = superhumanStateStore.get(stateKey) as { authorizationUrl?: string } | undefined;
+      if (!session?.authorizationUrl) {
+        throw new Error("Failed to start Superhuman authorization");
+      }
+      return res.json({ authorizationUrl: session.authorizationUrl });
+    }
+
     if (provider === "granola") {
       const google = await storage.getIntegrationConnection("google", userId);
       if (!google?.isConnected) {
@@ -111,6 +241,34 @@ router.post("/:provider/connect", async (req, res) => {
 // OAuth callback
 router.get("/callback/:provider", async (req, res) => {
   try {
+    if (req.params.provider === "superhuman") {
+      const code = req.query.code;
+      const state = req.query.state;
+      if (!code || !state) {
+        return res.redirect("/settings?integration_error=missing_params");
+      }
+
+      const stateKey = String(state);
+      const session = superhumanStateStore.get(stateKey);
+      if (!session) {
+        return res.redirect("/settings?integration_error=invalid_state");
+      }
+
+      const userId = req.user?.id;
+      if (!userId || userId !== session.userId) {
+        return res.redirect("/settings?integration_error=not_authenticated");
+      }
+
+      const authProvider = buildSuperhumanProvider(stateKey);
+      await auth(authProvider, {
+        serverUrl: SUPERHUMAN_MCP_URL,
+        authorizationCode: String(code),
+      });
+      superhumanStateStore.delete(stateKey);
+      await clearSuperhumanClient(userId);
+      return res.redirect("/settings?integration_success=superhuman");
+    }
+
     const { code, state, error: oauthError } = req.query;
 
     if (oauthError) {
@@ -163,6 +321,9 @@ router.delete("/:provider", async (req, res) => {
     const userId = getUserId(req);
     const { provider } = req.params;
     await storage.deleteIntegrationConnection(provider, userId);
+    if (provider === "superhuman") {
+      await clearSuperhumanClient(userId);
+    }
 
     // Disconnecting Google also removes Granola access
     if (provider === "google") {
