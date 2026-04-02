@@ -50,6 +50,16 @@ function getBaseUrl(): string {
   return "http://localhost:5000";
 }
 
+/**
+ * Logo shown on the Superhuman OAuth consent screen (RFC 7591 `logo_uri`).
+ * Set OAUTH_CLIENT_LOGO_URL to override (e.g. CDN); default is this app's public brand asset.
+ */
+function getSuperhumanOAuthLogoUri(): string {
+  const fromEnv = process.env.OAUTH_CLIENT_LOGO_URL?.trim();
+  if (fromEnv) return fromEnv;
+  return `${getBaseUrl()}/brand/outbound-os-mark.svg`;
+}
+
 function buildSuperhumanProvider(stateKey: string): OAuthClientProvider {
   const session = superhumanStateStore.get(stateKey);
   if (!session) {
@@ -62,7 +72,8 @@ function buildSuperhumanProvider(stateKey: string): OAuthClientProvider {
     grant_types: ["authorization_code", "refresh_token"],
     response_types: ["code"],
     token_endpoint_auth_method: "none",
-    client_name: "OutboundOS Superhuman MCP",
+    client_name: "Outbound OS",
+    logo_uri: getSuperhumanOAuthLogoUri(),
   };
 
   return {
