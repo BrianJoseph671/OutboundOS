@@ -78,7 +78,18 @@ export default function Settings() {
       window.history.replaceState({}, "", "/settings");
     }
     if (error) {
-      toast({ title: "Integration connection failed", description: error, variant: "destructive" });
+      const descriptions: Record<string, string> = {
+        not_authenticated: "Your session expired. Log in and try connecting again.",
+        session_mismatch:
+          "Browser session did not match this connection attempt. Close extra tabs and try Connect again from Settings.",
+        invalid_state: "This link expired or was already used. Click Connect again.",
+        missing_params: "OAuth returned an incomplete response. Try Connect again.",
+      };
+      toast({
+        title: "Integration connection failed",
+        description: descriptions[error] ?? decodeURIComponent(error.replace(/\+/g, " ")),
+        variant: "destructive",
+      });
       window.history.replaceState({}, "", "/settings");
     }
   }, []);

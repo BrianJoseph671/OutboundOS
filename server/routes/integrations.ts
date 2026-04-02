@@ -265,10 +265,20 @@ router.get("/callback/:provider", async (req, res) => {
         return res.redirect("/settings?integration_error=invalid_state");
       }
 
-      const userId = req.user?.id;
-      if (!userId || userId !== session.userId) {
-        return res.redirect("/settings?integration_error=not_authenticated");
+      // Do not require req.user on this request. Returning from the IdP is a
+      // cross-site top-level navigation; some browsers or host mismatches
+      // (localhost vs 127.0.0.1) omit the session cookie, which previously
+      // aborted the flow before token exchange. userId from state was set on
+      // an authenticated POST /connect and is the trust anchor for this code.
+      const cookieUserId = req.user?.id;
+      if (cookieUserId && cookieUserId !== session.userId) {
+        console.warn(
+          "[integrations] Superhuman OAuth callback: session user does not match connect state",
+        );
+        return res.redirect("/settings?integration_error=session_mismatch");
       }
+
+      const userId = session.userId;
 
       const authProvider = buildSuperhumanProvider(stateKey);
       await auth(authProvider, {
