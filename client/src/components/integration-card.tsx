@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -35,33 +34,47 @@ export function IntegrationCard({
 }: IntegrationCardProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [connecting, setConnecting] = useState(false);
 
   const connectMutation = useMutation({
     mutationFn: async () => {
-      setConnecting(true);
       const res = await fetch(`/api/integrations/${provider}/connect`, {
         method: "POST",
         credentials: "include",
       });
-      const data = await res.json();
+      let data: Record<string, unknown> = {};
+      try {
+        data = (await res.json()) as Record<string, unknown>;
+      } catch {
+        throw new Error(`Invalid response from server (${res.status})`);
+      }
       if (!res.ok) {
-        throw new Error(data.error || `Failed to connect ${name}`);
+        const msg =
+          (typeof data.error === "string" && data.error) ||
+          (typeof data.message === "string" && data.message) ||
+          `Failed to connect ${name}`;
+        throw new Error(msg);
       }
       return data;
     },
     onSuccess: (data) => {
-      if (data.authorizationUrl) {
-        window.location.href = data.authorizationUrl;
-      } else if (data.connected) {
+      const url = typeof data.authorizationUrl === "string" ? data.authorizationUrl : "";
+      if (url) {
+        window.location.assign(url);
+        return;
+      }
+      if (data.connected) {
         queryClient.invalidateQueries({ queryKey: ["/api/integrations"] });
         toast({ title: `${name} connected` });
         onStatusChange?.();
-        setConnecting(false);
+        return;
       }
+      toast({
+        title: `Could not start ${name}`,
+        description: "Server did not return an authorization link. Try again.",
+        variant: "destructive",
+      });
     },
     onError: (error: Error) => {
-      setConnecting(false);
       toast({
         title: `Failed to connect ${name}`,
         description: error.message,
@@ -152,10 +165,10 @@ export function IntegrationCard({
             <Button
               size="sm"
               onClick={() => connectMutation.mutate()}
-              disabled={connecting || connectMutation.isPending}
+              disabled={connectMutation.isPending}
               data-testid={`button-connect-${provider}`}
             >
-              {connecting || connectMutation.isPending ? (
+              {connectMutation.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
               ) : (
                 <ExternalLink className="h-4 w-4 mr-2" />
