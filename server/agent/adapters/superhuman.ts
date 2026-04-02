@@ -7,18 +7,50 @@
 import type { SuperhumanEmail } from "@shared/types/mcp";
 import type { RawInteraction } from "../services/interactionWriter";
 import { matchContact } from "../services/contactMatcher";
+import { getRelationshipProviderMode } from "../providerMode";
+import { storage } from "../../storage";
 
 /**
  * fetchEmails — pull emails from Superhuman MCP for a date range.
  * TODO: Replace with real MCP call to `list_email`.
  */
 export async function fetchEmails(
-  _startDate: string,
-  _endDate: string,
-  _userEmail: string,
+  startDate: string,
+  endDate: string,
+  userEmail: string,
+  userId: string,
 ): Promise<SuperhumanEmail[]> {
-  console.warn("[Superhuman Adapter] fetchEmails — TODO placeholder, returning empty");
-  return [];
+  const providerMode = getRelationshipProviderMode();
+  if (providerMode === "live") {
+    throw new Error(
+      "RELATIONSHIP_PROVIDER_MODE=live but Superhuman MCP adapter is not wired yet"
+    );
+  }
+
+  const contacts = await storage.getContacts(userId);
+  const withEmail = contacts.filter((c) => c.email && c.name);
+  if (withEmail.length === 0) return [];
+
+  const start = new Date(startDate).getTime();
+  const end = new Date(endDate).getTime();
+  const now = Number.isNaN(end) ? Date.now() : end;
+  const baseline = Number.isNaN(start) ? now - 7 * 24 * 60 * 60 * 1000 : start;
+  const span = Math.max(1, now - baseline);
+
+  return withEmail.slice(0, 3).map((contact, index) => {
+    const occurredAt = new Date(baseline + Math.floor(((index + 1) / 4) * span));
+    return {
+      messageId: `mock-email-message-${userId}-${contact.id}`,
+      threadId: `mock-email-thread-${userId}-${contact.id}`,
+      from: contact.email!,
+      to: [userEmail || "owner@outboundos.local"],
+      cc: [],
+      subject: `Following up from ${contact.company ?? "our last note"}`,
+      date: occurredAt.toISOString(),
+      snippet: `Quick follow-up from ${contact.name} about next steps.`,
+      hasAttachments: false,
+    };
+  });
 }
 
 /**
@@ -65,7 +97,7 @@ export async function fetchAndMapEmails(
   const result: RawInteraction[] = [];
 
   try {
-    const emails = await fetchEmails(startDate, endDate, userEmail);
+    const emails = await fetchEmails(startDate, endDate, userEmail, userId);
 
     for (const email of emails) {
       // Determine the counterparty email (the non-user participant)

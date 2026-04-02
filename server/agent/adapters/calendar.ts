@@ -7,17 +7,46 @@
 import type { CalendarEvent } from "@shared/types/mcp";
 import type { RawInteraction } from "../services/interactionWriter";
 import { matchContact } from "../services/contactMatcher";
+import { getRelationshipProviderMode } from "../providerMode";
+import { storage } from "../../storage";
 
 /**
  * fetchEvents — pull events from Google Calendar MCP for a time window.
  * TODO: Replace with real MCP call to `gcal_list_events`.
  */
 export async function fetchEvents(
-  _timeMin: string,
-  _timeMax: string,
+  timeMin: string,
+  timeMax: string,
+  userEmail: string,
+  userId: string,
 ): Promise<CalendarEvent[]> {
-  console.warn("[Calendar Adapter] fetchEvents — TODO placeholder, returning empty");
-  return [];
+  const providerMode = getRelationshipProviderMode();
+  if (providerMode === "live") {
+    throw new Error(
+      "RELATIONSHIP_PROVIDER_MODE=live but Calendar MCP adapter is not wired yet"
+    );
+  }
+
+  const contacts = await storage.getContacts(userId);
+  const withEmail = contacts.filter((c) => c.email && c.name);
+  if (withEmail.length === 0) return [];
+
+  const start = new Date(timeMin).getTime();
+  const end = new Date(timeMax).getTime();
+  const now = Number.isNaN(end) ? Date.now() : end;
+  const baseline = Number.isNaN(start) ? now - 7 * 24 * 60 * 60 * 1000 : start;
+  const slot = baseline + Math.floor((now - baseline) * 0.75);
+  const eventStart = new Date(slot);
+  const eventEnd = new Date(slot + 30 * 60 * 1000);
+
+  return withEmail.slice(0, 1).map((contact) => ({
+    eventId: `mock-calendar-${userId}-${contact.id}`,
+    title: `Coffee chat with ${contact.name}`,
+    start: eventStart.toISOString(),
+    end: eventEnd.toISOString(),
+    attendees: [userEmail || "owner@outboundos.local", contact.email!],
+    description: `Reconnect touchpoint with ${contact.name}.`,
+  }));
 }
 
 /**
@@ -56,7 +85,7 @@ export async function fetchAndMapEvents(
   const result: RawInteraction[] = [];
 
   try {
-    const events = await fetchEvents(startDate, endDate);
+    const events = await fetchEvents(startDate, endDate, userEmail, userId);
 
     for (const event of events) {
       // Filter to external attendees only (exclude user's own email)
