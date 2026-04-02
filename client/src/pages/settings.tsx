@@ -27,6 +27,7 @@ import {
   FileText,
   Plug,
   Info,
+  Mail,
 } from "lucide-react";
 import type { Settings as SettingsType, Contact } from "@shared/schema";
 import { format } from "date-fns";
@@ -373,6 +374,15 @@ export default function Settings() {
             onStatusChange={() => queryClient.invalidateQueries({ queryKey: ["/api/integrations"] })}
             onSync={() => syncGoogle()}
             isSyncing={isSyncingGoogle}
+          />
+          <IntegrationCard
+            provider="superhuman"
+            name="Superhuman Mail"
+            description="Connect your Superhuman MCP mailbox for live thread ingestion and draft workflows"
+            icon={<Mail className="h-5 w-5" />}
+            connected={isConnected("superhuman")}
+            accountId={integrations.find((i) => i.provider === "superhuman")?.providerAccountId}
+            onStatusChange={() => queryClient.invalidateQueries({ queryKey: ["/api/integrations"] })}
           />
           <IntegrationCard
             provider="granola"
