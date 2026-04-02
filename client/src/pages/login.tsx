@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, getQueryFn } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,6 +11,22 @@ import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { GoogleIcon } from "@/components/icons/google-icon";
 import type { AuthUser } from "@/hooks/useAuth";
+
+/** Only allow same-origin paths (prevents open redirects). */
+function getSafeNext(): string {
+  const params = new URLSearchParams(window.location.search);
+  const raw = params.get("next");
+  if (!raw) return "/";
+  let decoded = raw;
+  try {
+    decoded = decodeURIComponent(raw);
+  } catch {
+    return "/";
+  }
+  if (!decoded.startsWith("/") || decoded.startsWith("//")) return "/";
+  if (decoded.includes("://")) return "/";
+  return decoded.split("#")[0] || "/";
+}
 
 export default function Login() {
   const [, setLocation] = useLocation();
@@ -23,13 +39,25 @@ export default function Login() {
     queryKey: ["/api/auth/config"],
   });
 
+  const { data: existingUser, isLoading: authLoading } = useQuery<AuthUser | null>({
+    queryKey: ["/auth/me"],
+    queryFn: getQueryFn<AuthUser | null>({ on401: "returnNull" }),
+    retry: false,
+  });
+
+  useEffect(() => {
+    if (!authLoading && existingUser) {
+      setLocation(getSafeNext());
+    }
+  }, [authLoading, existingUser, setLocation]);
+
   const loginMutation = useMutation({
     mutationFn: (data: { email: string; password: string }) =>
       apiRequest("POST", "/api/auth/login", data),
-    onSuccess: async (res: Response) => {
-      const user: AuthUser = await res.json();
-      queryClient.setQueryData(["/api/auth/me"], user);
-      setLocation("/");
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["/auth/me"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      setLocation(getSafeNext());
     },
     onError: async (err: any) => {
       const msg = err?.message || "Login failed. Check your email and password.";
@@ -40,10 +68,10 @@ export default function Login() {
   const registerMutation = useMutation({
     mutationFn: (data: { email: string; password: string; displayName: string }) =>
       apiRequest("POST", "/api/auth/register", data),
-    onSuccess: async (res: Response) => {
-      const user: AuthUser = await res.json();
-      queryClient.setQueryData(["/api/auth/me"], user);
-      setLocation("/");
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["/auth/me"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      setLocation(getSafeNext());
     },
     onError: async (err: any) => {
       const msg = err?.message || "Registration failed.";
@@ -70,17 +98,27 @@ export default function Login() {
   };
 
   const handleGoogleLogin = () => {
+    const next = encodeURIComponent(getSafeNext());
+    const url = `/api/auth/google?next=${next}`;
     try {
       if (window.top && window.top !== window) {
-        window.top.location.href = "/api/auth/google";
+        window.top.location.href = url;
         return;
       }
     } catch (_e) {
     }
-    window.location.href = "/api/auth/google";
+    window.location.href = url;
   };
 
   const googleEnabled = authConfig?.googleEnabled;
+
+  if (authLoading || existingUser) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <p className="text-sm text-muted-foreground">Loading…</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">

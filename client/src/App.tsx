@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { Switch, Route } from "wouter";
+import Login from "@/pages/login";
 import { queryClient, getQueryFn, apiRequest } from "./lib/queryClient";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -58,7 +59,7 @@ function Router() {
 
 /**
  * Centered full-screen loading spinner — shown while /auth/me is resolving
- * or while the browser is being redirected to /auth/google.
+ * or while the browser is being redirected to /login.
  */
 function LoadingScreen() {
   return (
@@ -103,7 +104,7 @@ function AppShell({ user }: { user: AuthUser }) {
     } catch {
       // Proceed with redirect even if the server call fails
     }
-    window.location.href = "/auth/google";
+    window.location.href = "/login";
   };
 
   return (
@@ -144,7 +145,7 @@ function AppShell({ user }: { user: AuthUser }) {
 /**
  * AuthGate: fetches /auth/me on mount.
  * - While loading → shows a centered spinner
- * - On 401 (user === null) → redirects to /auth/google
+ * - On 401 (user === null) → redirects to /login?next=… (preserves return path)
  * - On non-401 error (network failure, 500, etc.) → shows error UI with retry
  * - On 200 (user present) → renders the full app shell
  */
@@ -165,7 +166,8 @@ function AuthGate() {
   // Using useEffect avoids calling window.location in render (safer in StrictMode).
   useEffect(() => {
     if (!isLoading && user === null) {
-      window.location.href = "/auth/google";
+      const next = `${window.location.pathname}${window.location.search}`;
+      window.location.href = `/login?next=${encodeURIComponent(next)}`;
     }
   }, [isLoading, user]);
 
@@ -186,7 +188,10 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <AuthGate />
+        <Switch>
+          <Route path="/login" component={Login} />
+          <Route component={AuthGate} />
+        </Switch>
         <Toaster />
       </TooltipProvider>
     </QueryClientProvider>
