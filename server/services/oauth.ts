@@ -4,12 +4,13 @@ import { storage } from "../storage";
 
 export interface OAuthProviderConfig {
   provider: string;
-  clientId: string;
-  clientSecret: string;
+  clientId?: string;
+  clientSecret?: string;
   authorizationUrl: string;
   tokenUrl: string;
   scopes: string[];
   redirectUri: string;
+  mcpServerUrl?: string;
 }
 
 export interface OAuthTokens {
@@ -66,11 +67,31 @@ export function getProviderConfig(provider: string): OAuthProviderConfig {
     };
   }
 
+  if (provider === "superhuman") {
+    const mcpServerUrl =
+      process.env.SUPERHUMAN_MCP_URL || "https://mcp.mail.superhuman.com/mcp";
+    return {
+      provider: "superhuman",
+      // Superhuman MCP uses MCP OAuth discovery/registration flow rather than
+      // static app client credentials in this service.
+      authorizationUrl: mcpServerUrl,
+      tokenUrl: mcpServerUrl,
+      scopes: [],
+      redirectUri: `${baseUrl}/api/integrations/callback/superhuman`,
+      mcpServerUrl,
+    };
+  }
+
   throw new Error(`Unknown OAuth provider: ${provider}`);
 }
 
 export function generateAuthorizationUrl(provider: string): string {
   const config = getProviderConfig(provider);
+  if (provider === "superhuman") {
+    throw new Error(
+      "Superhuman authorization must be started through the MCP OAuth flow. Use the Superhuman integration route wiring."
+    );
+  }
   const state = crypto.randomBytes(32).toString("hex");
   stateStore.set(state, { provider, createdAt: Date.now() });
 
@@ -96,6 +117,11 @@ export function validateState(state: string): string | null {
 
 export async function exchangeCodeForTokens(provider: string, code: string): Promise<OAuthTokens> {
   const config = getProviderConfig(provider);
+  if (provider === "superhuman") {
+    throw new Error(
+      "Superhuman token exchange is handled by the MCP OAuth flow. Use the Superhuman integration route wiring."
+    );
+  }
 
   const body = new URLSearchParams({
     grant_type: "authorization_code",
@@ -131,6 +157,11 @@ export async function refreshAccessToken(provider: string, userId: string): Prom
   if (!connection?.refreshToken) return null;
 
   const config = getProviderConfig(provider);
+  if (provider === "superhuman") {
+    // MCP OAuth refresh is handled in the MCP client path where discovery metadata
+    // is available. Keep this service behavior explicit for now.
+    return null;
+  }
   const refreshToken = decrypt(connection.refreshToken);
 
   const body = new URLSearchParams({
