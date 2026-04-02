@@ -9,6 +9,12 @@ import type { RawInteraction } from "../services/interactionWriter";
 import { matchContact } from "../services/contactMatcher";
 import { getRelationshipProviderMode } from "../providerMode";
 import { storage } from "../../storage";
+import { listThreads } from "../../services/mcpClient";
+
+function extractEmailAddress(value: string): string {
+  const match = value.match(/<([^>]+)>/);
+  return (match?.[1] || value).trim().toLowerCase();
+}
 
 /**
  * fetchEmails — pull emails from Superhuman MCP for a date range.
@@ -22,9 +28,36 @@ export async function fetchEmails(
 ): Promise<SuperhumanEmail[]> {
   const providerMode = getRelationshipProviderMode();
   if (providerMode === "live") {
-    throw new Error(
-      "RELATIONSHIP_PROVIDER_MODE=live but Superhuman MCP adapter is not wired yet"
-    );
+    const response = await listThreads(userId, {
+      start_date: startDate,
+      end_date: endDate,
+      limit: 50,
+    });
+
+    const mapped: SuperhumanEmail[] = [];
+    for (const thread of response.threads) {
+      const latestMessage = thread.messages?.[0];
+      const fromRaw = latestMessage?.from || thread.participants[0] || "";
+      const from = extractEmailAddress(fromRaw);
+
+      const toRaw = latestMessage?.to || thread.participants.slice(1);
+      const to = toRaw.map(extractEmailAddress).filter(Boolean);
+      const cc = (latestMessage?.cc || []).map(extractEmailAddress).filter(Boolean);
+
+      mapped.push({
+        messageId: latestMessage?.message_id || `${thread.thread_id}-latest`,
+        threadId: thread.thread_id,
+        from,
+        to,
+        cc,
+        subject: latestMessage?.subject || thread.subject,
+        date: latestMessage?.sent_at || thread.last_message_at,
+        snippet: latestMessage?.snippet || thread.snippet,
+        hasAttachments: (latestMessage?.attachments?.length || 0) > 0,
+      });
+    }
+
+    return mapped;
   }
 
   const contacts = await storage.getContacts(userId);
