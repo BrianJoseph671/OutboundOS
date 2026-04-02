@@ -27,6 +27,7 @@ import {
   FileText,
   Plug,
   Info,
+  Mail,
 } from "lucide-react";
 import type { Settings as SettingsType, Contact } from "@shared/schema";
 import { format } from "date-fns";
@@ -77,7 +78,18 @@ export default function Settings() {
       window.history.replaceState({}, "", "/settings");
     }
     if (error) {
-      toast({ title: "Integration connection failed", description: error, variant: "destructive" });
+      const descriptions: Record<string, string> = {
+        not_authenticated: "Your session expired. Log in and try connecting again.",
+        session_mismatch:
+          "Browser session did not match this connection attempt. Close extra tabs and try Connect again from Settings.",
+        invalid_state: "This link expired or was already used. Click Connect again.",
+        missing_params: "OAuth returned an incomplete response. Try Connect again.",
+      };
+      toast({
+        title: "Integration connection failed",
+        description: descriptions[error] ?? decodeURIComponent(error.replace(/\+/g, " ")),
+        variant: "destructive",
+      });
       window.history.replaceState({}, "", "/settings");
     }
   }, []);
@@ -373,6 +385,15 @@ export default function Settings() {
             onStatusChange={() => queryClient.invalidateQueries({ queryKey: ["/api/integrations"] })}
             onSync={() => syncGoogle()}
             isSyncing={isSyncingGoogle}
+          />
+          <IntegrationCard
+            provider="superhuman"
+            name="Superhuman Mail"
+            description="Connect your Superhuman MCP mailbox for live thread ingestion and draft workflows"
+            icon={<Mail className="h-5 w-5" />}
+            connected={isConnected("superhuman")}
+            accountId={integrations.find((i) => i.provider === "superhuman")?.providerAccountId}
+            onStatusChange={() => queryClient.invalidateQueries({ queryKey: ["/api/integrations"] })}
           />
           <IntegrationCard
             provider="granola"

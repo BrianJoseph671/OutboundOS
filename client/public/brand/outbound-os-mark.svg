@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Outbound OS">
+  <defs>
+    <linearGradient id="oo" x1="40" y1="36" x2="220" y2="228" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#22d3ee"/>
+      <stop offset="0.55" stop-color="#6366f1"/>
+      <stop offset="1" stop-color="#a855f7"/>
+    </linearGradient>
+    <linearGradient id="oo2" x1="128" y1="56" x2="128" y2="200" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#e0f2fe" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#c7d2fe" stop-opacity="0.85"/>
+    </linearGradient>
+  </defs>
+  <!-- Rounded tile: reads clearly at OAuth consent thumbnail sizes -->
+  <rect width="256" height="256" rx="56" fill="#09090b"/>
+  <path fill="url(#oo)" fill-rule="evenodd" d="M128 56c-39.76 0-72 32.24-72 72s32.24 72 72 72 72-32.24 72-72-32.24-72-72-72zm0 36c19.88 0 36 16.12 36 36s-16.12 36-36 36-36-16.12-36-36 16.12-36 36-36z"/>
+  <!-- Outbound cue: three small arcs suggesting motion / reach -->
+  <path fill="none" stroke="url(#oo2)" stroke-width="10" stroke-linecap="round" d="M188 88c16 24 16 56 0 80M196 72c-4-28-28-48-56-52"/>
+</svg>

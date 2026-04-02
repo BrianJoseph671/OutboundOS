@@ -14,6 +14,21 @@ import { randomBytes } from "crypto";
 // Export passport so tests can import it directly
 export { passport };
 
+/** Same-origin path only — prevents open redirects after OAuth. */
+export function safeOAuthReturnPath(next: unknown): string {
+  if (typeof next !== "string") return "/";
+  const trimmed = next.trim();
+  if (!trimmed.startsWith("/") || trimmed.startsWith("//")) return "/";
+  if (trimmed.includes("://")) return "/";
+  return trimmed.split("#")[0] || "/";
+}
+
+declare module "express-session" {
+  interface SessionData {
+    oauthReturnTo?: string;
+  }
+}
+
 declare global {
   namespace Express {
     interface User {
@@ -268,28 +283,37 @@ export async function setupAuth(app: Express) {
       )
     );
 
-    app.get(
-      "/api/auth/google",
-      passport.authenticate("google", { scope: ["profile", "email"] })
-    );
-    app.get(
-      "/auth/google",
-      passport.authenticate("google", { scope: ["profile", "email"] })
-    );
+    const startGoogleOAuth = (req: Request, res: Response, next: NextFunction) => {
+      const raw = req.query.next;
+      if (typeof raw === "string") {
+        req.session.oauthReturnTo = safeOAuthReturnPath(raw);
+      } else {
+        delete req.session.oauthReturnTo;
+      }
+      req.session.save((err) => {
+        if (err) return next(err);
+        passport.authenticate("google", { scope: ["profile", "email"] })(req, res, next);
+      });
+    };
+
+    app.get("/api/auth/google", startGoogleOAuth);
+    app.get("/auth/google", startGoogleOAuth);
+
+    const afterGoogleCallback = (req: Request, res: Response) => {
+      const dest = safeOAuthReturnPath(req.session.oauthReturnTo);
+      delete req.session.oauthReturnTo;
+      res.redirect(dest);
+    };
 
     app.get(
       "/api/auth/google/callback",
-      passport.authenticate("google", { failureRedirect: "/?error=google_auth_failed" }),
-      (req: Request, res: Response) => {
-        res.redirect("/");
-      }
+      passport.authenticate("google", { failureRedirect: "/login?error=google_auth_failed" }),
+      afterGoogleCallback,
     );
     app.get(
       "/auth/google/callback",
-      passport.authenticate("google", { failureRedirect: "/?error=google_auth_failed" }),
-      (req: Request, res: Response) => {
-        res.redirect("/");
-      }
+      passport.authenticate("google", { failureRedirect: "/login?error=google_auth_failed" }),
+      afterGoogleCallback,
     );
   } else {
     console.info("[Auth] Google OAuth not configured (GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET not set)");

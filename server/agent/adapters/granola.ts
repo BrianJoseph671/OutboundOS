@@ -7,6 +7,8 @@
 import type { GranolaMeeting } from "@shared/types/mcp";
 import type { RawInteraction } from "../services/interactionWriter";
 import { matchContact } from "../services/contactMatcher";
+import { getRelationshipProviderMode } from "../providerMode";
+import { storage } from "../../storage";
 
 type GranolaTimeRange = "this_week" | "last_week" | "last_30_days";
 
@@ -29,10 +31,32 @@ export function computeTimeRange(startDate: Date): GranolaTimeRange {
  * TODO: Replace with real MCP call to `list_meetings` + `get_meetings`.
  */
 export async function fetchMeetings(
-  _timeRange: GranolaTimeRange,
+  timeRange: GranolaTimeRange,
+  userId: string,
 ): Promise<GranolaMeeting[]> {
-  console.warn("[Granola Adapter] fetchMeetings — TODO placeholder, returning empty");
-  return [];
+  const providerMode = getRelationshipProviderMode();
+  if (providerMode === "live") {
+    throw new Error(
+      "RELATIONSHIP_PROVIDER_MODE=live but Granola MCP adapter is not wired yet"
+    );
+  }
+
+  const contacts = await storage.getContacts(userId);
+  const withEmail = contacts.filter((c) => c.email && c.name);
+  if (withEmail.length === 0) return [];
+
+  const now = Date.now();
+  const dayMs = 24 * 60 * 60 * 1000;
+  const lookbackDays = timeRange === "this_week" ? 5 : timeRange === "last_week" ? 12 : 25;
+  const meetingDate = new Date(now - lookbackDays * dayMs).toISOString().slice(0, 10);
+
+  return withEmail.slice(0, 2).map((contact) => ({
+    id: `mock-granola-${userId}-${contact.id}`,
+    title: `Catch-up with ${contact.name}`,
+    date: meetingDate,
+    knownParticipants: [contact.email!],
+    summary: `Discussed priorities and agreed on a follow-up with ${contact.name}.`,
+  }));
 }
 
 /**
@@ -74,7 +98,7 @@ export async function fetchAndMapMeetings(
 
   try {
     const timeRange = computeTimeRange(startDate);
-    const meetings = await fetchMeetings(timeRange);
+    const meetings = await fetchMeetings(timeRange, userId);
 
     for (const meeting of meetings) {
       for (const participantEmail of meeting.knownParticipants) {
