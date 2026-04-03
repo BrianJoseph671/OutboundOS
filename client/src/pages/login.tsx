@@ -124,6 +124,15 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
+          <div className="flex justify-center mb-5">
+            <img
+              src="/brand/outbound-os-logo.svg"
+              alt="Outbound OS"
+              className="h-14 w-auto max-w-[220px] object-contain mx-auto"
+              width={220}
+              height={56}
+            />
+          </div>
           <h1 className="text-3xl font-bold tracking-tight">Outbound OS</h1>
           <p className="text-muted-foreground mt-2">Your outreach management platform</p>
         </div>

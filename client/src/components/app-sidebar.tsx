@@ -24,7 +24,6 @@ import {
   FlaskConical,
   FileText,
   Settings,
-  Zap,
   Upload,
   Brain,
   Heart,
@@ -32,6 +31,8 @@ import {
   ListTodo,
   BarChart3,
 } from "lucide-react";
+
+const BRAND_LOGO_SRC = "/brand/outbound-os-logo.svg";
 import { useAuth } from "@/hooks/useAuth";
 
 const menuItems = [
@@ -56,11 +57,15 @@ export function AppSidebar() {
   return (
     <Sidebar>
       <SidebarHeader className="p-4 border-b border-sidebar-border">
-        <Link href="/" className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-md bg-primary flex items-center justify-center">
-            <Zap className="w-4 h-4 text-primary-foreground" />
-          </div>
-          <span className="font-semibold text-lg">Outbound OS</span>
+        <Link href="/" className="flex items-center gap-2 min-w-0">
+          <img
+            src={BRAND_LOGO_SRC}
+            alt="Outbound OS"
+            className="h-7 w-auto max-w-[100px] object-contain object-left shrink-0"
+            width={100}
+            height={28}
+          />
+          <span className="font-semibold text-lg truncate">Outbound OS</span>
         </Link>
       </SidebarHeader>
       <SidebarContent className="pt-4">

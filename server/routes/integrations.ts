@@ -58,7 +58,7 @@ function getBaseUrl(): string {
 function getSuperhumanOAuthLogoUri(): string | undefined {
   const fromEnv = process.env.OAUTH_CLIENT_LOGO_URL?.trim();
   const candidate =
-    fromEnv || `${getBaseUrl()}/brand/outbound-os-mark.svg`;
+    fromEnv || `${getBaseUrl()}/brand/outbound-os-logo.svg`;
   try {
     const u = new URL(candidate);
     if (u.protocol === "https:") return candidate;
