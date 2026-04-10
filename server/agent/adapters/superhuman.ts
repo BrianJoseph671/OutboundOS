@@ -12,6 +12,10 @@ import { storage } from "../../storage";
 import { listThreads } from "../../services/mcpClient";
 import type { SuperhumanThreadSummary } from "../../services/mcpClient";
 import type { SuperhumanThreadMessage } from "../../services/mcpClient";
+import {
+  getSuperhumanCheckpoint,
+  saveSuperhumanCheckpoint,
+} from "../services/superhumanSyncState";
 
 const DEFAULT_PAGE_LIMIT = 50;
 const MAX_PAGES_PER_SYNC = Number.parseInt(
@@ -64,6 +68,12 @@ export async function fetchEmails(
 ): Promise<SuperhumanEmail[]> {
   const providerMode = getRelationshipProviderMode();
   if (providerMode === "live") {
+    const checkpointIso = await getSuperhumanCheckpoint(userId);
+    const effectiveStartDate =
+      checkpointIso && Date.parse(checkpointIso) > Date.parse(startDate)
+        ? checkpointIso
+        : startDate;
+
     const threads: SuperhumanThreadSummary[] = [];
     let cursor: string | undefined;
     let pageCount = 0;
@@ -74,7 +84,7 @@ export async function fetchEmails(
       if (pageLimit <= 0) break;
 
       const response = await listThreads(userId, {
-        start_date: startDate,
+        start_date: effectiveStartDate,
         end_date: endDate,
         limit: pageLimit,
         ...(cursor ? { cursor } : {}),
@@ -107,6 +117,15 @@ export async function fetchEmails(
         snippet: latestMessage?.snippet || thread.snippet,
         hasAttachments: (latestMessage?.attachments?.length || 0) > 0,
       });
+    }
+
+    const newestEmailDate = mapped.reduce<string | null>((latest, email) => {
+      if (!email.date || Number.isNaN(Date.parse(email.date))) return latest;
+      if (!latest) return email.date;
+      return Date.parse(email.date) > Date.parse(latest) ? email.date : latest;
+    }, null);
+    if (newestEmailDate) {
+      await saveSuperhumanCheckpoint(userId, newestEmailDate);
     }
 
     return mapped;
