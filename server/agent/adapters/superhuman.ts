@@ -11,6 +11,7 @@ import { getRelationshipProviderMode } from "../providerMode";
 import { storage } from "../../storage";
 import { listThreads } from "../../services/mcpClient";
 import type { SuperhumanThreadSummary } from "../../services/mcpClient";
+import type { SuperhumanThreadMessage } from "../../services/mcpClient";
 
 const DEFAULT_PAGE_LIMIT = 50;
 const MAX_PAGES_PER_SYNC = Number.parseInt(
@@ -25,6 +26,30 @@ const MAX_THREADS_PER_SYNC = Number.parseInt(
 function extractEmailAddress(value: string): string {
   const match = value.match(/<([^>]+)>/);
   return (match?.[1] || value).trim().toLowerCase();
+}
+
+function normalizeEmailList(values: string[] | undefined): string[] {
+  if (!values?.length) return [];
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+  for (const value of values) {
+    const email = extractEmailAddress(value);
+    if (!email || seen.has(email)) continue;
+    seen.add(email);
+    normalized.push(email);
+  }
+  return normalized;
+}
+
+function toTimestamp(value: string | undefined): number {
+  if (!value) return 0;
+  const ts = Date.parse(value);
+  return Number.isNaN(ts) ? 0 : ts;
+}
+
+function pickLatestMessage(thread: SuperhumanThreadSummary): SuperhumanThreadMessage | undefined {
+  if (!thread.messages?.length) return undefined;
+  return [...thread.messages].sort((a, b) => toTimestamp(b.sent_at) - toTimestamp(a.sent_at))[0];
 }
 
 /**
@@ -63,13 +88,13 @@ export async function fetchEmails(
 
     const mapped: SuperhumanEmail[] = [];
     for (const thread of threads) {
-      const latestMessage = thread.messages?.[0];
+      const latestMessage = pickLatestMessage(thread);
       const fromRaw = latestMessage?.from || thread.participants[0] || "";
       const from = extractEmailAddress(fromRaw);
 
       const toRaw = latestMessage?.to || thread.participants.slice(1);
-      const to = toRaw.map(extractEmailAddress).filter(Boolean);
-      const cc = (latestMessage?.cc || []).map(extractEmailAddress).filter(Boolean);
+      const to = normalizeEmailList(toRaw);
+      const cc = normalizeEmailList(latestMessage?.cc || []);
 
       mapped.push({
         messageId: latestMessage?.message_id || `${thread.thread_id}-latest`,
@@ -117,7 +142,7 @@ export async function fetchEmails(
  * mapEmailToInteraction — convert a Superhuman email to a RawInteraction.
  *
  * Direction: outbound if `from` matches userEmail (case-insensitive), inbound otherwise.
- * sourceId: thread_id (per PRD Section 5.2 Interaction Mapping).
+ * sourceId: thread_id (stable per-conversation identity for idempotent dedupe).
  * summary: subject + snippet truncated to 200 chars.
  */
 export function mapEmailToInteraction(
