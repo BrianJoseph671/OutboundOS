@@ -10,6 +10,17 @@ import { matchContact } from "../services/contactMatcher";
 import { getRelationshipProviderMode } from "../providerMode";
 import { storage } from "../../storage";
 import { listThreads } from "../../services/mcpClient";
+import type { SuperhumanThreadSummary } from "../../services/mcpClient";
+
+const DEFAULT_PAGE_LIMIT = 50;
+const MAX_PAGES_PER_SYNC = Number.parseInt(
+  process.env.SUPERHUMAN_MAX_PAGES_PER_SYNC || "20",
+  10,
+);
+const MAX_THREADS_PER_SYNC = Number.parseInt(
+  process.env.SUPERHUMAN_MAX_THREADS_PER_SYNC || "1000",
+  10,
+);
 
 function extractEmailAddress(value: string): string {
   const match = value.match(/<([^>]+)>/);
@@ -28,14 +39,30 @@ export async function fetchEmails(
 ): Promise<SuperhumanEmail[]> {
   const providerMode = getRelationshipProviderMode();
   if (providerMode === "live") {
-    const response = await listThreads(userId, {
-      start_date: startDate,
-      end_date: endDate,
-      limit: 50,
-    });
+    const threads: SuperhumanThreadSummary[] = [];
+    let cursor: string | undefined;
+    let pageCount = 0;
+
+    while (pageCount < MAX_PAGES_PER_SYNC && threads.length < MAX_THREADS_PER_SYNC) {
+      const remaining = MAX_THREADS_PER_SYNC - threads.length;
+      const pageLimit = Math.min(DEFAULT_PAGE_LIMIT, remaining);
+      if (pageLimit <= 0) break;
+
+      const response = await listThreads(userId, {
+        start_date: startDate,
+        end_date: endDate,
+        limit: pageLimit,
+        ...(cursor ? { cursor } : {}),
+      });
+
+      threads.push(...(response.threads || []));
+      pageCount++;
+      cursor = response.next_cursor;
+      if (!cursor) break;
+    }
 
     const mapped: SuperhumanEmail[] = [];
-    for (const thread of response.threads) {
+    for (const thread of threads) {
       const latestMessage = thread.messages?.[0];
       const fromRaw = latestMessage?.from || thread.participants[0] || "";
       const from = extractEmailAddress(fromRaw);
