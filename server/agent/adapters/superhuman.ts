@@ -66,6 +66,7 @@ export async function fetchEmails(
   userEmail: string,
   userId: string,
 ): Promise<SuperhumanEmail[]> {
+  const startedAt = Date.now();
   const providerMode = getRelationshipProviderMode();
   if (providerMode === "live") {
     const checkpointIso = await getSuperhumanCheckpoint(userId);
@@ -77,6 +78,8 @@ export async function fetchEmails(
     const threads: SuperhumanThreadSummary[] = [];
     let cursor: string | undefined;
     let pageCount = 0;
+    let hitPageLimit = false;
+    let hitThreadLimit = false;
 
     while (pageCount < MAX_PAGES_PER_SYNC && threads.length < MAX_THREADS_PER_SYNC) {
       const remaining = MAX_THREADS_PER_SYNC - threads.length;
@@ -95,6 +98,8 @@ export async function fetchEmails(
       cursor = response.next_cursor;
       if (!cursor) break;
     }
+    hitPageLimit = pageCount >= MAX_PAGES_PER_SYNC && !!cursor;
+    hitThreadLimit = threads.length >= MAX_THREADS_PER_SYNC;
 
     const mapped: SuperhumanEmail[] = [];
     for (const thread of threads) {
@@ -127,6 +132,20 @@ export async function fetchEmails(
     if (newestEmailDate) {
       await saveSuperhumanCheckpoint(userId, newestEmailDate);
     }
+    console.info("[Sync][Superhuman] fetchEmails completed", {
+      userId,
+      providerMode,
+      requestedStartDate: startDate,
+      effectiveStartDate,
+      endDate,
+      checkpointIso,
+      pagesFetched: pageCount,
+      threadsFetched: threads.length,
+      emailsMapped: mapped.length,
+      hitPageLimit,
+      hitThreadLimit,
+      elapsedMs: Date.now() - startedAt,
+    });
 
     return mapped;
   }

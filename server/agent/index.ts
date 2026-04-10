@@ -105,6 +105,7 @@ export async function runSyncWithDeps(
   userId: string,
   deps: RunSyncDeps,
 ): Promise<SyncResponse> {
+  const syncStartedAt = Date.now();
   const errors: string[] = [];
   let newInteractions = 0;
   let newActions = 0;
@@ -115,35 +116,82 @@ export async function runSyncWithDeps(
   const { startDate, endDate } = await computeSyncWindow(userId);
   const startISO = startDate.toISOString();
   const endISO = endDate.toISOString();
+  console.info("[Sync] run started", {
+    userId,
+    startISO,
+    endISO,
+  });
 
   // ── Step 2: Call adapters (partial failure — each wrapped independently) ──
   const rawInteractions: RawInteraction[] = [];
 
   try {
+    const t0 = Date.now();
     const emailResult = await deps.fetchAndMapEmails(startISO, endISO, userId, userEmail);
     rawInteractions.push(...emailResult.interactions);
     errors.push(...emailResult.errors);
+    console.info("[Sync] adapter completed", {
+      userId,
+      adapter: "superhuman",
+      interactions: emailResult.interactions.length,
+      errors: emailResult.errors.length,
+      elapsedMs: Date.now() - t0,
+    });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     errors.push(`Superhuman adapter failed: ${msg}`);
+    console.error("[Sync] adapter failed", {
+      userId,
+      adapter: "superhuman",
+      errorType: "adapter_failure",
+      message: msg,
+    });
   }
 
   try {
+    const t0 = Date.now();
     const meetingResult = await deps.fetchAndMapMeetings(startDate, userId);
     rawInteractions.push(...meetingResult.interactions);
     errors.push(...meetingResult.errors);
+    console.info("[Sync] adapter completed", {
+      userId,
+      adapter: "granola",
+      interactions: meetingResult.interactions.length,
+      errors: meetingResult.errors.length,
+      elapsedMs: Date.now() - t0,
+    });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     errors.push(`Granola adapter failed: ${msg}`);
+    console.error("[Sync] adapter failed", {
+      userId,
+      adapter: "granola",
+      errorType: "adapter_failure",
+      message: msg,
+    });
   }
 
   try {
+    const t0 = Date.now();
     const calendarResult = await deps.fetchAndMapEvents(startISO, endISO, userId, userEmail);
     rawInteractions.push(...calendarResult.interactions);
     errors.push(...calendarResult.errors);
+    console.info("[Sync] adapter completed", {
+      userId,
+      adapter: "calendar",
+      interactions: calendarResult.interactions.length,
+      errors: calendarResult.errors.length,
+      elapsedMs: Date.now() - t0,
+    });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     errors.push(`Calendar adapter failed: ${msg}`);
+    console.error("[Sync] adapter failed", {
+      userId,
+      adapter: "calendar",
+      errorType: "adapter_failure",
+      message: msg,
+    });
   }
 
   // ── Step 3: Write interactions with dedup ────────────────────────────────
@@ -201,5 +249,15 @@ export async function runSyncWithDeps(
     }
   }
 
+  console.info("[Sync] run completed", {
+    userId,
+    startISO,
+    endISO,
+    rawInteractions: rawInteractions.length,
+    newInteractions,
+    newActions,
+    errorCount: errors.length,
+    elapsedMs: Date.now() - syncStartedAt,
+  });
   return { newInteractions, newActions, errors };
 }
