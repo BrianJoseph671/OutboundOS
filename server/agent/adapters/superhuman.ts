@@ -10,10 +10,50 @@ import { matchContact } from "../services/contactMatcher";
 import { getRelationshipProviderMode } from "../providerMode";
 import { storage } from "../../storage";
 import { listThreads } from "../../services/mcpClient";
+import type { SuperhumanThreadSummary } from "../../services/mcpClient";
+import type { SuperhumanThreadMessage } from "../../services/mcpClient";
+import {
+  getSuperhumanCheckpoint,
+  saveSuperhumanCheckpoint,
+} from "../services/superhumanSyncState";
+
+const DEFAULT_PAGE_LIMIT = 50;
+const MAX_PAGES_PER_SYNC = Number.parseInt(
+  process.env.SUPERHUMAN_MAX_PAGES_PER_SYNC || "20",
+  10,
+);
+const MAX_THREADS_PER_SYNC = Number.parseInt(
+  process.env.SUPERHUMAN_MAX_THREADS_PER_SYNC || "1000",
+  10,
+);
 
 function extractEmailAddress(value: string): string {
   const match = value.match(/<([^>]+)>/);
   return (match?.[1] || value).trim().toLowerCase();
+}
+
+function normalizeEmailList(values: string[] | undefined): string[] {
+  if (!values?.length) return [];
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+  for (const value of values) {
+    const email = extractEmailAddress(value);
+    if (!email || seen.has(email)) continue;
+    seen.add(email);
+    normalized.push(email);
+  }
+  return normalized;
+}
+
+function toTimestamp(value: string | undefined): number {
+  if (!value) return 0;
+  const ts = Date.parse(value);
+  return Number.isNaN(ts) ? 0 : ts;
+}
+
+function pickLatestMessage(thread: SuperhumanThreadSummary): SuperhumanThreadMessage | undefined {
+  if (!thread.messages?.length) return undefined;
+  return [...thread.messages].sort((a, b) => toTimestamp(b.sent_at) - toTimestamp(a.sent_at))[0];
 }
 
 /**
@@ -26,23 +66,50 @@ export async function fetchEmails(
   userEmail: string,
   userId: string,
 ): Promise<SuperhumanEmail[]> {
+  const startedAt = Date.now();
   const providerMode = getRelationshipProviderMode();
   if (providerMode === "live") {
-    const response = await listThreads(userId, {
-      start_date: startDate,
-      end_date: endDate,
-      limit: 50,
-    });
+    const checkpointIso = await getSuperhumanCheckpoint(userId);
+    const effectiveStartDate =
+      checkpointIso && Date.parse(checkpointIso) > Date.parse(startDate)
+        ? checkpointIso
+        : startDate;
+
+    const threads: SuperhumanThreadSummary[] = [];
+    let cursor: string | undefined;
+    let pageCount = 0;
+    let hitPageLimit = false;
+    let hitThreadLimit = false;
+
+    while (pageCount < MAX_PAGES_PER_SYNC && threads.length < MAX_THREADS_PER_SYNC) {
+      const remaining = MAX_THREADS_PER_SYNC - threads.length;
+      const pageLimit = Math.min(DEFAULT_PAGE_LIMIT, remaining);
+      if (pageLimit <= 0) break;
+
+      const response = await listThreads(userId, {
+        start_date: effectiveStartDate,
+        end_date: endDate,
+        limit: pageLimit,
+        ...(cursor ? { cursor } : {}),
+      });
+
+      threads.push(...(response.threads || []));
+      pageCount++;
+      cursor = response.next_cursor;
+      if (!cursor) break;
+    }
+    hitPageLimit = pageCount >= MAX_PAGES_PER_SYNC && !!cursor;
+    hitThreadLimit = threads.length >= MAX_THREADS_PER_SYNC;
 
     const mapped: SuperhumanEmail[] = [];
-    for (const thread of response.threads) {
-      const latestMessage = thread.messages?.[0];
+    for (const thread of threads) {
+      const latestMessage = pickLatestMessage(thread);
       const fromRaw = latestMessage?.from || thread.participants[0] || "";
       const from = extractEmailAddress(fromRaw);
 
       const toRaw = latestMessage?.to || thread.participants.slice(1);
-      const to = toRaw.map(extractEmailAddress).filter(Boolean);
-      const cc = (latestMessage?.cc || []).map(extractEmailAddress).filter(Boolean);
+      const to = normalizeEmailList(toRaw);
+      const cc = normalizeEmailList(latestMessage?.cc || []);
 
       mapped.push({
         messageId: latestMessage?.message_id || `${thread.thread_id}-latest`,
@@ -56,6 +123,29 @@ export async function fetchEmails(
         hasAttachments: (latestMessage?.attachments?.length || 0) > 0,
       });
     }
+
+    const newestEmailDate = mapped.reduce<string | null>((latest, email) => {
+      if (!email.date || Number.isNaN(Date.parse(email.date))) return latest;
+      if (!latest) return email.date;
+      return Date.parse(email.date) > Date.parse(latest) ? email.date : latest;
+    }, null);
+    if (newestEmailDate) {
+      await saveSuperhumanCheckpoint(userId, newestEmailDate);
+    }
+    console.info("[Sync][Superhuman] fetchEmails completed", {
+      userId,
+      providerMode,
+      requestedStartDate: startDate,
+      effectiveStartDate,
+      endDate,
+      checkpointIso,
+      pagesFetched: pageCount,
+      threadsFetched: threads.length,
+      emailsMapped: mapped.length,
+      hitPageLimit,
+      hitThreadLimit,
+      elapsedMs: Date.now() - startedAt,
+    });
 
     return mapped;
   }
@@ -90,7 +180,7 @@ export async function fetchEmails(
  * mapEmailToInteraction — convert a Superhuman email to a RawInteraction.
  *
  * Direction: outbound if `from` matches userEmail (case-insensitive), inbound otherwise.
- * sourceId: thread_id (per PRD Section 5.2 Interaction Mapping).
+ * sourceId: thread_id (stable per-conversation identity for idempotent dedupe).
  * summary: subject + snippet truncated to 200 chars.
  */
 export function mapEmailToInteraction(

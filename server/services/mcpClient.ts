@@ -3,6 +3,8 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import { getValidAccessToken } from "./oauth";
 
 type JsonRecord = Record<string, unknown>;
+const MAX_MCP_RETRIES = Number.parseInt(process.env.SUPERHUMAN_MCP_MAX_RETRIES || "3", 10);
+const RETRY_BASE_DELAY_MS = Number.parseInt(process.env.SUPERHUMAN_MCP_RETRY_BASE_MS || "250", 10);
 
 export interface SuperhumanThreadMessage {
   message_id: string;
@@ -73,6 +75,45 @@ const authProvider = new SuperhumanAuthProvider();
 
 function getSuperhumanMcpUrl(): string {
   return process.env.SUPERHUMAN_MCP_URL || "https://mcp.mail.superhuman.com/mcp";
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getErrorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+function isRetryableSuperhumanError(err: unknown): boolean {
+  const message = getErrorMessage(err).toLowerCase();
+  if (
+    message.includes("not connected")
+    || message.includes("unauthorized")
+    || message.includes("forbidden")
+    || message.includes("invalid token")
+    || message.includes("auth")
+  ) {
+    return false;
+  }
+  return (
+    message.includes("timeout")
+    || message.includes("timed out")
+    || message.includes("network")
+    || message.includes("econnreset")
+    || message.includes("socket hang up")
+    || message.includes("429")
+    || message.includes("5xx")
+    || message.includes("502")
+    || message.includes("503")
+    || message.includes("504")
+  );
+}
+
+function backoffDelayMs(attempt: number): number {
+  const exp = RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
+  const jitter = Math.floor(Math.random() * RETRY_BASE_DELAY_MS);
+  return exp + jitter;
 }
 
 async function getClientForUser(userId: string): Promise<Client> {
@@ -148,12 +189,30 @@ async function callSuperhumanTool<T>(
   toolName: string,
   args: JsonRecord,
 ): Promise<T> {
-  const client = await getClientForUser(userId);
-  const result = await client.callTool({
-    name: toolName,
-    arguments: args,
-  });
-  return parseToolJson<T>(result);
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= MAX_MCP_RETRIES; attempt++) {
+    try {
+      const client = await getClientForUser(userId);
+      const result = await client.callTool({
+        name: toolName,
+        arguments: args,
+      });
+      return parseToolJson<T>(result);
+    } catch (err) {
+      lastError = err;
+      const existing = clientCache.get(userId);
+      if (existing) {
+        await existing.client.close().catch(() => undefined);
+        clientCache.delete(userId);
+      }
+      const retryable = isRetryableSuperhumanError(err);
+      const shouldRetry = retryable && attempt < MAX_MCP_RETRIES;
+      if (!shouldRetry) break;
+      await sleep(backoffDelayMs(attempt));
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error(getErrorMessage(lastError));
 }
 
 export async function listThreads(
