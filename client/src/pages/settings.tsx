@@ -28,7 +28,13 @@ import {
   Plug,
   Info,
   Mail,
+  Network,
+  RefreshCw,
+  Loader2,
+  CheckCircle2,
+  AlertCircle,
 } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
 import type { Settings as SettingsType, Contact } from "@shared/schema";
 import { format } from "date-fns";
 import { IntegrationCard } from "@/components/integration-card";
@@ -123,6 +129,49 @@ export default function Settings() {
       toast({ title: "Failed to save settings", variant: "destructive" });
     },
   });
+
+  // ── Network Indexer ──────────────────────────────────────────────────────
+  const { data: networkStatus, refetch: refetchNetworkStatus } = useQuery<{
+    jobId?: string;
+    status: string;
+    threadsScanned?: number;
+    contactsFound?: number;
+    contactsUpdated?: number;
+    errors?: string[];
+    startedAt?: string;
+    completedAt?: string;
+    message?: string;
+  }>({
+    queryKey: ["/api/network/status"],
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      return data?.status === "running" ? 2000 : false;
+    },
+  });
+
+  const indexMutation = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/network/index"),
+    onSuccess: () => {
+      toast({ title: "Network indexing started" });
+      refetchNetworkStatus();
+    },
+    onError: () => {
+      toast({ title: "Failed to start indexing", variant: "destructive" });
+    },
+  });
+
+  const syncMutation = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/network/sync"),
+    onSuccess: () => {
+      toast({ title: "Incremental sync started" });
+      refetchNetworkStatus();
+    },
+    onError: () => {
+      toast({ title: "Failed to start sync", variant: "destructive" });
+    },
+  });
+
+  const isIndexing = networkStatus?.status === "running" || indexMutation.isPending || syncMutation.isPending;
 
   const handleSave = () => {
     saveMutation.mutate(formData);
@@ -407,6 +456,92 @@ export default function Settings() {
             onSync={isConnected("google") ? () => syncGranola() : undefined}
             isSyncing={isSyncingGranola}
           />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Network className="w-5 h-5" />
+            Network Indexer
+          </CardTitle>
+          <CardDescription>
+            Scan your email history to identify real contacts and classify relationship warmth
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {networkStatus?.status === "running" && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Indexing in progress...</span>
+              </div>
+              {(networkStatus.threadsScanned ?? 0) > 0 && (
+                <div className="text-sm space-y-1">
+                  <p>Threads scanned: <span className="font-medium">{networkStatus.threadsScanned}</span></p>
+                  {(networkStatus.contactsFound ?? 0) > 0 && (
+                    <p>Contacts found: <span className="font-medium">{networkStatus.contactsFound}</span></p>
+                  )}
+                </div>
+              )}
+              <Progress value={undefined} className="h-2" />
+            </div>
+          )}
+
+          {networkStatus?.status === "completed" && (
+            <div className="flex items-start gap-3 rounded-lg border border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950/30 p-3 text-sm">
+              <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400 mt-0.5 shrink-0" />
+              <div className="text-green-800 dark:text-green-300">
+                <p className="font-medium">Index complete</p>
+                <p>
+                  Scanned {networkStatus.threadsScanned} threads, found {networkStatus.contactsFound} contacts, updated {networkStatus.contactsUpdated} records.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {networkStatus?.status === "failed" && (
+            <div className="flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/30 p-3 text-sm">
+              <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400 mt-0.5 shrink-0" />
+              <div className="text-red-800 dark:text-red-300">
+                <p className="font-medium">Index failed</p>
+                {networkStatus.errors?.map((err, i) => (
+                  <p key={i}>{err}</p>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="flex items-center gap-3">
+            <Button
+              onClick={() => indexMutation.mutate()}
+              disabled={isIndexing}
+              data-testid="button-network-index"
+            >
+              {isIndexing ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Network className="w-4 h-4 mr-2" />
+              )}
+              {networkStatus?.status === "completed" ? "Re-index Network" : "Index My Network"}
+            </Button>
+            {networkStatus?.status === "completed" && (
+              <Button
+                variant="outline"
+                onClick={() => syncMutation.mutate()}
+                disabled={isIndexing}
+                data-testid="button-network-sync"
+              >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Sync Recent (7 days)
+              </Button>
+            )}
+          </div>
+
+          <p className="text-xs text-muted-foreground">
+            Scans the last 6 months of email to identify who you actually communicate with,
+            then classifies each contact by warmth (VIP, Warm, Cool, Cold).
+          </p>
         </CardContent>
       </Card>
 

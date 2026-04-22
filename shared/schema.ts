@@ -53,6 +53,13 @@ export const contacts = pgTable("contacts", {
   updatedAt: timestamp("updated_at").defaultNow(),
   // Phase 2 columns
   lastSyncedAt: timestamp("last_synced_at"),
+  // Network Indexer columns
+  warmthScore: integer("warmth_score").default(0),
+  bidirectionalThreads: integer("bidirectional_threads").default(0),
+  totalThreads: integer("total_threads").default(0),
+  lastInboundAt: timestamp("last_inbound_at"),
+  lastOutboundAt: timestamp("last_outbound_at"),
+  indexedAt: timestamp("indexed_at"),
 }, (table) => [
   index("contacts_user_id_idx").on(table.userId),
 ]);
@@ -329,3 +336,24 @@ export const contactBriefs = pgTable("contact_briefs", {
 export const insertContactBriefSchema = createInsertSchema(contactBriefs).omit({ id: true });
 export type InsertContactBrief = z.infer<typeof insertContactBriefSchema>;
 export type ContactBriefRow = typeof contactBriefs.$inferSelect;
+
+// Network Index Jobs — tracks indexing progress for the UI
+export const networkIndexJobs = pgTable("network_index_jobs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  status: text("status").notNull().default("pending"),
+  threadsScanned: integer("threads_scanned").default(0),
+  contactsFound: integer("contacts_found").default(0),
+  contactsUpdated: integer("contacts_updated").default(0),
+  errors: jsonb("errors").$type<string[]>().default([]),
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertNetworkIndexJobSchema = createInsertSchema(networkIndexJobs).omit({ id: true });
+export type InsertNetworkIndexJob = z.infer<typeof insertNetworkIndexJobSchema>;
+export type NetworkIndexJob = typeof networkIndexJobs.$inferSelect;
+
+export const warmthTiers = ["vip", "warm", "cool", "cold"] as const;
+export type WarmthTier = typeof warmthTiers[number];

@@ -12,6 +12,7 @@ import {
   actions, type Action, type InsertAction,
   draftsLog, type DraftsLog, type InsertDraftsLog,
   contactBriefs, type ContactBriefRow, type InsertContactBrief,
+  networkIndexJobs, type NetworkIndexJob, type InsertNetworkIndexJob,
   users, type User, type InsertUser
 } from "@shared/schema";
 import { db } from "./db";
@@ -122,6 +123,15 @@ export interface IStorage {
   // Contact Briefs (Phase 3)
   getContactBrief(contactId: string, userId: string): Promise<ContactBriefRow | undefined>;
   upsertContactBrief(contactId: string, userId: string, data: { briefData: Record<string, unknown>; modelVersion: string | null; generatedAt: Date }): Promise<ContactBriefRow>;
+
+  // Network Index Jobs
+  createNetworkIndexJob(job: InsertNetworkIndexJob): Promise<NetworkIndexJob>;
+  getNetworkIndexJob(id: string, userId: string): Promise<NetworkIndexJob | undefined>;
+  getLatestNetworkIndexJob(userId: string): Promise<NetworkIndexJob | undefined>;
+  updateNetworkIndexJob(id: string, userId: string, data: Partial<InsertNetworkIndexJob>): Promise<NetworkIndexJob | undefined>;
+
+  // Contacts — bulk warmth update
+  getContactByEmail(email: string, userId: string): Promise<Contact | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -884,6 +894,46 @@ export class DatabaseStorage implements IStorage {
       })
       .returning();
     return result;
+  }
+
+  // ─── Network Index Jobs ──────────────────────────────────────────────────
+
+  async createNetworkIndexJob(job: InsertNetworkIndexJob): Promise<NetworkIndexJob> {
+    const [created] = await db.insert(networkIndexJobs).values(job as any).returning();
+    return created;
+  }
+
+  async getNetworkIndexJob(id: string, userId: string): Promise<NetworkIndexJob | undefined> {
+    const [job] = await db.select().from(networkIndexJobs)
+      .where(and(eq(networkIndexJobs.id, id), eq(networkIndexJobs.userId, userId)));
+    return job;
+  }
+
+  async getLatestNetworkIndexJob(userId: string): Promise<NetworkIndexJob | undefined> {
+    const [job] = await db.select().from(networkIndexJobs)
+      .where(eq(networkIndexJobs.userId, userId))
+      .orderBy(desc(networkIndexJobs.createdAt))
+      .limit(1);
+    return job;
+  }
+
+  async updateNetworkIndexJob(id: string, userId: string, data: Partial<InsertNetworkIndexJob>): Promise<NetworkIndexJob | undefined> {
+    const [updated] = await db.update(networkIndexJobs)
+      .set(data as any)
+      .where(and(eq(networkIndexJobs.id, id), eq(networkIndexJobs.userId, userId)))
+      .returning();
+    return updated;
+  }
+
+  // ─── Contacts — email lookup ─────────────────────────────────────────────
+
+  async getContactByEmail(email: string, userId: string): Promise<Contact | undefined> {
+    const [contact] = await db.select().from(contacts)
+      .where(and(
+        eq(contacts.userId, userId),
+        drizzleSql`LOWER(${contacts.email}) = LOWER(${email})`
+      ));
+    return contact;
   }
 }
 
