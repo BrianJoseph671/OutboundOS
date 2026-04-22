@@ -4,11 +4,31 @@
  * Uses Claude API when ANTHROPIC_API_KEY is set; otherwise returns a
  * deterministic fallback brief built from raw interaction data.
  */
+import Anthropic from "@anthropic-ai/sdk";
 import { storage } from "../storage";
 import type { ContactBrief, BriefSections, BriefSource } from "@shared/types/draft";
 
 const MODEL_VERSION = "claude-sonnet-4-20250514";
 const BRIEF_CACHE_HOURS = 24;
+
+function getClaudeClient(): Anthropic | null {
+  if (!process.env.ANTHROPIC_API_KEY) return null;
+  return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+}
+
+async function callClaudeReal(prompt: string): Promise<string> {
+  const client = getClaudeClient();
+  if (!client) throw new Error("ANTHROPIC_API_KEY not set");
+
+  const response = await client.messages.create({
+    model: MODEL_VERSION,
+    max_tokens: 1024,
+    messages: [{ role: "user", content: prompt }],
+  });
+
+  const textBlock = response.content.find((b) => b.type === "text");
+  return textBlock?.text || "";
+}
 
 export interface BriefGeneratorDeps {
   getInteractions: typeof storage.getInteractions;
@@ -174,9 +194,24 @@ export async function generateBrief(
       brief = buildFallbackBrief(contactId, contact.name, sorted);
     }
   } else if (process.env.ANTHROPIC_API_KEY) {
-    // TODO: Wire real Claude API call when anthropic SDK is installed
-    // For now, fall back to deterministic brief
-    brief = buildFallbackBrief(contactId, contact.name, sorted);
+    try {
+      const prompt = buildClaudePrompt(contact.name, sorted);
+      const raw = await callClaudeReal(prompt);
+      const sections = parseClaudeResponse(raw);
+      if (sections) {
+        brief = {
+          contactId,
+          sections,
+          sources: buildSourcesFromInteractions(sorted),
+          generatedAt: new Date().toISOString(),
+          modelVersion: MODEL_VERSION,
+        };
+      } else {
+        brief = buildFallbackBrief(contactId, contact.name, sorted);
+      }
+    } catch {
+      brief = buildFallbackBrief(contactId, contact.name, sorted);
+    }
   } else {
     brief = buildFallbackBrief(contactId, contact.name, sorted);
   }

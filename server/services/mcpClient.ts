@@ -240,6 +240,33 @@ export async function getThread(
   });
 }
 
+export interface SuperhumanDraftResponse {
+  draft_id: string;
+  thread_id: string;
+}
+
+export async function createSuperhumanDraft(
+  userId: string,
+  params: { to: string; subject: string; body: string; thread_id?: string },
+): Promise<SuperhumanDraftResponse> {
+  return callSuperhumanTool<SuperhumanDraftResponse>(userId, "draft_email", {
+    to: params.to,
+    subject: params.subject,
+    body: params.body,
+    ...(params.thread_id ? { thread_id: params.thread_id } : {}),
+  });
+}
+
+export async function sendSuperhumanDraft(
+  userId: string,
+  params: { draft_id: string; thread_id: string },
+): Promise<{ success: boolean }> {
+  return callSuperhumanTool<{ success: boolean }>(userId, "send_draft", {
+    draft_id: params.draft_id,
+    thread_id: params.thread_id,
+  });
+}
+
 export async function clearSuperhumanClient(userId: string): Promise<void> {
   const existing = clientCache.get(userId);
   if (!existing) return;

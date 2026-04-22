@@ -60,6 +60,7 @@ export interface ReviseRequest {
   instructions: string;
   actionId: string;
   contactId: string;
+  currentBody?: string;
 }
 
 export type ReviseResponse = ComposeResponse;
