@@ -357,3 +357,60 @@ export type NetworkIndexJob = typeof networkIndexJobs.$inferSelect;
 
 export const warmthTiers = ["vip", "warm", "cool", "cold"] as const;
 export type WarmthTier = typeof warmthTiers[number];
+
+// ─── Email Sequences ─────────────────────────────────────────────────────────
+
+export const sequenceTemplates = pgTable("sequence_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  steps: jsonb("steps").$type<Array<{ stepNumber: number; delayDays: number; instructions: string }>>().notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertSequenceTemplateSchema = createInsertSchema(sequenceTemplates).omit({ id: true });
+export type InsertSequenceTemplate = z.infer<typeof insertSequenceTemplateSchema>;
+export type SequenceTemplate = typeof sequenceTemplates.$inferSelect;
+
+export const sequences = pgTable("sequences", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  contactId: varchar("contact_id").notNull().references(() => contacts.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  status: text("status").notNull().default("active"),
+  templateId: varchar("template_id").references(() => sequenceTemplates.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => [
+  index("sequences_user_id_idx").on(table.userId),
+  index("sequences_contact_id_idx").on(table.contactId),
+]);
+
+export const insertSequenceSchema = createInsertSchema(sequences).omit({ id: true });
+export type InsertSequence = z.infer<typeof insertSequenceSchema>;
+export type Sequence = typeof sequences.$inferSelect;
+
+export const sequenceSteps = pgTable("sequence_steps", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sequenceId: varchar("sequence_id").notNull().references(() => sequences.id, { onDelete: "cascade" }),
+  stepNumber: integer("step_number").notNull(),
+  delayDays: integer("delay_days").notNull().default(0),
+  subject: text("subject"),
+  instructions: text("instructions").notNull(),
+  status: text("status").notNull().default("pending"),
+  scheduledFor: timestamp("scheduled_for"),
+  sentAt: timestamp("sent_at"),
+  draftId: text("draft_id"),
+  threadId: text("thread_id"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertSequenceStepSchema = createInsertSchema(sequenceSteps).omit({ id: true });
+export type InsertSequenceStep = z.infer<typeof insertSequenceStepSchema>;
+export type SequenceStep = typeof sequenceSteps.$inferSelect;
+
+export const sequenceStatuses = ["active", "completed", "paused", "cancelled"] as const;
+export type SequenceStatus = typeof sequenceStatuses[number];
+
+export const stepStatuses = ["pending", "due", "sent", "skipped"] as const;
+export type StepStatus = typeof stepStatuses[number];

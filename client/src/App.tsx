@@ -23,6 +23,7 @@ import Decisions from "@/pages/decisions";
 import Settings from "@/pages/settings";
 import WeeklyBriefPage from "@/pages/weekly-brief";
 import RoiDashboardPage from "@/pages/roi-dashboard";
+import SequencesPage from "@/pages/sequences";
 import NotFound from "@/pages/not-found";
 
 /** Shape returned by GET /auth/me (password is omitted server-side) */
@@ -51,6 +52,7 @@ function Router() {
       <Route path="/decisions" component={Decisions} />
       <Route path="/weekly-brief" component={WeeklyBriefPage} />
       <Route path="/roi" component={RoiDashboardPage} />
+      <Route path="/sequences" component={SequencesPage} />
       <Route path="/settings" component={Settings} />
       <Route component={NotFound} />
     </Switch>

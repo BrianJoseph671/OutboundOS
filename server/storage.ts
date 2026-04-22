@@ -13,6 +13,9 @@ import {
   draftsLog, type DraftsLog, type InsertDraftsLog,
   contactBriefs, type ContactBriefRow, type InsertContactBrief,
   networkIndexJobs, type NetworkIndexJob, type InsertNetworkIndexJob,
+  sequences, type Sequence, type InsertSequence,
+  sequenceSteps, type SequenceStep, type InsertSequenceStep,
+  sequenceTemplates, type SequenceTemplate, type InsertSequenceTemplate,
   users, type User, type InsertUser
 } from "@shared/schema";
 import { db } from "./db";
@@ -130,8 +133,28 @@ export interface IStorage {
   getLatestNetworkIndexJob(userId: string): Promise<NetworkIndexJob | undefined>;
   updateNetworkIndexJob(id: string, userId: string, data: Partial<InsertNetworkIndexJob>): Promise<NetworkIndexJob | undefined>;
 
-  // Contacts — bulk warmth update
+  // Contacts — email lookup
   getContactByEmail(email: string, userId: string): Promise<Contact | undefined>;
+
+  // Sequences
+  getSequences(userId: string, filters?: { status?: string; contactId?: string }): Promise<Sequence[]>;
+  getSequence(id: string, userId: string): Promise<Sequence | undefined>;
+  createSequence(seq: InsertSequence): Promise<Sequence>;
+  updateSequence(id: string, userId: string, data: Partial<InsertSequence>): Promise<Sequence | undefined>;
+
+  // Sequence Steps
+  getSequenceSteps(sequenceId: string): Promise<SequenceStep[]>;
+  getSequenceStep(id: string): Promise<SequenceStep | undefined>;
+  createSequenceStep(step: InsertSequenceStep): Promise<SequenceStep>;
+  updateSequenceStep(id: string, data: Partial<InsertSequenceStep>): Promise<SequenceStep | undefined>;
+  getDueSequenceSteps(userId: string): Promise<(SequenceStep & { sequenceName: string; contactId: string })[]>;
+
+  // Sequence Templates
+  getSequenceTemplates(userId: string): Promise<SequenceTemplate[]>;
+  getSequenceTemplate(id: string, userId: string): Promise<SequenceTemplate | undefined>;
+  createSequenceTemplate(template: InsertSequenceTemplate): Promise<SequenceTemplate>;
+  updateSequenceTemplate(id: string, userId: string, data: Partial<InsertSequenceTemplate>): Promise<SequenceTemplate | undefined>;
+  deleteSequenceTemplate(id: string, userId: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -934,6 +957,109 @@ export class DatabaseStorage implements IStorage {
         drizzleSql`LOWER(${contacts.email}) = LOWER(${email})`
       ));
     return contact;
+  }
+
+  // ─── Sequences ───────────────────────────────────────────────────────────
+
+  async getSequences(userId: string, filters?: { status?: string; contactId?: string }): Promise<Sequence[]> {
+    const conditions = [eq(sequences.userId, userId)];
+    if (filters?.status) conditions.push(eq(sequences.status, filters.status));
+    if (filters?.contactId) conditions.push(eq(sequences.contactId, filters.contactId));
+    return db.select().from(sequences).where(and(...conditions)).orderBy(desc(sequences.createdAt));
+  }
+
+  async getSequence(id: string, userId: string): Promise<Sequence | undefined> {
+    const [seq] = await db.select().from(sequences)
+      .where(and(eq(sequences.id, id), eq(sequences.userId, userId)));
+    return seq;
+  }
+
+  async createSequence(seq: InsertSequence): Promise<Sequence> {
+    const [created] = await db.insert(sequences).values(seq as any).returning();
+    return created;
+  }
+
+  async updateSequence(id: string, userId: string, data: Partial<InsertSequence>): Promise<Sequence | undefined> {
+    const [updated] = await db.update(sequences)
+      .set({ ...data as any, updatedAt: new Date() })
+      .where(and(eq(sequences.id, id), eq(sequences.userId, userId)))
+      .returning();
+    return updated;
+  }
+
+  // ─── Sequence Steps ──────────────────────────────────────────────────────
+
+  async getSequenceSteps(sequenceId: string): Promise<SequenceStep[]> {
+    return db.select().from(sequenceSteps)
+      .where(eq(sequenceSteps.sequenceId, sequenceId))
+      .orderBy(asc(sequenceSteps.stepNumber));
+  }
+
+  async getSequenceStep(id: string): Promise<SequenceStep | undefined> {
+    const [step] = await db.select().from(sequenceSteps).where(eq(sequenceSteps.id, id));
+    return step;
+  }
+
+  async createSequenceStep(step: InsertSequenceStep): Promise<SequenceStep> {
+    const [created] = await db.insert(sequenceSteps).values(step as any).returning();
+    return created;
+  }
+
+  async updateSequenceStep(id: string, data: Partial<InsertSequenceStep>): Promise<SequenceStep | undefined> {
+    const [updated] = await db.update(sequenceSteps).set(data as any).where(eq(sequenceSteps.id, id)).returning();
+    return updated;
+  }
+
+  async getDueSequenceSteps(userId: string): Promise<(SequenceStep & { sequenceName: string; contactId: string })[]> {
+    const now = new Date();
+    const results = await db
+      .select({
+        ...getTableColumns(sequenceSteps),
+        sequenceName: sequences.name,
+        contactId: sequences.contactId,
+      })
+      .from(sequenceSteps)
+      .innerJoin(sequences, eq(sequenceSteps.sequenceId, sequences.id))
+      .where(and(
+        eq(sequences.userId, userId),
+        eq(sequences.status, "active"),
+        eq(sequenceSteps.status, "pending"),
+        lte(sequenceSteps.scheduledFor, now),
+      ))
+      .orderBy(asc(sequenceSteps.scheduledFor));
+    return results;
+  }
+
+  // ─── Sequence Templates ──────────────────────────────────────────────────
+
+  async getSequenceTemplates(userId: string): Promise<SequenceTemplate[]> {
+    return db.select().from(sequenceTemplates)
+      .where(eq(sequenceTemplates.userId, userId))
+      .orderBy(desc(sequenceTemplates.createdAt));
+  }
+
+  async getSequenceTemplate(id: string, userId: string): Promise<SequenceTemplate | undefined> {
+    const [t] = await db.select().from(sequenceTemplates)
+      .where(and(eq(sequenceTemplates.id, id), eq(sequenceTemplates.userId, userId)));
+    return t;
+  }
+
+  async createSequenceTemplate(template: InsertSequenceTemplate): Promise<SequenceTemplate> {
+    const [created] = await db.insert(sequenceTemplates).values(template as any).returning();
+    return created;
+  }
+
+  async updateSequenceTemplate(id: string, userId: string, data: Partial<InsertSequenceTemplate>): Promise<SequenceTemplate | undefined> {
+    const [updated] = await db.update(sequenceTemplates).set(data as any)
+      .where(and(eq(sequenceTemplates.id, id), eq(sequenceTemplates.userId, userId)))
+      .returning();
+    return updated;
+  }
+
+  async deleteSequenceTemplate(id: string, userId: string): Promise<boolean> {
+    const result = await db.delete(sequenceTemplates)
+      .where(and(eq(sequenceTemplates.id, id), eq(sequenceTemplates.userId, userId)));
+    return (result.rowCount ?? 0) > 0;
   }
 }
 
