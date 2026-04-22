@@ -4,7 +4,7 @@
  * and are used throughout the UI and API layers.
  */
 
-export type ActionType = 'follow_up' | 'reconnect' | 'open_thread' | 'new_contact';
+export type ActionType = 'follow_up' | 'reconnect' | 'open_thread' | 'new_contact' | 'new_reply' | 'sequence_step';
 
 export type ActionStatus = 'pending' | 'completed' | 'dismissed' | 'snoozed';
 

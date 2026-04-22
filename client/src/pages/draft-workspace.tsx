@@ -72,6 +72,16 @@ const ACTION_TYPE_CONFIG: Record<
     className:
       "bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800",
   },
+  new_reply: {
+    label: "New Reply",
+    className:
+      "bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-800",
+  },
+  sequence_step: {
+    label: "Sequence Step",
+    className:
+      "bg-indigo-100 text-indigo-800 border-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-400 dark:border-indigo-800",
+  },
 };
 
 interface ActionDetail {

@@ -10,6 +10,7 @@ import { storage } from "../storage";
 import { listThreads, type SuperhumanThreadSummary } from "./mcpClient";
 import { computeWarmth } from "./warmthClassifier";
 import type { Contact, WarmthTier } from "@shared/schema";
+import { detectActions } from "../agent/services/actionDetector";
 
 const PAGE_SIZE = 50;
 const MAX_PAGES = 40; // safety cap: 40 * 50 = 2000 threads max
@@ -354,6 +355,17 @@ export async function runFullIndex(
     progress.contactsFound = contactsFound;
     progress.contactsUpdated = contactsUpdated;
 
+    // Run action detection after indexing
+    try {
+      const recentInteractions = await storage.getInteractions(userId);
+      const actionsToCreate = await detectActions(userId, recentInteractions);
+      for (const action of actionsToCreate) {
+        try { await storage.createAction(action); } catch { /* dedup */ }
+      }
+    } catch (err) {
+      console.warn("[NetworkIndexer] Action detection after full index failed:", err);
+    }
+
     await storage.updateNetworkIndexJob(job.id, userId, {
       status: "completed",
       threadsScanned,
@@ -446,6 +458,17 @@ export async function runIncrementalSync(
     );
     progress.contactsFound = contactsFound;
     progress.contactsUpdated = contactsUpdated;
+
+    // Run action detection after sync
+    try {
+      const recentInteractions = await storage.getInteractions(userId);
+      const actionsToCreate = await detectActions(userId, recentInteractions);
+      for (const action of actionsToCreate) {
+        try { await storage.createAction(action); } catch { /* dedup */ }
+      }
+    } catch (err) {
+      console.warn("[NetworkIndexer] Action detection after sync failed:", err);
+    }
 
     await storage.updateNetworkIndexJob(job.id, userId, {
       status: "completed",

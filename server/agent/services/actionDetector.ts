@@ -11,8 +11,10 @@
  * 3. reconnect: scan all contacts — if tier='warm' or tier='vip' AND
  *    lastInteractionAt is >14 days ago (or null) → create a reconnect action.
  *
- * 4. Auto-complete: for each new outbound interaction, check if a pending follow_up
- *    action exists for that contact. If yes, mark it completed.
+ * 4. new_reply: inbound email received in last 48 hours with no outbound reply.
+ *
+ * 5. Auto-complete: for each new outbound interaction, check if a pending follow_up
+ *    or new_reply action exists for that contact. If yes, mark it completed.
  *
  * Dedup: before creating any action, check if a pending action already exists for
  * the same (contactId, actionType). If yes, skip.
@@ -20,6 +22,7 @@
 import { storage } from "../../storage";
 import type { Interaction, InsertAction } from "@shared/schema";
 
+const FORTY_EIGHT_HOURS_MS = 48 * 60 * 60 * 1000;
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 const FOURTEEN_DAYS_MS = 14 * 24 * 60 * 60 * 1000;
 
@@ -100,6 +103,33 @@ export async function detectActions(
           reason: `Open thread: ${interaction.openThreads.trim()}`,
           snoozedUntil: null,
         });
+      }
+    }
+
+    // ── new_reply: inbound email within 48 hours, no outbound reply yet ─────
+    if (interaction.direction === "inbound" && interaction.channel === "email") {
+      const ageMs = Date.now() - interaction.occurredAt.getTime();
+      if (ageMs <= FORTY_EIGHT_HOURS_MS) {
+        const allInteractions = await storage.getInteractions(userId, interaction.contactId);
+        const hasOutboundAfter = allInteractions.some(
+          (i) => i.direction === "outbound" && i.occurredAt.getTime() > interaction.occurredAt.getTime()
+        );
+        if (!hasOutboundAfter) {
+          if (!(await isDuplicate(interaction.contactId, "new_reply"))) {
+            markProposed(interaction.contactId, "new_reply");
+            const hoursSince = Math.round(ageMs / (1000 * 60 * 60));
+            actionsToCreate.push({
+              userId,
+              contactId: interaction.contactId,
+              actionType: "new_reply",
+              triggerInteractionId: interaction.id,
+              priority: Math.max(1, hoursSince),
+              status: "pending",
+              reason: `Replied to your email ${hoursSince}h ago — no response sent yet`,
+              snoozedUntil: null,
+            });
+          }
+        }
       }
     }
   }
@@ -187,11 +217,11 @@ async function shouldCreateFollowUp(
  */
 async function autoCompleteFollowUp(userId: string, contactId: string): Promise<void> {
   const pendingActions = await storage.getActions(userId, { status: "pending" });
-  const pendingFollowUps = pendingActions.filter(
-    (a) => a.contactId === contactId && a.actionType === "follow_up"
+  const autoCompletable = pendingActions.filter(
+    (a) => a.contactId === contactId && (a.actionType === "follow_up" || a.actionType === "new_reply")
   );
 
-  for (const action of pendingFollowUps) {
+  for (const action of autoCompletable) {
     await storage.updateAction(action.id, userId, { status: "completed" });
   }
 }
