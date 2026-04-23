@@ -1,12 +1,11 @@
 import { Router, type Request, type Response } from "express";
-import { runFullIndex, runIncrementalSync } from "../services/networkIndexer";
+import { prepareIndexReviewSession, runIncrementalSync } from "../services/networkIndexer";
 import { storage } from "../storage";
 
 export const networkRouter = Router();
 
 /**
- * POST /api/network/index — trigger a full 6-month email index.
- * Runs asynchronously; returns the job ID immediately so the client can poll status.
+ * POST /api/network/index — scan + create type-review session.
  */
 networkRouter.post("/index", async (req: Request, res: Response) => {
   try {
@@ -18,19 +17,28 @@ networkRouter.post("/index", async (req: Request, res: Response) => {
     }
 
     const latest = await storage.getLatestNetworkIndexJob(userId);
-    if (latest && latest.status === "running") {
+    if (latest && (latest.status === "running" || latest.status === "pending_review")) {
+      const pendingSession = latest.status === "pending_review"
+        ? await storage.getLatestPendingIndexReviewSession(userId)
+        : undefined;
       return res.status(409).json({
-        error: "An index is already running",
+        error: latest.status === "pending_review"
+          ? "A review is pending for your latest index run"
+          : "An index is already running",
         jobId: latest.id,
+        sessionId: pendingSession?.id,
       });
     }
 
-    // Respond immediately, then run in background.
-    // runFullIndex creates and manages its own job record.
-    res.json({ status: "started" });
-
-    runFullIndex(userId, userEmail).catch((err) => {
-      console.error("[NetworkRouter] Background full index failed:", err);
+    const prepared = await prepareIndexReviewSession(userId, userEmail);
+    res.json({
+      status: "pending_review",
+      sessionId: prepared.sessionId,
+      jobId: prepared.jobId,
+      typeCount: prepared.typeCount,
+      autoAcceptedCount: prepared.autoAcceptedCount,
+      totalClassifiedCount: prepared.totalClassifiedCount,
+      calendarPrioritizedCount: prepared.calendarPrioritizedCount,
     });
   } catch (error) {
     console.error("[POST /api/network/index]", error);
@@ -88,8 +96,13 @@ networkRouter.get("/status", async (req: Request, res: Response) => {
       return res.json({ status: "none", message: "No index has been run yet" });
     }
 
+    const pendingSession = job.status === "pending_review"
+      ? await storage.getLatestPendingIndexReviewSession(userId)
+      : undefined;
+
     res.json({
       jobId: job.id,
+      sessionId: pendingSession?.id,
       status: job.status,
       threadsScanned: job.threadsScanned,
       contactsFound: job.contactsFound,

@@ -1,13 +1,13 @@
 /**
  * Compose Service — email draft generation and revision.
- * Uses Claude API for intelligent draft writing and Superhuman MCP for
+ * Uses Claude API for intelligent draft writing and Gmail API for
  * creating email drafts. Falls back to deterministic output when
  * API keys / MCP connections are unavailable.
  */
 import Anthropic from "@anthropic-ai/sdk";
 import { storage } from "../storage";
 import { generateBrief } from "./briefGenerator";
-import { createSuperhumanDraft, type SuperhumanDraftResponse } from "./mcpClient";
+import { createGmailDraft } from "./gmailClient";
 import type {
   ComposeRequest,
   ComposeResponse,
@@ -235,7 +235,7 @@ export async function createDraft(
     return result;
   }
 
-  // Try to create a Superhuman draft via MCP
+  // Try to create a Gmail draft
   let draftId: string;
   let draftThreadId: string;
 
@@ -250,23 +250,23 @@ export async function createDraft(
       draftId = shResult.draftId;
       draftThreadId = shResult.draftThreadId;
     } catch (err) {
-      console.warn("[ComposeService] Superhuman draft creation failed, using local ID:", err);
+      console.warn("[ComposeService] Injected draft creation failed, using local ID:", err);
       draftId = `local-draft-${Date.now()}`;
       draftThreadId = `local-thread-${Date.now()}`;
     }
   } else {
-    // Try live Superhuman MCP
+    // Try live Gmail drafts API
     try {
-      const shResult = await createSuperhumanDraft(userId, {
+      const gmailResult = await createGmailDraft(userId, {
         to: req.to || "",
         subject: req.subject || "",
         body,
         thread_id: req.threadId,
       });
-      draftId = shResult.draft_id;
-      draftThreadId = shResult.thread_id;
+      draftId = gmailResult.draft_id;
+      draftThreadId = gmailResult.thread_id;
     } catch (err) {
-      console.warn("[ComposeService] Superhuman MCP draft failed, using local ID:", err);
+      console.warn("[ComposeService] Gmail draft creation failed, using local ID:", err);
       draftId = `local-draft-${Date.now()}`;
       draftThreadId = `local-thread-${Date.now()}`;
     }

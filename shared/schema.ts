@@ -414,3 +414,57 @@ export type SequenceStatus = typeof sequenceStatuses[number];
 
 export const stepStatuses = ["pending", "due", "sent", "skipped"] as const;
 export type StepStatus = typeof stepStatuses[number];
+
+// ─── Email Type Review Gate ──────────────────────────────────────────────────
+
+export const emailTypeRules = pgTable("email_type_rules", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  signatureHash: text("signature_hash").notNull(),
+  label: text("label").notNull(),
+  decision: text("decision").notNull(), // accept | reject
+  examples: jsonb("examples").$type<string[]>().default([]),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("email_type_rules_user_signature_unique").on(table.userId, table.signatureHash),
+  index("email_type_rules_user_decision_idx").on(table.userId, table.decision),
+]);
+
+export const insertEmailTypeRuleSchema = createInsertSchema(emailTypeRules).omit({ id: true });
+export type InsertEmailTypeRule = z.infer<typeof insertEmailTypeRuleSchema>;
+export type EmailTypeRule = typeof emailTypeRules.$inferSelect;
+
+export const indexReviewSessions = pgTable("index_review_sessions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  jobId: varchar("job_id").references(() => networkIndexJobs.id, { onDelete: "set null" }),
+  status: text("status").notNull().default("pending_review"), // pending_review | approved | cancelled
+  summary: jsonb("summary").$type<Record<string, unknown>>().default({}),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  resolvedAt: timestamp("resolved_at"),
+}, (table) => [
+  index("index_review_sessions_user_status_idx").on(table.userId, table.status),
+]);
+
+export const insertIndexReviewSessionSchema = createInsertSchema(indexReviewSessions).omit({ id: true });
+export type InsertIndexReviewSession = z.infer<typeof insertIndexReviewSessionSchema>;
+export type IndexReviewSession = typeof indexReviewSessions.$inferSelect;
+
+export const indexReviewItems = pgTable("index_review_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sessionId: varchar("session_id").notNull().references(() => indexReviewSessions.id, { onDelete: "cascade" }),
+  signatureHash: text("signature_hash").notNull(),
+  proposedLabel: text("proposed_label").notNull(),
+  exampleSubjects: jsonb("example_subjects").$type<string[]>().default([]),
+  messageCount: integer("message_count").notNull().default(0),
+  decision: text("decision"), // accept | reject | null
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("index_review_items_session_signature_unique").on(table.sessionId, table.signatureHash),
+  index("index_review_items_session_decision_idx").on(table.sessionId, table.decision),
+]);
+
+export const insertIndexReviewItemSchema = createInsertSchema(indexReviewItems).omit({ id: true });
+export type InsertIndexReviewItem = z.infer<typeof insertIndexReviewItemSchema>;
+export type IndexReviewItem = typeof indexReviewItems.$inferSelect;

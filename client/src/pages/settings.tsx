@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -52,6 +53,7 @@ interface IntegrationStatus {
 
 export default function Settings() {
   const { toast } = useToast();
+  const [, navigate] = useLocation();
 
   const { data: settings, isLoading } = useQuery<SettingsType>({
     queryKey: ["/api/settings"],
@@ -133,6 +135,7 @@ export default function Settings() {
   // ── Network Indexer ──────────────────────────────────────────────────────
   const { data: networkStatus, refetch: refetchNetworkStatus } = useQuery<{
     jobId?: string;
+    sessionId?: string;
     status: string;
     threadsScanned?: number;
     contactsFound?: number;
@@ -148,10 +151,19 @@ export default function Settings() {
       return data?.status === "running" ? 2000 : false;
     },
   });
+  const { data: pendingReview } = useQuery<{ session: { id: string } | null }>({
+    queryKey: ["/api/index-review/pending"],
+  });
 
   const indexMutation = useMutation({
     mutationFn: () => apiRequest("POST", "/api/network/index"),
-    onSuccess: () => {
+    onSuccess: async (resp) => {
+      const data = await resp.json();
+      if (data?.status === "pending_review" && data?.sessionId) {
+        toast({ title: "Index scan complete. Review email types before contacts are written." });
+        navigate(`/network-review/${data.sessionId}`);
+        return;
+      }
       toast({ title: "Network indexing started" });
       refetchNetworkStatus();
     },
@@ -172,6 +184,7 @@ export default function Settings() {
   });
 
   const isIndexing = networkStatus?.status === "running" || indexMutation.isPending || syncMutation.isPending;
+  const pendingSessionId = pendingReview?.session?.id || networkStatus?.sessionId;
 
   const handleSave = () => {
     saveMutation.mutate(formData);
@@ -500,6 +513,16 @@ export default function Settings() {
             </div>
           )}
 
+          {networkStatus?.status === "pending_review" && (
+            <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30 p-3 text-sm">
+              <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+              <div className="text-amber-800 dark:text-amber-300">
+                <p className="font-medium">Review required</p>
+                <p>Index scan is complete. Review classified email types before contacts are persisted.</p>
+              </div>
+            </div>
+          )}
+
           {networkStatus?.status === "failed" && (
             <div className="flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/30 p-3 text-sm">
               <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400 mt-0.5 shrink-0" />
@@ -524,6 +547,14 @@ export default function Settings() {
                 <Network className="w-4 h-4 mr-2" />
               )}
               {networkStatus?.status === "completed" ? "Re-index Network" : "Index My Network"}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => pendingSessionId && navigate(`/network-review/${pendingSessionId}`)}
+              disabled={!pendingSessionId}
+              data-testid="button-network-review"
+            >
+              Review Email Types
             </Button>
             {networkStatus?.status === "completed" && (
               <Button

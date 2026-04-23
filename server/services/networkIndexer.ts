@@ -1,5 +1,5 @@
 /**
- * Network Indexer — scans email history via Superhuman MCP, identifies real contacts,
+ * Network Indexer — scans email history via Gmail API, identifies real contacts,
  * filters noise, computes warmth scores, and persists to the database.
  *
  * Supports two modes:
@@ -7,13 +7,15 @@
  *   - Incremental sync: scans last 7 days of inbound + outbound
  */
 import { storage } from "../storage";
-import { listThreads, type SuperhumanThreadSummary } from "./mcpClient";
+import { listGmailThreads, type GmailThreadSummary } from "./gmailClient";
 import { computeWarmth } from "./warmthClassifier";
 import type { Contact, WarmthTier } from "@shared/schema";
 import { detectActions } from "../agent/services/actionDetector";
+import { classifyEmailTypes, subjectSignatureHash, type EmailTypeCandidate } from "./emailTypeClassifier";
 
 const PAGE_SIZE = 50;
 const MAX_PAGES = 40; // safety cap: 40 * 50 = 2000 threads max
+const MAX_REVIEW_ITEMS = 20;
 
 // ─── Noise Filtering ─────────────────────────────────────────────────────────
 
@@ -22,7 +24,6 @@ const NOISE_EMAIL_PATTERNS = [
   /^no-reply@/i,
   /^notifications?@/i,
   /^mailer-daemon@/i,
-  /^reminder@superhuman\.com$/i,
   /^.*@calendar\.google\.com$/i,
   /^.*@resource\.calendar\.google\.com$/i,
   /^mailer-daemon@googlemail\.com$/i,
@@ -76,15 +77,22 @@ async function scanThreads(
   userEmail: string,
   query: { start_date: string; end_date: string; from?: string[]; to?: string[] },
   onProgress?: (threadsScanned: number) => void,
-): Promise<{ contactMap: Map<string, ScannedContact>; threadsScanned: number }> {
+): Promise<{
+  contactMap: Map<string, ScannedContact>;
+  threadsScanned: number;
+  emailTypeCandidates: EmailTypeCandidate[];
+  signaturesByEmail: Map<string, Set<string>>;
+}> {
   const contactMap = new Map<string, ScannedContact>();
+  const signaturesByEmail = new Map<string, Set<string>>();
+  const typeSignals = new Map<string, { signatureKey: string; count: number; examples: Set<string> }>();
   let threadsScanned = 0;
   let cursor: string | undefined;
 
   for (let page = 0; page < MAX_PAGES; page++) {
     let response;
     try {
-      response = await listThreads(userId, {
+      response = await listGmailThreads(userId, {
         ...query,
         limit: PAGE_SIZE,
         ...(cursor ? { cursor } : {}),
@@ -99,7 +107,7 @@ async function scanThreads(
 
     for (const thread of threads) {
       threadsScanned++;
-      processThread(thread, userEmail, contactMap);
+      processThread(thread, userEmail, contactMap, typeSignals, signaturesByEmail);
     }
 
     onProgress?.(threadsScanned);
@@ -108,13 +116,23 @@ async function scanThreads(
     if (!cursor) break;
   }
 
-  return { contactMap, threadsScanned };
+  const emailTypeCandidates: EmailTypeCandidate[] = Array.from(typeSignals.entries()).map(
+    ([signatureHash, v]) => ({
+      signatureHash,
+      signatureKey: v.signatureKey,
+      messageCount: v.count,
+      exampleSubjects: Array.from(v.examples).slice(0, 5),
+    }),
+  );
+  return { contactMap, threadsScanned, emailTypeCandidates, signaturesByEmail };
 }
 
 function processThread(
-  thread: SuperhumanThreadSummary,
+  thread: GmailThreadSummary,
   userEmail: string,
   contactMap: Map<string, ScannedContact>,
+  typeSignals: Map<string, { signatureKey: string; count: number; examples: Set<string> }>,
+  signaturesByEmail: Map<string, Set<string>>,
 ) {
   const userNorm = userEmail.toLowerCase().trim();
   const participants = (thread.participants || []).map(extractEmailAddress);
@@ -150,11 +168,27 @@ function processThread(
   }
 
   const isBidirectional = hasUserSent && hasUserReceived;
+  const subject = thread.subject || "";
+  const signature = subjectSignatureHash(subject);
+  const existingType = typeSignals.get(signature.signatureHash);
+  if (existingType) {
+    existingType.count++;
+    if (subject) existingType.examples.add(subject);
+  } else {
+    typeSignals.set(signature.signatureHash, {
+      signatureKey: signature.signatureKey,
+      count: 1,
+      examples: new Set(subject ? [subject] : []),
+    });
+  }
 
   // Extract counterparty emails (non-user participants)
   const counterparties = participants.filter((p) => p !== userNorm && !isNoiseEmail(p));
 
   for (const email of counterparties) {
+    const setForEmail = signaturesByEmail.get(email) || new Set<string>();
+    setForEmail.add(signature.signatureHash);
+    signaturesByEmail.set(email, setForEmail);
     const existing = contactMap.get(email);
     if (existing) {
       existing.threadCount++;
@@ -297,6 +331,246 @@ async function buildCrossRefMaps(userId: string): Promise<{
   return { hasGranolaMap, hasCalendarMap };
 }
 
+function filterContactsByRejectedSignatures(
+  contactMap: Map<string, ScannedContact>,
+  signaturesByEmail: Map<string, Set<string>>,
+  rejected: Set<string>,
+): Map<string, ScannedContact> {
+  if (rejected.size === 0) return contactMap;
+  const filtered = new Map<string, ScannedContact>();
+  for (const [email, scanned] of Array.from(contactMap.entries())) {
+    const signatures = signaturesByEmail.get(email);
+    const shouldReject = signatures ? Array.from(signatures).some((sig) => rejected.has(sig)) : false;
+    if (!shouldReject) filtered.set(email, scanned);
+  }
+  return filtered;
+}
+
+export async function prepareIndexReviewSession(
+  userId: string,
+  userEmail: string,
+): Promise<{
+  sessionId: string;
+  jobId: string;
+  typeCount: number;
+  autoAcceptedCount: number;
+  totalClassifiedCount: number;
+  calendarPrioritizedCount: number;
+}> {
+  const job = await storage.createNetworkIndexJob({
+    userId,
+    status: "running",
+    startedAt: new Date(),
+  });
+
+  const sixMonthsAgo = new Date();
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+  const scan = await scanThreads(
+    userId,
+    userEmail,
+    {
+      start_date: sixMonthsAgo.toISOString(),
+      end_date: new Date().toISOString(),
+      from: [userEmail],
+    },
+    async (scanned) => {
+      try {
+        await storage.updateNetworkIndexJob(job.id, userId, { threadsScanned: scanned });
+      } catch { /* non-critical */ }
+    },
+  );
+
+  const { hasGranolaMap, hasCalendarMap } = await buildCrossRefMaps(userId);
+  const meetingLinkedSignals = new Map<string, { meetingLinkedContactCount: number; hasAnyMeetingLinkedContacts: boolean }>();
+  for (const candidate of scan.emailTypeCandidates) {
+    const linkedEmails: string[] = [];
+    for (const [email, signatureSet] of Array.from(scan.signaturesByEmail.entries())) {
+      if (signatureSet.has(candidate.signatureHash)) linkedEmails.push(email);
+    }
+    let count = 0;
+    for (const email of linkedEmails) {
+      if (hasGranolaMap.get(email) || hasCalendarMap.get(email)) count++;
+    }
+    meetingLinkedSignals.set(candidate.signatureHash, {
+      meetingLinkedContactCount: count,
+      hasAnyMeetingLinkedContacts: count > 0,
+    });
+  }
+
+  const enrichedCandidates = scan.emailTypeCandidates.map((c) => {
+    const signal = meetingLinkedSignals.get(c.signatureHash);
+    return {
+      ...c,
+      meetingLinkedContactCount: signal?.meetingLinkedContactCount || 0,
+      hasAnyMeetingLinkedContacts: signal?.hasAnyMeetingLinkedContacts || false,
+    };
+  });
+
+  const classified = await classifyEmailTypes(enrichedCandidates);
+  const ranked = [...classified].sort((a, b) => {
+    if (a.hasAnyMeetingLinkedContacts !== b.hasAnyMeetingLinkedContacts) {
+      return a.hasAnyMeetingLinkedContacts ? -1 : 1;
+    }
+    if ((a.meetingLinkedContactCount || 0) !== (b.meetingLinkedContactCount || 0)) {
+      return (b.meetingLinkedContactCount || 0) - (a.meetingLinkedContactCount || 0);
+    }
+    return b.messageCount - a.messageCount;
+  });
+  const reviewItems = ranked.slice(0, MAX_REVIEW_ITEMS);
+  const autoAcceptedItems = ranked.slice(MAX_REVIEW_ITEMS);
+  const calendarPrioritizedCount = reviewItems.filter((i) => i.hasAnyMeetingLinkedContacts).length;
+  const session = await storage.createIndexReviewSession({
+    userId,
+    jobId: job.id,
+    status: "pending_review",
+    summary: {
+      threadsScanned: scan.threadsScanned,
+      contacts: Array.from(scan.contactMap.entries()).map(([email, c]) => ({
+        ...c,
+        lastInbound: c.lastInbound?.toISOString() || null,
+        lastOutbound: c.lastOutbound?.toISOString() || null,
+        lastInteraction: c.lastInteraction?.toISOString() || null,
+      })),
+      signaturesByEmail: Object.fromEntries(
+        Array.from(scan.signaturesByEmail.entries()).map(([email, set]) => [email, Array.from(set)]),
+      ),
+      totalClassifiedCount: ranked.length,
+      reviewVisibleCount: reviewItems.length,
+      autoAcceptedCount: autoAcceptedItems.length,
+      calendarPrioritizedCount,
+      signatureMeetingSignals: Object.fromEntries(
+        ranked.map((r) => [
+          r.signatureHash,
+          {
+            hasAnyMeetingLinkedContacts: r.hasAnyMeetingLinkedContacts,
+            meetingLinkedContactCount: r.meetingLinkedContactCount,
+          },
+        ]),
+      ),
+    },
+  });
+
+  for (const item of reviewItems) {
+    await storage.createIndexReviewItem({
+      sessionId: session.id,
+      signatureHash: item.signatureHash,
+      proposedLabel: item.proposedLabel,
+      exampleSubjects: item.exampleSubjects,
+      messageCount: item.messageCount,
+      decision: null,
+    });
+  }
+  for (const item of autoAcceptedItems) {
+    await storage.upsertEmailTypeRule(userId, item.signatureHash, {
+      label: item.proposedLabel,
+      decision: "accept",
+      examples: item.exampleSubjects || [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as any);
+  }
+
+  await storage.updateNetworkIndexJob(job.id, userId, {
+    status: "pending_review",
+    threadsScanned: scan.threadsScanned,
+    contactsFound: scan.contactMap.size,
+  } as any);
+
+  return {
+    sessionId: session.id,
+    jobId: job.id,
+    typeCount: reviewItems.length,
+    autoAcceptedCount: autoAcceptedItems.length,
+    totalClassifiedCount: ranked.length,
+    calendarPrioritizedCount,
+  };
+}
+
+export async function completeIndexReviewSession(
+  userId: string,
+  sessionId: string,
+): Promise<IndexProgress> {
+  const session = await storage.getIndexReviewSession(sessionId, userId);
+  if (!session) throw new Error("Review session not found");
+  if (session.status !== "pending_review") throw new Error("Review session is not pending");
+  const items = await storage.getIndexReviewItems(session.id);
+
+  for (const item of items) {
+    const decision = item.decision || "accept";
+    await storage.upsertEmailTypeRule(userId, item.signatureHash, {
+      label: item.proposedLabel,
+      decision,
+      examples: item.exampleSubjects || [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as any);
+  }
+
+  const rejected = await storage.getRejectedEmailTypeSignatures(userId);
+  const summary = (session.summary || {}) as Record<string, any>;
+  const contactsRaw = Array.isArray(summary.contacts) ? summary.contacts : [];
+  const signaturesByEmailRaw = (summary.signaturesByEmail || {}) as Record<string, string[]>;
+
+  const contactMap = new Map<string, ScannedContact>();
+  for (const c of contactsRaw) {
+    contactMap.set(c.email, {
+      email: c.email,
+      name: c.name,
+      threadCount: c.threadCount,
+      bidirectionalThreads: c.bidirectionalThreads,
+      lastInbound: c.lastInbound ? new Date(c.lastInbound) : null,
+      lastOutbound: c.lastOutbound ? new Date(c.lastOutbound) : null,
+      lastInteraction: c.lastInteraction ? new Date(c.lastInteraction) : null,
+      company: c.company || null,
+    });
+  }
+  const signaturesByEmail = new Map<string, Set<string>>();
+  for (const [email, signatures] of Object.entries(signaturesByEmailRaw)) {
+    signaturesByEmail.set(email, new Set(Array.isArray(signatures) ? signatures : []));
+  }
+
+  const filteredMap = filterContactsByRejectedSignatures(contactMap, signaturesByEmail, rejected);
+  const { hasGranolaMap, hasCalendarMap } = await buildCrossRefMaps(userId);
+  const { contactsFound, contactsUpdated } = await persistContacts(
+    userId,
+    filteredMap,
+    hasGranolaMap,
+    hasCalendarMap,
+  );
+
+  try {
+    const recentInteractions = await storage.getInteractions(userId);
+    const actionsToCreate = await detectActions(userId, recentInteractions);
+    for (const action of actionsToCreate) {
+      try { await storage.createAction(action); } catch { /* dedup */ }
+    }
+  } catch {
+    // no-op
+  }
+
+  await storage.updateIndexReviewSession(session.id, userId, {
+    status: "approved",
+    resolvedAt: new Date(),
+  } as any);
+
+  if (session.jobId) {
+    await storage.updateNetworkIndexJob(session.jobId, userId, {
+      status: "completed",
+      contactsFound,
+      contactsUpdated,
+      completedAt: new Date(),
+    } as any);
+  }
+
+  return {
+    jobId: session.jobId || "",
+    threadsScanned: Number(summary.threadsScanned || 0),
+    contactsFound,
+    contactsUpdated,
+    errors: [],
+  };
+}
+
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /**
@@ -307,84 +581,14 @@ export async function runFullIndex(
   userId: string,
   userEmail: string,
 ): Promise<IndexProgress> {
-  const job = await storage.createNetworkIndexJob({
-    userId,
-    status: "running",
-    startedAt: new Date(),
-  });
-
-  const progress: IndexProgress = {
-    jobId: job.id,
+  const prep = await prepareIndexReviewSession(userId, userEmail);
+  return {
+    jobId: prep.jobId,
     threadsScanned: 0,
     contactsFound: 0,
     contactsUpdated: 0,
     errors: [],
   };
-
-  try {
-    const sixMonthsAgo = new Date();
-    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-
-    const { contactMap, threadsScanned } = await scanThreads(
-      userId,
-      userEmail,
-      {
-        start_date: sixMonthsAgo.toISOString(),
-        end_date: new Date().toISOString(),
-        from: [userEmail],
-      },
-      async (scanned) => {
-        // Periodic progress update
-        try {
-          await storage.updateNetworkIndexJob(job.id, userId, {
-            threadsScanned: scanned,
-          });
-        } catch { /* non-critical */ }
-      },
-    );
-
-    progress.threadsScanned = threadsScanned;
-
-    // Build cross-reference maps from existing meetings
-    const { hasGranolaMap, hasCalendarMap } = await buildCrossRefMaps(userId);
-
-    // Persist contacts with warmth scoring
-    const { contactsFound, contactsUpdated } = await persistContacts(
-      userId, contactMap, hasGranolaMap, hasCalendarMap,
-    );
-    progress.contactsFound = contactsFound;
-    progress.contactsUpdated = contactsUpdated;
-
-    // Run action detection after indexing
-    try {
-      const recentInteractions = await storage.getInteractions(userId);
-      const actionsToCreate = await detectActions(userId, recentInteractions);
-      for (const action of actionsToCreate) {
-        try { await storage.createAction(action); } catch { /* dedup */ }
-      }
-    } catch (err) {
-      console.warn("[NetworkIndexer] Action detection after full index failed:", err);
-    }
-
-    await storage.updateNetworkIndexJob(job.id, userId, {
-      status: "completed",
-      threadsScanned,
-      contactsFound,
-      contactsUpdated,
-      completedAt: new Date(),
-    });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    progress.errors.push(msg);
-    console.error("[NetworkIndexer] Full index failed:", msg);
-    await storage.updateNetworkIndexJob(job.id, userId, {
-      status: "failed",
-      errors: [msg],
-      completedAt: new Date(),
-    });
-  }
-
-  return progress;
 }
 
 /**
@@ -414,6 +618,8 @@ export async function runIncrementalSync(
     const now = new Date().toISOString();
     const start = sevenDaysAgo.toISOString();
 
+    const rejected = await storage.getRejectedEmailTypeSignatures(userId);
+
     // Scan outbound threads
     const outbound = await scanThreads(userId, userEmail, {
       start_date: start,
@@ -428,8 +634,9 @@ export async function runIncrementalSync(
       to: [userEmail],
     });
 
-    // Merge contact maps
+    // Merge contact maps + signature maps
     const mergedMap = new Map(Array.from(outbound.contactMap.entries()));
+    const mergedSignatures = new Map(Array.from(outbound.signaturesByEmail.entries()));
     for (const [email, scanned] of Array.from(inbound.contactMap.entries())) {
       const existing = mergedMap.get(email);
       if (existing) {
@@ -448,13 +655,18 @@ export async function runIncrementalSync(
       } else {
         mergedMap.set(email, scanned);
       }
+      const existingSignatures = mergedSignatures.get(email) || new Set<string>();
+      const inboundSignatures = inbound.signaturesByEmail.get(email) || new Set<string>();
+      for (const sig of Array.from(inboundSignatures)) existingSignatures.add(sig);
+      mergedSignatures.set(email, existingSignatures);
     }
 
     progress.threadsScanned = outbound.threadsScanned + inbound.threadsScanned;
+    const filteredMap = filterContactsByRejectedSignatures(mergedMap, mergedSignatures, rejected);
 
     const { hasGranolaMap, hasCalendarMap } = await buildCrossRefMaps(userId);
     const { contactsFound, contactsUpdated } = await persistContacts(
-      userId, mergedMap, hasGranolaMap, hasCalendarMap,
+      userId, filteredMap, hasGranolaMap, hasCalendarMap,
     );
     progress.contactsFound = contactsFound;
     progress.contactsUpdated = contactsUpdated;

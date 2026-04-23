@@ -22,6 +22,7 @@ import { weeklyBriefRouter } from "./routes/weeklyBrief";
 import { roiRouter } from "./routes/roi";
 import { networkRouter } from "./routes/network";
 import { sequencesRouter, sequenceTemplatesRouter } from "./routes/sequences";
+import { indexReviewRouter } from "./routes/indexReview";
 import { seedRelationshipActionsForUser } from "./services/seedRelationshipActions";
 import { appendResearchedTag } from "./utils/contactTags";
 import { isAuthenticated } from "./auth";
@@ -186,6 +187,9 @@ export async function registerRoutes(
 
   // Network Indexer routes — POST /api/network/index, POST /api/network/sync, GET /api/network/status
   app.use("/api/network", networkRouter);
+
+  // Index review routes — swipe type decisions before persisting contacts
+  app.use("/api/index-review", indexReviewRouter);
 
   // Sequences routes — CRUD + lifecycle
   app.use("/api/sequences", sequencesRouter);

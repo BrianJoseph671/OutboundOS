@@ -16,6 +16,9 @@ import {
   sequences, type Sequence, type InsertSequence,
   sequenceSteps, type SequenceStep, type InsertSequenceStep,
   sequenceTemplates, type SequenceTemplate, type InsertSequenceTemplate,
+  emailTypeRules, type EmailTypeRule, type InsertEmailTypeRule,
+  indexReviewSessions, type IndexReviewSession, type InsertIndexReviewSession,
+  indexReviewItems, type IndexReviewItem, type InsertIndexReviewItem,
   users, type User, type InsertUser
 } from "@shared/schema";
 import { db } from "./db";
@@ -155,6 +158,21 @@ export interface IStorage {
   createSequenceTemplate(template: InsertSequenceTemplate): Promise<SequenceTemplate>;
   updateSequenceTemplate(id: string, userId: string, data: Partial<InsertSequenceTemplate>): Promise<SequenceTemplate | undefined>;
   deleteSequenceTemplate(id: string, userId: string): Promise<boolean>;
+
+  // Email Type Rules
+  getEmailTypeRules(userId: string): Promise<EmailTypeRule[]>;
+  getEmailTypeRuleBySignature(userId: string, signatureHash: string): Promise<EmailTypeRule | undefined>;
+  upsertEmailTypeRule(userId: string, signatureHash: string, data: Omit<InsertEmailTypeRule, "userId" | "signatureHash">): Promise<EmailTypeRule>;
+  getRejectedEmailTypeSignatures(userId: string): Promise<Set<string>>;
+
+  // Index Review Sessions
+  createIndexReviewSession(session: InsertIndexReviewSession): Promise<IndexReviewSession>;
+  getIndexReviewSession(id: string, userId: string): Promise<IndexReviewSession | undefined>;
+  getLatestPendingIndexReviewSession(userId: string): Promise<IndexReviewSession | undefined>;
+  updateIndexReviewSession(id: string, userId: string, data: Partial<InsertIndexReviewSession>): Promise<IndexReviewSession | undefined>;
+  createIndexReviewItem(item: InsertIndexReviewItem): Promise<IndexReviewItem>;
+  getIndexReviewItems(sessionId: string): Promise<IndexReviewItem[]>;
+  updateIndexReviewItemDecision(sessionId: string, signatureHash: string, decision: "accept" | "reject"): Promise<IndexReviewItem | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1060,6 +1078,114 @@ export class DatabaseStorage implements IStorage {
     const result = await db.delete(sequenceTemplates)
       .where(and(eq(sequenceTemplates.id, id), eq(sequenceTemplates.userId, userId)));
     return (result.rowCount ?? 0) > 0;
+  }
+
+  // ─── Email Type Rules ─────────────────────────────────────────────────────
+
+  async getEmailTypeRules(userId: string): Promise<EmailTypeRule[]> {
+    return db.select().from(emailTypeRules)
+      .where(eq(emailTypeRules.userId, userId))
+      .orderBy(desc(emailTypeRules.updatedAt));
+  }
+
+  async getEmailTypeRuleBySignature(userId: string, signatureHash: string): Promise<EmailTypeRule | undefined> {
+    const [row] = await db.select().from(emailTypeRules)
+      .where(and(eq(emailTypeRules.userId, userId), eq(emailTypeRules.signatureHash, signatureHash)));
+    return row;
+  }
+
+  async upsertEmailTypeRule(
+    userId: string,
+    signatureHash: string,
+    data: Omit<InsertEmailTypeRule, "userId" | "signatureHash">,
+  ): Promise<EmailTypeRule> {
+    const [row] = await db.insert(emailTypeRules)
+      .values({
+        userId,
+        signatureHash,
+        label: data.label,
+        decision: data.decision,
+        examples: data.examples || [],
+        updatedAt: new Date(),
+      } as any)
+      .onConflictDoUpdate({
+        target: [emailTypeRules.userId, emailTypeRules.signatureHash],
+        set: {
+          label: data.label,
+          decision: data.decision,
+          examples: data.examples || [],
+          updatedAt: new Date(),
+        } as any,
+      })
+      .returning();
+    return row;
+  }
+
+  async getRejectedEmailTypeSignatures(userId: string): Promise<Set<string>> {
+    const rows = await db.select({
+      signatureHash: emailTypeRules.signatureHash,
+    }).from(emailTypeRules)
+      .where(and(eq(emailTypeRules.userId, userId), eq(emailTypeRules.decision, "reject")));
+    return new Set(rows.map((r) => r.signatureHash));
+  }
+
+  // ─── Index Review Sessions ────────────────────────────────────────────────
+
+  async createIndexReviewSession(session: InsertIndexReviewSession): Promise<IndexReviewSession> {
+    const [created] = await db.insert(indexReviewSessions).values(session as any).returning();
+    return created;
+  }
+
+  async getIndexReviewSession(id: string, userId: string): Promise<IndexReviewSession | undefined> {
+    const [row] = await db.select().from(indexReviewSessions)
+      .where(and(eq(indexReviewSessions.id, id), eq(indexReviewSessions.userId, userId)));
+    return row;
+  }
+
+  async getLatestPendingIndexReviewSession(userId: string): Promise<IndexReviewSession | undefined> {
+    const [row] = await db.select().from(indexReviewSessions)
+      .where(and(eq(indexReviewSessions.userId, userId), eq(indexReviewSessions.status, "pending_review")))
+      .orderBy(desc(indexReviewSessions.createdAt))
+      .limit(1);
+    return row;
+  }
+
+  async updateIndexReviewSession(
+    id: string,
+    userId: string,
+    data: Partial<InsertIndexReviewSession>,
+  ): Promise<IndexReviewSession | undefined> {
+    const [row] = await db.update(indexReviewSessions)
+      .set(data as any)
+      .where(and(eq(indexReviewSessions.id, id), eq(indexReviewSessions.userId, userId)))
+      .returning();
+    return row;
+  }
+
+  async createIndexReviewItem(item: InsertIndexReviewItem): Promise<IndexReviewItem> {
+    const [created] = await db.insert(indexReviewItems).values(item as any).returning();
+    return created;
+  }
+
+  async getIndexReviewItems(sessionId: string): Promise<IndexReviewItem[]> {
+    return db.select().from(indexReviewItems)
+      .where(eq(indexReviewItems.sessionId, sessionId))
+      .orderBy(desc(indexReviewItems.messageCount), asc(indexReviewItems.proposedLabel));
+  }
+
+  async updateIndexReviewItemDecision(
+    sessionId: string,
+    signatureHash: string,
+    decision: "accept" | "reject",
+  ): Promise<IndexReviewItem | undefined> {
+    const [row] = await db.update(indexReviewItems)
+      .set({ decision })
+      .where(and(
+        eq(indexReviewItems.sessionId, sessionId),
+        eq(indexReviewItems.signatureHash, signatureHash),
+      ))
+      .returning();
+    return row;
   }
 }
 
