@@ -30,6 +30,7 @@ import {
   LogOut,
   ListTodo,
   BarChart3,
+  ListChecks,
 } from "lucide-react";
 
 const BRAND_LOGO_SRC = "/brand/outbound-os-logo.svg";
@@ -37,6 +38,7 @@ import { useAuth } from "@/hooks/useAuth";
 
 const menuItems = [
   { title: "Actions", url: "/actions", icon: ListTodo },
+  { title: "Sequences", url: "/sequences", icon: ListChecks },
   { title: "Prospect Research", url: "/prospect-research", icon: FlaskConical },
   { title: "Import Prospects", url: "/research-setup", icon: Upload },
   { title: "Contacts", url: "/contacts", icon: Users },

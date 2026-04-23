@@ -13,7 +13,7 @@ export const actionsRouter = Router();
 // ── Allowed values ─────────────────────────────────────────────────────────────
 
 const VALID_STATUSES = ["pending", "completed", "dismissed", "snoozed"] as const;
-const VALID_ACTION_TYPES = ["follow_up", "reconnect", "open_thread", "new_contact"] as const;
+const VALID_ACTION_TYPES = ["follow_up", "reconnect", "open_thread", "new_contact", "new_reply", "sequence_step"] as const;
 
 type ActionStatus = (typeof VALID_STATUSES)[number];
 

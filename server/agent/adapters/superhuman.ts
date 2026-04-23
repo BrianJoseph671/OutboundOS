@@ -9,9 +9,9 @@ import type { RawInteraction } from "../services/interactionWriter";
 import { matchContact } from "../services/contactMatcher";
 import { getRelationshipProviderMode } from "../providerMode";
 import { storage } from "../../storage";
-import { listThreads } from "../../services/mcpClient";
-import type { SuperhumanThreadSummary } from "../../services/mcpClient";
-import type { SuperhumanThreadMessage } from "../../services/mcpClient";
+import { listGmailThreads } from "../../services/gmailClient";
+import type { GmailThreadSummary as SuperhumanThreadSummary } from "../../services/gmailClient";
+import type { GmailThreadMessage as SuperhumanThreadMessage } from "../../services/gmailClient";
 import {
   getSuperhumanCheckpoint,
   saveSuperhumanCheckpoint,
@@ -86,7 +86,7 @@ export async function fetchEmails(
       const pageLimit = Math.min(DEFAULT_PAGE_LIMIT, remaining);
       if (pageLimit <= 0) break;
 
-      const response = await listThreads(userId, {
+      const response = await listGmailThreads(userId, {
         start_date: effectiveStartDate,
         end_date: endDate,
         limit: pageLimit,

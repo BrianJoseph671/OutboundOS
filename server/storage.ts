@@ -12,6 +12,13 @@ import {
   actions, type Action, type InsertAction,
   draftsLog, type DraftsLog, type InsertDraftsLog,
   contactBriefs, type ContactBriefRow, type InsertContactBrief,
+  networkIndexJobs, type NetworkIndexJob, type InsertNetworkIndexJob,
+  sequences, type Sequence, type InsertSequence,
+  sequenceSteps, type SequenceStep, type InsertSequenceStep,
+  sequenceTemplates, type SequenceTemplate, type InsertSequenceTemplate,
+  emailTypeRules, type EmailTypeRule, type InsertEmailTypeRule,
+  indexReviewSessions, type IndexReviewSession, type InsertIndexReviewSession,
+  indexReviewItems, type IndexReviewItem, type InsertIndexReviewItem,
   users, type User, type InsertUser
 } from "@shared/schema";
 import { db } from "./db";
@@ -122,6 +129,50 @@ export interface IStorage {
   // Contact Briefs (Phase 3)
   getContactBrief(contactId: string, userId: string): Promise<ContactBriefRow | undefined>;
   upsertContactBrief(contactId: string, userId: string, data: { briefData: Record<string, unknown>; modelVersion: string | null; generatedAt: Date }): Promise<ContactBriefRow>;
+
+  // Network Index Jobs
+  createNetworkIndexJob(job: InsertNetworkIndexJob): Promise<NetworkIndexJob>;
+  getNetworkIndexJob(id: string, userId: string): Promise<NetworkIndexJob | undefined>;
+  getLatestNetworkIndexJob(userId: string): Promise<NetworkIndexJob | undefined>;
+  updateNetworkIndexJob(id: string, userId: string, data: Partial<InsertNetworkIndexJob>): Promise<NetworkIndexJob | undefined>;
+
+  // Contacts — email lookup
+  getContactByEmail(email: string, userId: string): Promise<Contact | undefined>;
+
+  // Sequences
+  getSequences(userId: string, filters?: { status?: string; contactId?: string }): Promise<Sequence[]>;
+  getSequence(id: string, userId: string): Promise<Sequence | undefined>;
+  createSequence(seq: InsertSequence): Promise<Sequence>;
+  updateSequence(id: string, userId: string, data: Partial<InsertSequence>): Promise<Sequence | undefined>;
+
+  // Sequence Steps
+  getSequenceSteps(sequenceId: string): Promise<SequenceStep[]>;
+  getSequenceStep(id: string): Promise<SequenceStep | undefined>;
+  createSequenceStep(step: InsertSequenceStep): Promise<SequenceStep>;
+  updateSequenceStep(id: string, data: Partial<InsertSequenceStep>): Promise<SequenceStep | undefined>;
+  getDueSequenceSteps(userId: string): Promise<(SequenceStep & { sequenceName: string; contactId: string })[]>;
+
+  // Sequence Templates
+  getSequenceTemplates(userId: string): Promise<SequenceTemplate[]>;
+  getSequenceTemplate(id: string, userId: string): Promise<SequenceTemplate | undefined>;
+  createSequenceTemplate(template: InsertSequenceTemplate): Promise<SequenceTemplate>;
+  updateSequenceTemplate(id: string, userId: string, data: Partial<InsertSequenceTemplate>): Promise<SequenceTemplate | undefined>;
+  deleteSequenceTemplate(id: string, userId: string): Promise<boolean>;
+
+  // Email Type Rules
+  getEmailTypeRules(userId: string): Promise<EmailTypeRule[]>;
+  getEmailTypeRuleBySignature(userId: string, signatureHash: string): Promise<EmailTypeRule | undefined>;
+  upsertEmailTypeRule(userId: string, signatureHash: string, data: Omit<InsertEmailTypeRule, "userId" | "signatureHash">): Promise<EmailTypeRule>;
+  getRejectedEmailTypeSignatures(userId: string): Promise<Set<string>>;
+
+  // Index Review Sessions
+  createIndexReviewSession(session: InsertIndexReviewSession): Promise<IndexReviewSession>;
+  getIndexReviewSession(id: string, userId: string): Promise<IndexReviewSession | undefined>;
+  getLatestPendingIndexReviewSession(userId: string): Promise<IndexReviewSession | undefined>;
+  updateIndexReviewSession(id: string, userId: string, data: Partial<InsertIndexReviewSession>): Promise<IndexReviewSession | undefined>;
+  createIndexReviewItem(item: InsertIndexReviewItem): Promise<IndexReviewItem>;
+  getIndexReviewItems(sessionId: string): Promise<IndexReviewItem[]>;
+  updateIndexReviewItemDecision(sessionId: string, signatureHash: string, decision: "accept" | "reject"): Promise<IndexReviewItem | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -884,6 +935,257 @@ export class DatabaseStorage implements IStorage {
       })
       .returning();
     return result;
+  }
+
+  // ─── Network Index Jobs ──────────────────────────────────────────────────
+
+  async createNetworkIndexJob(job: InsertNetworkIndexJob): Promise<NetworkIndexJob> {
+    const [created] = await db.insert(networkIndexJobs).values(job as any).returning();
+    return created;
+  }
+
+  async getNetworkIndexJob(id: string, userId: string): Promise<NetworkIndexJob | undefined> {
+    const [job] = await db.select().from(networkIndexJobs)
+      .where(and(eq(networkIndexJobs.id, id), eq(networkIndexJobs.userId, userId)));
+    return job;
+  }
+
+  async getLatestNetworkIndexJob(userId: string): Promise<NetworkIndexJob | undefined> {
+    const [job] = await db.select().from(networkIndexJobs)
+      .where(eq(networkIndexJobs.userId, userId))
+      .orderBy(desc(networkIndexJobs.createdAt))
+      .limit(1);
+    return job;
+  }
+
+  async updateNetworkIndexJob(id: string, userId: string, data: Partial<InsertNetworkIndexJob>): Promise<NetworkIndexJob | undefined> {
+    const [updated] = await db.update(networkIndexJobs)
+      .set(data as any)
+      .where(and(eq(networkIndexJobs.id, id), eq(networkIndexJobs.userId, userId)))
+      .returning();
+    return updated;
+  }
+
+  // ─── Contacts — email lookup ─────────────────────────────────────────────
+
+  async getContactByEmail(email: string, userId: string): Promise<Contact | undefined> {
+    const [contact] = await db.select().from(contacts)
+      .where(and(
+        eq(contacts.userId, userId),
+        drizzleSql`LOWER(${contacts.email}) = LOWER(${email})`
+      ));
+    return contact;
+  }
+
+  // ─── Sequences ───────────────────────────────────────────────────────────
+
+  async getSequences(userId: string, filters?: { status?: string; contactId?: string }): Promise<Sequence[]> {
+    const conditions = [eq(sequences.userId, userId)];
+    if (filters?.status) conditions.push(eq(sequences.status, filters.status));
+    if (filters?.contactId) conditions.push(eq(sequences.contactId, filters.contactId));
+    return db.select().from(sequences).where(and(...conditions)).orderBy(desc(sequences.createdAt));
+  }
+
+  async getSequence(id: string, userId: string): Promise<Sequence | undefined> {
+    const [seq] = await db.select().from(sequences)
+      .where(and(eq(sequences.id, id), eq(sequences.userId, userId)));
+    return seq;
+  }
+
+  async createSequence(seq: InsertSequence): Promise<Sequence> {
+    const [created] = await db.insert(sequences).values(seq as any).returning();
+    return created;
+  }
+
+  async updateSequence(id: string, userId: string, data: Partial<InsertSequence>): Promise<Sequence | undefined> {
+    const [updated] = await db.update(sequences)
+      .set({ ...data as any, updatedAt: new Date() })
+      .where(and(eq(sequences.id, id), eq(sequences.userId, userId)))
+      .returning();
+    return updated;
+  }
+
+  // ─── Sequence Steps ──────────────────────────────────────────────────────
+
+  async getSequenceSteps(sequenceId: string): Promise<SequenceStep[]> {
+    return db.select().from(sequenceSteps)
+      .where(eq(sequenceSteps.sequenceId, sequenceId))
+      .orderBy(asc(sequenceSteps.stepNumber));
+  }
+
+  async getSequenceStep(id: string): Promise<SequenceStep | undefined> {
+    const [step] = await db.select().from(sequenceSteps).where(eq(sequenceSteps.id, id));
+    return step;
+  }
+
+  async createSequenceStep(step: InsertSequenceStep): Promise<SequenceStep> {
+    const [created] = await db.insert(sequenceSteps).values(step as any).returning();
+    return created;
+  }
+
+  async updateSequenceStep(id: string, data: Partial<InsertSequenceStep>): Promise<SequenceStep | undefined> {
+    const [updated] = await db.update(sequenceSteps).set(data as any).where(eq(sequenceSteps.id, id)).returning();
+    return updated;
+  }
+
+  async getDueSequenceSteps(userId: string): Promise<(SequenceStep & { sequenceName: string; contactId: string })[]> {
+    const now = new Date();
+    const results = await db
+      .select({
+        ...getTableColumns(sequenceSteps),
+        sequenceName: sequences.name,
+        contactId: sequences.contactId,
+      })
+      .from(sequenceSteps)
+      .innerJoin(sequences, eq(sequenceSteps.sequenceId, sequences.id))
+      .where(and(
+        eq(sequences.userId, userId),
+        eq(sequences.status, "active"),
+        eq(sequenceSteps.status, "pending"),
+        lte(sequenceSteps.scheduledFor, now),
+      ))
+      .orderBy(asc(sequenceSteps.scheduledFor));
+    return results;
+  }
+
+  // ─── Sequence Templates ──────────────────────────────────────────────────
+
+  async getSequenceTemplates(userId: string): Promise<SequenceTemplate[]> {
+    return db.select().from(sequenceTemplates)
+      .where(eq(sequenceTemplates.userId, userId))
+      .orderBy(desc(sequenceTemplates.createdAt));
+  }
+
+  async getSequenceTemplate(id: string, userId: string): Promise<SequenceTemplate | undefined> {
+    const [t] = await db.select().from(sequenceTemplates)
+      .where(and(eq(sequenceTemplates.id, id), eq(sequenceTemplates.userId, userId)));
+    return t;
+  }
+
+  async createSequenceTemplate(template: InsertSequenceTemplate): Promise<SequenceTemplate> {
+    const [created] = await db.insert(sequenceTemplates).values(template as any).returning();
+    return created;
+  }
+
+  async updateSequenceTemplate(id: string, userId: string, data: Partial<InsertSequenceTemplate>): Promise<SequenceTemplate | undefined> {
+    const [updated] = await db.update(sequenceTemplates).set(data as any)
+      .where(and(eq(sequenceTemplates.id, id), eq(sequenceTemplates.userId, userId)))
+      .returning();
+    return updated;
+  }
+
+  async deleteSequenceTemplate(id: string, userId: string): Promise<boolean> {
+    const result = await db.delete(sequenceTemplates)
+      .where(and(eq(sequenceTemplates.id, id), eq(sequenceTemplates.userId, userId)));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  // ─── Email Type Rules ─────────────────────────────────────────────────────
+
+  async getEmailTypeRules(userId: string): Promise<EmailTypeRule[]> {
+    return db.select().from(emailTypeRules)
+      .where(eq(emailTypeRules.userId, userId))
+      .orderBy(desc(emailTypeRules.updatedAt));
+  }
+
+  async getEmailTypeRuleBySignature(userId: string, signatureHash: string): Promise<EmailTypeRule | undefined> {
+    const [row] = await db.select().from(emailTypeRules)
+      .where(and(eq(emailTypeRules.userId, userId), eq(emailTypeRules.signatureHash, signatureHash)));
+    return row;
+  }
+
+  async upsertEmailTypeRule(
+    userId: string,
+    signatureHash: string,
+    data: Omit<InsertEmailTypeRule, "userId" | "signatureHash">,
+  ): Promise<EmailTypeRule> {
+    const [row] = await db.insert(emailTypeRules)
+      .values({
+        userId,
+        signatureHash,
+        label: data.label,
+        decision: data.decision,
+        examples: data.examples || [],
+        updatedAt: new Date(),
+      } as any)
+      .onConflictDoUpdate({
+        target: [emailTypeRules.userId, emailTypeRules.signatureHash],
+        set: {
+          label: data.label,
+          decision: data.decision,
+          examples: data.examples || [],
+          updatedAt: new Date(),
+        } as any,
+      })
+      .returning();
+    return row;
+  }
+
+  async getRejectedEmailTypeSignatures(userId: string): Promise<Set<string>> {
+    const rows = await db.select({
+      signatureHash: emailTypeRules.signatureHash,
+    }).from(emailTypeRules)
+      .where(and(eq(emailTypeRules.userId, userId), eq(emailTypeRules.decision, "reject")));
+    return new Set(rows.map((r) => r.signatureHash));
+  }
+
+  // ─── Index Review Sessions ────────────────────────────────────────────────
+
+  async createIndexReviewSession(session: InsertIndexReviewSession): Promise<IndexReviewSession> {
+    const [created] = await db.insert(indexReviewSessions).values(session as any).returning();
+    return created;
+  }
+
+  async getIndexReviewSession(id: string, userId: string): Promise<IndexReviewSession | undefined> {
+    const [row] = await db.select().from(indexReviewSessions)
+      .where(and(eq(indexReviewSessions.id, id), eq(indexReviewSessions.userId, userId)));
+    return row;
+  }
+
+  async getLatestPendingIndexReviewSession(userId: string): Promise<IndexReviewSession | undefined> {
+    const [row] = await db.select().from(indexReviewSessions)
+      .where(and(eq(indexReviewSessions.userId, userId), eq(indexReviewSessions.status, "pending_review")))
+      .orderBy(desc(indexReviewSessions.createdAt))
+      .limit(1);
+    return row;
+  }
+
+  async updateIndexReviewSession(
+    id: string,
+    userId: string,
+    data: Partial<InsertIndexReviewSession>,
+  ): Promise<IndexReviewSession | undefined> {
+    const [row] = await db.update(indexReviewSessions)
+      .set(data as any)
+      .where(and(eq(indexReviewSessions.id, id), eq(indexReviewSessions.userId, userId)))
+      .returning();
+    return row;
+  }
+
+  async createIndexReviewItem(item: InsertIndexReviewItem): Promise<IndexReviewItem> {
+    const [created] = await db.insert(indexReviewItems).values(item as any).returning();
+    return created;
+  }
+
+  async getIndexReviewItems(sessionId: string): Promise<IndexReviewItem[]> {
+    return db.select().from(indexReviewItems)
+      .where(eq(indexReviewItems.sessionId, sessionId))
+      .orderBy(desc(indexReviewItems.messageCount), asc(indexReviewItems.proposedLabel));
+  }
+
+  async updateIndexReviewItemDecision(
+    sessionId: string,
+    signatureHash: string,
+    decision: "accept" | "reject",
+  ): Promise<IndexReviewItem | undefined> {
+    const [row] = await db.update(indexReviewItems)
+      .set({ decision })
+      .where(and(
+        eq(indexReviewItems.sessionId, sessionId),
+        eq(indexReviewItems.signatureHash, signatureHash),
+      ))
+      .returning();
+    return row;
   }
 }
 

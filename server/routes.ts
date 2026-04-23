@@ -20,6 +20,9 @@ import { briefsRouter } from "./routes/briefs";
 import { composeRouter } from "./routes/compose";
 import { weeklyBriefRouter } from "./routes/weeklyBrief";
 import { roiRouter } from "./routes/roi";
+import { networkRouter } from "./routes/network";
+import { sequencesRouter, sequenceTemplatesRouter } from "./routes/sequences";
+import { indexReviewRouter } from "./routes/indexReview";
 import { seedRelationshipActionsForUser } from "./services/seedRelationshipActions";
 import { appendResearchedTag } from "./utils/contactTags";
 import { isAuthenticated } from "./auth";
@@ -181,6 +184,18 @@ export async function registerRoutes(
 
   // ROI Dashboard routes (Phase 4) — GET /api/dashboard/roi, GET /api/dashboard/roi/export
   app.use("/api/dashboard", roiRouter);
+
+  // Network Indexer routes — POST /api/network/index, POST /api/network/sync, GET /api/network/status
+  app.use("/api/network", networkRouter);
+
+  // Index review routes — swipe type decisions before persisting contacts
+  app.use("/api/index-review", indexReviewRouter);
+
+  // Sequences routes — CRUD + lifecycle
+  app.use("/api/sequences", sequencesRouter);
+
+  // Sequence Templates routes
+  app.use("/api/sequence-templates", sequenceTemplatesRouter);
 
   // Dev-only: seed RelationshipOS actions for the *current session* user (avoids CLI user id mismatch)
   if (process.env.NODE_ENV === "development") {
