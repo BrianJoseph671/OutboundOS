@@ -443,6 +443,9 @@ export async function prepareIndexReviewSession(
 
   const classified = await classifyEmailTypes(enrichedCandidates);
   const ranked = [...classified].sort((a, b) => {
+    const aIsLabel = a.source === "label";
+    const bIsLabel = b.source === "label";
+    if (aIsLabel !== bIsLabel) return aIsLabel ? -1 : 1;
     if (a.hasAnyMeetingLinkedContacts !== b.hasAnyMeetingLinkedContacts) {
       return a.hasAnyMeetingLinkedContacts ? -1 : 1;
     }
