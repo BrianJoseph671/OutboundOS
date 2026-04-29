@@ -7,7 +7,7 @@
  *   - Incremental sync: scans last 7 days of inbound + outbound
  */
 import { storage } from "../storage";
-import { listGmailThreads, type GmailThreadSummary } from "./gmailClient";
+import { listGmailThreads, getUserLabelMap, type GmailThreadSummary } from "./gmailClient";
 import { computeWarmth } from "./warmthClassifier";
 import type { Contact, WarmthTier } from "@shared/schema";
 import { detectActions } from "../agent/services/actionDetector";
@@ -77,6 +77,7 @@ async function scanThreads(
   userEmail: string,
   query: { start_date: string; end_date: string; from?: string[]; to?: string[] },
   onProgress?: (threadsScanned: number) => void,
+  userLabelMap?: Map<string, string>,
 ): Promise<{
   contactMap: Map<string, ScannedContact>;
   threadsScanned: number;
@@ -85,7 +86,7 @@ async function scanThreads(
 }> {
   const contactMap = new Map<string, ScannedContact>();
   const signaturesByEmail = new Map<string, Set<string>>();
-  const typeSignals = new Map<string, { signatureKey: string; count: number; examples: Set<string> }>();
+  const typeSignals = new Map<string, { signatureKey: string; count: number; examples: Set<string>; labelName?: string }>();
   let threadsScanned = 0;
   let cursor: string | undefined;
 
@@ -107,7 +108,7 @@ async function scanThreads(
 
     for (const thread of threads) {
       threadsScanned++;
-      processThread(thread, userEmail, contactMap, typeSignals, signaturesByEmail);
+      processThread(thread, userEmail, contactMap, typeSignals, signaturesByEmail, userLabelMap);
     }
 
     onProgress?.(threadsScanned);
@@ -131,8 +132,9 @@ function processThread(
   thread: GmailThreadSummary,
   userEmail: string,
   contactMap: Map<string, ScannedContact>,
-  typeSignals: Map<string, { signatureKey: string; count: number; examples: Set<string> }>,
+  typeSignals: Map<string, { signatureKey: string; count: number; examples: Set<string>; labelName?: string }>,
   signaturesByEmail: Map<string, Set<string>>,
+  userLabelMap?: Map<string, string>,
 ) {
   const userNorm = userEmail.toLowerCase().trim();
   const participants = (thread.participants || []).map(extractEmailAddress);
@@ -182,12 +184,36 @@ function processThread(
     });
   }
 
+  const labelSignatures: Array<{ signatureHash: string; labelName: string }> = [];
+  if (userLabelMap && userLabelMap.size > 0) {
+    const threadLabelIds = thread.labels || [];
+    for (const labelId of threadLabelIds) {
+      const labelName = userLabelMap.get(labelId);
+      if (!labelName) continue;
+      const labelSig = subjectSignatureHash(`label:${labelName.toLowerCase()}`);
+      labelSignatures.push({ signatureHash: labelSig.signatureHash, labelName });
+      const existingLabelType = typeSignals.get(labelSig.signatureHash);
+      if (existingLabelType) {
+        existingLabelType.count++;
+        if (subject) existingLabelType.examples.add(subject);
+      } else {
+        typeSignals.set(labelSig.signatureHash, {
+          signatureKey: labelSig.signatureKey,
+          count: 1,
+          examples: new Set(subject ? [subject] : []),
+          labelName,
+        });
+      }
+    }
+  }
+
   // Extract counterparty emails (non-user participants)
   const counterparties = participants.filter((p) => p !== userNorm && !isNoiseEmail(p));
 
   for (const email of counterparties) {
     const setForEmail = signaturesByEmail.get(email) || new Set<string>();
     setForEmail.add(signature.signatureHash);
+    for (const ls of labelSignatures) setForEmail.add(ls.signatureHash);
     signaturesByEmail.set(email, setForEmail);
     const existing = contactMap.get(email);
     if (existing) {
@@ -365,6 +391,12 @@ export async function prepareIndexReviewSession(
 
   const sixMonthsAgo = new Date();
   sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+  let userLabelMap: Map<string, string> | undefined;
+  try {
+    userLabelMap = await getUserLabelMap(userId);
+  } catch (err) {
+    console.warn("[NetworkIndexer] Failed to load Gmail user labels:", err);
+  }
   const scan = await scanThreads(
     userId,
     userEmail,
@@ -378,6 +410,7 @@ export async function prepareIndexReviewSession(
         await storage.updateNetworkIndexJob(job.id, userId, { threadsScanned: scanned });
       } catch { /* non-critical */ }
     },
+    userLabelMap,
   );
 
   const { hasGranolaMap, hasCalendarMap } = await buildCrossRefMaps(userId);
@@ -619,20 +652,38 @@ export async function runIncrementalSync(
     const start = sevenDaysAgo.toISOString();
 
     const rejected = await storage.getRejectedEmailTypeSignatures(userId);
+    let userLabelMap: Map<string, string> | undefined;
+    try {
+      userLabelMap = await getUserLabelMap(userId);
+    } catch (err) {
+      console.warn("[NetworkIndexer] Failed to load Gmail user labels:", err);
+    }
 
     // Scan outbound threads
-    const outbound = await scanThreads(userId, userEmail, {
-      start_date: start,
-      end_date: now,
-      from: [userEmail],
-    });
+    const outbound = await scanThreads(
+      userId,
+      userEmail,
+      {
+        start_date: start,
+        end_date: now,
+        from: [userEmail],
+      },
+      undefined,
+      userLabelMap,
+    );
 
     // Scan inbound threads (to:me)
-    const inbound = await scanThreads(userId, userEmail, {
-      start_date: start,
-      end_date: now,
-      to: [userEmail],
-    });
+    const inbound = await scanThreads(
+      userId,
+      userEmail,
+      {
+        start_date: start,
+        end_date: now,
+        to: [userEmail],
+      },
+      undefined,
+      userLabelMap,
+    );
 
     // Merge contact maps + signature maps
     const mergedMap = new Map(Array.from(outbound.contactMap.entries()));
