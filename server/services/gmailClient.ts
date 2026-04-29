@@ -133,6 +133,38 @@ async function gmailFetch<T>(userId: string, url: string, init?: RequestInit): P
   return (await response.json()) as T;
 }
 
+export interface GmailLabel {
+  id: string;
+  name: string;
+  type: "system" | "user";
+}
+
+export async function listGmailLabels(userId: string): Promise<GmailLabel[]> {
+  const url = `${GMAIL_API_BASE}/labels`;
+  const response = await gmailFetch<{ labels?: Array<{ id?: string; name?: string; type?: string }> }>(
+    userId,
+    url,
+  );
+  return (response.labels || [])
+    .filter((l) => !!l.id && !!l.name)
+    .map((l) => ({
+      id: l.id as string,
+      name: l.name as string,
+      type: (l.type === "user" ? "user" : "system") as "system" | "user",
+    }));
+}
+
+export async function getUserLabelMap(userId: string): Promise<Map<string, string>> {
+  const labels = await listGmailLabels(userId);
+  const map = new Map<string, string>();
+  for (const label of labels) {
+    if (label.type === "user") {
+      map.set(label.id, label.name);
+    }
+  }
+  return map;
+}
+
 export async function getGmailThread(
   userId: string,
   threadId: string,

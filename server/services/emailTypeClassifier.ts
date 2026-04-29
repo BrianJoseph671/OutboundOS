@@ -1,6 +1,8 @@
 import crypto from "crypto";
 import Anthropic from "@anthropic-ai/sdk";
 
+export type EmailTypeSource = "label" | "subject";
+
 export interface EmailTypeCandidate {
   signatureHash: string;
   signatureKey: string;
@@ -8,6 +10,8 @@ export interface EmailTypeCandidate {
   exampleSubjects: string[];
   meetingLinkedContactCount?: number;
   hasAnyMeetingLinkedContacts?: boolean;
+  source?: EmailTypeSource;
+  labelName?: string;
 }
 
 export interface ClassifiedEmailType {
@@ -17,6 +21,8 @@ export interface ClassifiedEmailType {
   exampleSubjects: string[];
   meetingLinkedContactCount: number;
   hasAnyMeetingLinkedContacts: boolean;
+  source: EmailTypeSource;
+  labelName?: string;
 }
 
 function normalizeSubject(subject: string): string {
@@ -40,13 +46,16 @@ async function labelWithClaude(
   if (!process.env.ANTHROPIC_API_KEY || candidates.length === 0) return new Map();
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+  const subjectCandidates = candidates.filter((c) => c.source !== "label");
+  if (subjectCandidates.length === 0) return new Map();
+
   const prompt = [
     "You are classifying email subject patterns into concise type labels.",
     "Return JSON object mapping signatureHash -> label.",
     "Labels should be short (2-6 words) and indicate email intent.",
     "If clearly non-networking (marketing, notifications, admin), make that explicit.",
     "",
-    JSON.stringify(candidates.map((c) => ({
+    JSON.stringify(subjectCandidates.map((c) => ({
       signatureHash: c.signatureHash,
       messageCount: c.messageCount,
       meetingLinkedContactCount: c.meetingLinkedContactCount || 0,
@@ -89,12 +98,21 @@ export async function classifyEmailTypes(
   const aiLabels = await labelWithClaude(candidates);
   return candidates
     .sort((a, b) => b.messageCount - a.messageCount)
-    .map((c) => ({
-      signatureHash: c.signatureHash,
-      proposedLabel: aiLabels.get(c.signatureHash) || fallbackLabel(c),
-      messageCount: c.messageCount,
-      exampleSubjects: c.exampleSubjects,
-      meetingLinkedContactCount: c.meetingLinkedContactCount || 0,
-      hasAnyMeetingLinkedContacts: Boolean(c.hasAnyMeetingLinkedContacts),
-    }));
+    .map((c) => {
+      const source: EmailTypeSource = c.source === "label" ? "label" : "subject";
+      const proposedLabel =
+        source === "label" && c.labelName
+          ? c.labelName
+          : aiLabels.get(c.signatureHash) || fallbackLabel(c);
+      return {
+        signatureHash: c.signatureHash,
+        proposedLabel,
+        messageCount: c.messageCount,
+        exampleSubjects: c.exampleSubjects,
+        meetingLinkedContactCount: c.meetingLinkedContactCount || 0,
+        hasAnyMeetingLinkedContacts: Boolean(c.hasAnyMeetingLinkedContacts),
+        source,
+        labelName: c.labelName,
+      };
+    });
 }
