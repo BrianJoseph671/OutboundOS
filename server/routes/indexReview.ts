@@ -25,7 +25,12 @@ indexReviewRouter.get("/:sessionId", async (req: Request, res: Response) => {
     const summary = (session.summary || {}) as Record<string, any>;
     const signatureMeetingSignals = (summary.signatureMeetingSignals || {}) as Record<
       string,
-      { hasAnyMeetingLinkedContacts?: boolean; meetingLinkedContactCount?: number }
+      {
+        hasAnyMeetingLinkedContacts?: boolean;
+        meetingLinkedContactCount?: number;
+        source?: "label" | "subject";
+        labelName?: string | null;
+      }
     >;
     const enrichedItems = items.map((item) => {
       const signal = signatureMeetingSignals[item.signatureHash] || {};
@@ -33,6 +38,8 @@ indexReviewRouter.get("/:sessionId", async (req: Request, res: Response) => {
         ...item,
         hasAnyMeetingLinkedContacts: Boolean(signal.hasAnyMeetingLinkedContacts),
         meetingLinkedContactCount: Number(signal.meetingLinkedContactCount || 0),
+        source: signal.source === "label" ? "label" : "subject",
+        labelName: signal.labelName || null,
       };
     });
     res.json({

@@ -482,6 +482,8 @@ export async function prepareIndexReviewSession(
           {
             hasAnyMeetingLinkedContacts: r.hasAnyMeetingLinkedContacts,
             meetingLinkedContactCount: r.meetingLinkedContactCount,
+            source: r.source,
+            labelName: r.labelName || null,
           },
         ]),
       ),
