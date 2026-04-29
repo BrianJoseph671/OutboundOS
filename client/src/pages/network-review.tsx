@@ -17,6 +17,8 @@ interface ReviewItem {
   messageCount: number;
   hasAnyMeetingLinkedContacts?: boolean;
   meetingLinkedContactCount?: number;
+  source?: "label" | "subject";
+  labelName?: string | null;
   decision: "accept" | "reject" | null;
 }
 
@@ -74,7 +76,7 @@ export default function NetworkReviewPage() {
       <div className="space-y-2">
         <h1 className="text-2xl font-semibold">Review Email Types</h1>
         <p className="text-sm text-muted-foreground">
-          Reviewing top 20 types by impact, with meeting-linked types prioritized.
+          Reviewing top 20 types — your Gmail labels and meeting-linked types are prioritized.
         </p>
         <p className="text-sm text-muted-foreground">
           Swipe right/accept for real networking types. Swipe left/reject for types to auto-ignore in future indexing.
@@ -89,6 +91,9 @@ export default function NetworkReviewPage() {
             <div className="flex items-center justify-between">
               <CardTitle>{current.proposedLabel}</CardTitle>
               <div className="flex items-center gap-2">
+                {current.source === "label" && current.labelName ? (
+                  <Badge variant="default">Label: {current.labelName}</Badge>
+                ) : null}
                 {current.hasAnyMeetingLinkedContacts ? (
                   <Badge variant="default">Met before</Badge>
                 ) : null}
