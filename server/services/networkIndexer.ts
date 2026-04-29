@@ -123,6 +123,8 @@ async function scanThreads(
       signatureKey: v.signatureKey,
       messageCount: v.count,
       exampleSubjects: Array.from(v.examples).slice(0, 5),
+      source: v.labelName ? "label" : "subject",
+      labelName: v.labelName,
     }),
   );
   return { contactMap, threadsScanned, emailTypeCandidates, signaturesByEmail };
