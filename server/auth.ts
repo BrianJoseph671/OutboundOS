@@ -92,7 +92,7 @@ function logoutHandler(req: Request, res: Response, next: NextFunction) {
   });
 }
 
-function isNotreDameEmail(value: unknown): boolean {
+export function isNotreDameEmail(value: unknown): boolean {
   if (typeof value !== "string") return false;
   return value.trim().toLowerCase().endsWith("@nd.edu");
 }

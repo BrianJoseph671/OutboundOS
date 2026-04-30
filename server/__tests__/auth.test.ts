@@ -14,7 +14,7 @@ import request from "supertest";
 import { db, pool } from "../db";
 import { users } from "@shared/schema";
 import { eq } from "drizzle-orm";
-import { authRouter, passport } from "../auth";
+import { authRouter, isNotreDameEmail, passport } from "../auth";
 import { requireAuth } from "../middleware/auth";
 
 // ── Test user cleanup ─────────────────────────────────────────────────────────
@@ -119,6 +119,21 @@ describe("requireAuth middleware", () => {
     requireAuth(req, res, next);
 
     expect(next).not.toHaveBeenCalled();
+  });
+});
+
+describe("isNotreDameEmail", () => {
+  it("returns true for nd.edu emails with varied casing/spacing", () => {
+    expect(isNotreDameEmail("user@nd.edu")).toBe(true);
+    expect(isNotreDameEmail("USER@ND.EDU")).toBe(true);
+    expect(isNotreDameEmail("  user@nd.edu  ")).toBe(true);
+  });
+
+  it("returns false for other domains and non-strings", () => {
+    expect(isNotreDameEmail("user@gmail.com")).toBe(false);
+    expect(isNotreDameEmail("nd.edu")).toBe(false);
+    expect(isNotreDameEmail(null)).toBe(false);
+    expect(isNotreDameEmail(undefined)).toBe(false);
   });
 });
 
