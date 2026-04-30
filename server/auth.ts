@@ -285,6 +285,8 @@ export async function setupAuth(app: Express) {
 
     const startGoogleOAuth = (req: Request, res: Response, next: NextFunction) => {
       const raw = req.query.next;
+      const rawHd = req.query.hd;
+      const hd = typeof rawHd === "string" && rawHd.trim() ? rawHd.trim() : undefined;
       if (typeof raw === "string") {
         req.session.oauthReturnTo = safeOAuthReturnPath(raw);
       } else {
@@ -292,7 +294,11 @@ export async function setupAuth(app: Express) {
       }
       req.session.save((err) => {
         if (err) return next(err);
-        passport.authenticate("google", { scope: ["profile", "email"] })(req, res, next);
+        passport.authenticate("google", {
+          scope: ["profile", "email"],
+          prompt: "login select_account",
+          ...(hd ? { hd } : {}),
+        })(req, res, next);
       });
     };
 
