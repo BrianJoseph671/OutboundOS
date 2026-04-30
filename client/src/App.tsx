@@ -125,6 +125,11 @@ function AppShell({ user }: { user: AuthUser }) {
                   {user.fullName}
                 </span>
               )}
+              {user.email && (
+                <span className="text-xs text-muted-foreground hidden md:inline">
+                  {user.email}
+                </span>
+              )}
               <Button
                 variant="ghost"
                 size="sm"
