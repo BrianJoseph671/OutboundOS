@@ -34,6 +34,8 @@ export default function Login() {
 
   const [loginForm, setLoginForm] = useState({ email: "", password: "" });
   const [registerForm, setRegisterForm] = useState({ email: "", password: "", displayName: "" });
+  const isNdLoginEmail = loginForm.email.trim().toLowerCase().endsWith("@nd.edu");
+  const isNdRegisterEmail = registerForm.email.trim().toLowerCase().endsWith("@nd.edu");
 
   const { data: authConfig } = useQuery<{ googleEnabled: boolean }>({
     queryKey: ["/api/auth/config"],
@@ -99,7 +101,9 @@ export default function Login() {
 
   const handleGoogleLogin = () => {
     const next = encodeURIComponent(getSafeNext());
-    const url = `/api/auth/google?next=${next}`;
+    const email = loginForm.email.trim().toLowerCase() || registerForm.email.trim().toLowerCase();
+    const maybeDomainHint = email.endsWith("@nd.edu") ? "&hd=nd.edu" : "";
+    const url = `/api/auth/google?next=${next}${maybeDomainHint}`;
     try {
       if (window.top && window.top !== window) {
         window.top.location.href = url;
@@ -192,12 +196,18 @@ export default function Login() {
                       onChange={(e) => setLoginForm(f => ({ ...f, password: e.target.value }))}
                       data-testid="input-login-password"
                       autoComplete="current-password"
+                      disabled={isNdLoginEmail}
                     />
+                    {isNdLoginEmail && (
+                      <p className="text-xs text-muted-foreground">
+                        Notre Dame accounts must sign in with Google.
+                      </p>
+                    )}
                   </div>
                   <Button
                     type="submit"
                     className="w-full"
-                    disabled={loginMutation.isPending}
+                    disabled={loginMutation.isPending || isNdLoginEmail}
                     data-testid="button-login-submit"
                   >
                     {loginMutation.isPending ? "Signing in…" : "Sign In"}
@@ -268,12 +278,18 @@ export default function Login() {
                       onChange={(e) => setRegisterForm(f => ({ ...f, password: e.target.value }))}
                       data-testid="input-register-password"
                       autoComplete="new-password"
+                      disabled={isNdRegisterEmail}
                     />
+                    {isNdRegisterEmail && (
+                      <p className="text-xs text-muted-foreground">
+                        Notre Dame accounts must sign in with Google.
+                      </p>
+                    )}
                   </div>
                   <Button
                     type="submit"
                     className="w-full"
-                    disabled={registerMutation.isPending}
+                    disabled={registerMutation.isPending || isNdRegisterEmail}
                     data-testid="button-register-submit"
                   >
                     {registerMutation.isPending ? "Creating account…" : "Create Account"}
