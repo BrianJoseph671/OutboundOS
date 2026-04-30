@@ -92,6 +92,11 @@ function logoutHandler(req: Request, res: Response, next: NextFunction) {
   });
 }
 
+export function isNotreDameEmail(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  return value.trim().toLowerCase().endsWith("@nd.edu");
+}
+
 authRouter.get("/api/auth/me", meHandler);
 authRouter.get("/auth/me", meHandler);
 authRouter.post("/api/auth/logout", logoutHandler);
@@ -231,6 +236,9 @@ export async function setupAuth(app: Express) {
       { usernameField: "email", passwordField: "password" },
       async (email, password, done) => {
         try {
+          if (isNotreDameEmail(email)) {
+            return done(null, false, { message: "Notre Dame accounts must sign in with Google." });
+          }
           const [user] = await db
             .select()
             .from(users)
@@ -285,6 +293,8 @@ export async function setupAuth(app: Express) {
 
     const startGoogleOAuth = (req: Request, res: Response, next: NextFunction) => {
       const raw = req.query.next;
+      const rawHd = req.query.hd;
+      const hd = typeof rawHd === "string" && rawHd.trim() ? rawHd.trim() : undefined;
       if (typeof raw === "string") {
         req.session.oauthReturnTo = safeOAuthReturnPath(raw);
       } else {
@@ -292,7 +302,11 @@ export async function setupAuth(app: Express) {
       }
       req.session.save((err) => {
         if (err) return next(err);
-        passport.authenticate("google", { scope: ["profile", "email"] })(req, res, next);
+        passport.authenticate("google", {
+          scope: ["profile", "email"],
+          prompt: "login select_account",
+          ...(hd ? { hd } : {}),
+        })(req, res, next);
       });
     };
 
@@ -327,6 +341,9 @@ export async function setupAuth(app: Express) {
       const { email, password, displayName } = req.body;
       if (!email || !password) {
         return res.status(400).json({ message: "Email and password are required" });
+      }
+      if (isNotreDameEmail(email)) {
+        return res.status(400).json({ message: "Notre Dame accounts must sign in with Google." });
       }
       if (password.length < 8) {
         return res.status(400).json({ message: "Password must be at least 8 characters" });

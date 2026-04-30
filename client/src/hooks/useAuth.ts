@@ -11,7 +11,7 @@ export interface AuthUser {
 
 export function useAuth() {
   const { data: user, isLoading } = useQuery<AuthUser | null>({
-    queryKey: ["/api/auth/me"],
+    queryKey: ["/auth/me"],
     queryFn: getQueryFn({ on401: "returnNull" }),
     retry: false,
     staleTime: 5 * 60 * 1000,
@@ -19,7 +19,7 @@ export function useAuth() {
 
   const logoutMutation = useMutation({
     mutationFn: () => apiRequest("POST", "/api/auth/logout"),
-    onSuccess: () => {
+    onSettled: () => {
       const keysToRemove = [
         "userProfile",
         "outbound-airtable-config",
@@ -27,8 +27,9 @@ export function useAuth() {
         "outbound-contacts",
       ];
       keysToRemove.forEach((k) => localStorage.removeItem(k));
-      queryClient.setQueryData(["/api/auth/me"], null);
+      queryClient.setQueryData(["/auth/me"], null);
       queryClient.clear();
+      window.location.href = "/login";
     },
   });
 
