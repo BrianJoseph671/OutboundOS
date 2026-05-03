@@ -501,6 +501,10 @@ export async function prepareIndexReviewSession(
     });
   }
   for (const item of autoAcceptedItems) {
+    const existingRule = await storage.getEmailTypeRuleBySignature(userId, item.signatureHash);
+    if (existingRule?.decision === "reject") {
+      continue;
+    }
     await storage.upsertEmailTypeRule(userId, item.signatureHash, {
       label: item.proposedLabel,
       decision: "accept",
