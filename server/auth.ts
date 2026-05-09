@@ -247,6 +247,9 @@ export async function setupAuth(app: Express) {
           if (!user) {
             return done(null, false, { message: "Invalid email or password" });
           }
+          if (isNotreDameEmail(user.email)) {
+            return done(null, false, { message: "Notre Dame accounts must sign in with Google." });
+          }
           if (!user.password) {
             return done(null, false, { message: "This account uses Google sign-in" });
           }
