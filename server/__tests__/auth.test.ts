@@ -11,10 +11,11 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import express from "express";
 import session from "express-session";
 import request from "supertest";
+import bcrypt from "bcrypt";
 import { db, pool } from "../db";
 import { users } from "@shared/schema";
 import { eq } from "drizzle-orm";
-import { authRouter, isNotreDameEmail, passport } from "../auth";
+import { authRouter, isNotreDameEmail, passport, setupAuth } from "../auth";
 import { requireAuth } from "../middleware/auth";
 
 // ── Test user cleanup ─────────────────────────────────────────────────────────
@@ -76,6 +77,13 @@ function createTestApp(
   return app;
 }
 
+async function createFullAuthApp(): Promise<express.Application> {
+  const app = express();
+  app.use(express.json());
+  await setupAuth(app);
+  return app;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // requireAuth middleware — unit tests
 // ─────────────────────────────────────────────────────────────────────────────
@@ -134,6 +142,33 @@ describe("isNotreDameEmail", () => {
     expect(isNotreDameEmail("nd.edu")).toBe(false);
     expect(isNotreDameEmail(null)).toBe(false);
     expect(isNotreDameEmail(undefined)).toBe(false);
+  });
+});
+
+describe("POST /api/auth/login — Notre Dame account policy", () => {
+  it("rejects local password login for Notre Dame accounts when submitted by username", async () => {
+    const username = `nd_legacy_${Date.now()}`;
+    const password = "correct horse battery staple";
+    const [user] = await db
+      .insert(users)
+      .values({
+        username,
+        password: await bcrypt.hash(password, 12),
+        email: `${username}@nd.edu`,
+      })
+      .returning();
+    testUserIds.push(user.id);
+
+    const app = await createFullAuthApp();
+    const agent = request.agent(app);
+
+    const res = await agent
+      .post("/api/auth/login")
+      .send({ email: username, password });
+
+    expect(res.status).toBe(401);
+    expect(res.body).toHaveProperty("message", "Notre Dame accounts must sign in with Google.");
+    await agent.get("/auth/me").expect(401);
   });
 });
 
