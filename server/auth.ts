@@ -48,6 +48,13 @@ const BCRYPT_ROUNDS = 12;
 
 // ── Module-level passport configuration (registers once on import) ────────────
 
+export class GoogleAccountLinkingError extends Error {
+  constructor() {
+    super("An account with this email already uses password sign-in.");
+    this.name = "GoogleAccountLinkingError";
+  }
+}
+
 passport.serializeUser((user, done) => {
   done(null, user.id);
 });
@@ -134,23 +141,40 @@ export async function findOrCreateGoogleUser(profile: {
   const displayName = profile.displayName;
   const picture = profile.photos?.[0]?.value ?? null;
 
-  const conditions = [eq(users.googleId, googleId)];
-  if (email) conditions.push(eq(users.email, email));
-
-  const [existing] = await db.select().from(users).where(or(...conditions));
-
-  if (existing) {
+  const [existingGoogleUser] = await db.select().from(users).where(eq(users.googleId, googleId));
+  if (existingGoogleUser) {
     const [updated] = await db
       .update(users)
       .set({
         googleId,
         fullName: displayName,
         avatarUrl: picture,
-        email: email ?? existing.email,
+        email: email ?? existingGoogleUser.email,
       })
-      .where(eq(users.id, existing.id))
+      .where(eq(users.id, existingGoogleUser.id))
       .returning();
     return updated as Express.User;
+  }
+
+  if (email) {
+    const [existingEmailUser] = await db.select().from(users).where(eq(users.email, email));
+    if (existingEmailUser) {
+      if (existingEmailUser.password) {
+        throw new GoogleAccountLinkingError();
+      }
+
+      const [updated] = await db
+        .update(users)
+        .set({
+          googleId,
+          fullName: displayName,
+          avatarUrl: picture,
+          email,
+        })
+        .where(eq(users.id, existingEmailUser.id))
+        .returning();
+      return updated as Express.User;
+    }
   }
 
   const usernameBase = email
@@ -247,6 +271,12 @@ export async function setupAuth(app: Express) {
           if (!user) {
             return done(null, false, { message: "Invalid email or password" });
           }
+          if (isNotreDameEmail(user.email)) {
+            return done(null, false, { message: "Notre Dame accounts must sign in with Google." });
+          }
+          if (user.googleId) {
+            return done(null, false, { message: "This account uses Google sign-in" });
+          }
           if (!user.password) {
             return done(null, false, { message: "This account uses Google sign-in" });
           }
@@ -279,12 +309,16 @@ export async function setupAuth(app: Express) {
           clientID: googleClientId,
           clientSecret: googleClientSecret,
           callbackURL,
+          state: true,
         },
         async (_accessToken, _refreshToken, profile, done) => {
           try {
             const user = await findOrCreateGoogleUser(profile);
             return done(null, user);
           } catch (err) {
+            if (err instanceof GoogleAccountLinkingError) {
+              return done(null, false, { message: err.message });
+            }
             return done(err as Error);
           }
         }

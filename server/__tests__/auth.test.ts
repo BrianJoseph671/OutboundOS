@@ -7,14 +7,22 @@
  * - GET /auth/me — authenticated returns user without password field
  * - POST /auth/logout — destroys session; subsequent /auth/me returns 401
  */
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, afterAll } from "vitest";
 import express from "express";
 import session from "express-session";
 import request from "supertest";
+import bcrypt from "bcrypt";
 import { db, pool } from "../db";
 import { users } from "@shared/schema";
 import { eq } from "drizzle-orm";
-import { authRouter, isNotreDameEmail, passport } from "../auth";
+import {
+  authRouter,
+  findOrCreateGoogleUser,
+  GoogleAccountLinkingError,
+  isNotreDameEmail,
+  passport,
+  setupAuth,
+} from "../auth";
 import { requireAuth } from "../middleware/auth";
 
 // ── Test user cleanup ─────────────────────────────────────────────────────────
@@ -76,6 +84,13 @@ function createTestApp(
   return app;
 }
 
+async function createFullAuthApp(): Promise<express.Application> {
+  const app = express();
+  app.use(express.json());
+  await setupAuth(app);
+  return app;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // requireAuth middleware — unit tests
 // ─────────────────────────────────────────────────────────────────────────────
@@ -134,6 +149,81 @@ describe("isNotreDameEmail", () => {
     expect(isNotreDameEmail("nd.edu")).toBe(false);
     expect(isNotreDameEmail(null)).toBe(false);
     expect(isNotreDameEmail(undefined)).toBe(false);
+  });
+});
+
+describe("Google account linking", () => {
+  it("does not attach Google credentials to an existing password account with the same email", async () => {
+    const suffix = Date.now();
+    const email = `google_link_victim_${suffix}@example.com`;
+    const [localUser] = await db
+      .insert(users)
+      .values({
+        username: `google_link_victim_${suffix}`,
+        email,
+        password: "existing_password_hash",
+      })
+      .returning();
+    testUserIds.push(localUser.id);
+
+    await expect(
+      findOrCreateGoogleUser({
+        id: `google-${suffix}`,
+        displayName: "Victim User",
+        emails: [{ value: email }],
+      }),
+    ).rejects.toBeInstanceOf(GoogleAccountLinkingError);
+
+    const [stored] = await db.select().from(users).where(eq(users.id, localUser.id));
+    expect(stored.googleId).toBeNull();
+    expect(stored.password).toBe("existing_password_hash");
+  });
+});
+
+describe("POST /api/auth/login policy guards", () => {
+  it("rejects password login for Google-linked accounts", async () => {
+    const suffix = Date.now();
+    const password = "correct horse battery staple";
+    const [googleLinkedUser] = await db
+      .insert(users)
+      .values({
+        username: `google_password_${suffix}`,
+        email: `google_password_${suffix}@example.com`,
+        password: await bcrypt.hash(password, 4),
+        googleId: `google-password-${suffix}`,
+      })
+      .returning();
+    testUserIds.push(googleLinkedUser.id);
+
+    const app = await createFullAuthApp();
+    const res = await request(app)
+      .post("/api/auth/login")
+      .send({ email: googleLinkedUser.email, password });
+
+    expect(res.status).toBe(401);
+    expect(res.body).toHaveProperty("message", "This account uses Google sign-in");
+  });
+
+  it("rejects username password login for stored Notre Dame accounts", async () => {
+    const suffix = Date.now();
+    const password = "correct horse battery staple";
+    const [notreDameUser] = await db
+      .insert(users)
+      .values({
+        username: `nd_password_${suffix}`,
+        email: `nd_password_${suffix}@nd.edu`,
+        password: await bcrypt.hash(password, 4),
+      })
+      .returning();
+    testUserIds.push(notreDameUser.id);
+
+    const app = await createFullAuthApp();
+    const res = await request(app)
+      .post("/api/auth/login")
+      .send({ email: notreDameUser.username, password });
+
+    expect(res.status).toBe(401);
+    expect(res.body).toHaveProperty("message", "Notre Dame accounts must sign in with Google.");
   });
 });
 
