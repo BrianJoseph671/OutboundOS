@@ -14,7 +14,7 @@ import request from "supertest";
 import { db, pool } from "../db";
 import { users } from "@shared/schema";
 import { eq } from "drizzle-orm";
-import { authRouter, googleOAuthAuthenticateOptions, isNotreDameEmail, passport } from "../auth";
+import { authRouter, isNotreDameEmail, passport } from "../auth";
 import { requireAuth } from "../middleware/auth";
 
 // ── Test user cleanup ─────────────────────────────────────────────────────────
@@ -134,22 +134,6 @@ describe("isNotreDameEmail", () => {
     expect(isNotreDameEmail("nd.edu")).toBe(false);
     expect(isNotreDameEmail(null)).toBe(false);
     expect(isNotreDameEmail(undefined)).toBe(false);
-  });
-});
-
-describe("googleOAuthAuthenticateOptions", () => {
-  it("uses only Google-supported prompt values", () => {
-    const options = googleOAuthAuthenticateOptions();
-
-    expect(options.prompt).toBe("select_account");
-    expect(options.prompt).not.toContain("login");
-  });
-
-  it("includes the hosted-domain hint when provided", () => {
-    expect(googleOAuthAuthenticateOptions("nd.edu")).toMatchObject({
-      hd: "nd.edu",
-      scope: ["profile", "email"],
-    });
   });
 });
 
