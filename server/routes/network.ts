@@ -16,17 +16,20 @@ networkRouter.post("/index", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "User email not found. Connect your Google account first." });
     }
 
-    const latest = await storage.getLatestNetworkIndexJob(userId);
-    if (latest && (latest.status === "running" || latest.status === "pending_review")) {
-      const pendingSession = latest.status === "pending_review"
-        ? await storage.getLatestPendingIndexReviewSession(userId)
-        : undefined;
+    const pendingSession = await storage.getLatestPendingIndexReviewSession(userId);
+    if (pendingSession) {
       return res.status(409).json({
-        error: latest.status === "pending_review"
-          ? "A review is pending for your latest index run"
-          : "An index is already running",
+        error: "A review is pending for your latest index run",
+        jobId: pendingSession.jobId,
+        sessionId: pendingSession.id,
+      });
+    }
+
+    const latest = await storage.getLatestNetworkIndexJob(userId);
+    if (latest && latest.status === "running") {
+      return res.status(409).json({
+        error: "An index is already running",
         jobId: latest.id,
-        sessionId: pendingSession?.id,
       });
     }
 
@@ -66,6 +69,15 @@ networkRouter.post("/sync", async (req: Request, res: Response) => {
       });
     }
 
+    const pendingSession = await storage.getLatestPendingIndexReviewSession(userId);
+    if (pendingSession) {
+      return res.status(409).json({
+        error: "Complete your pending index review before syncing",
+        jobId: pendingSession.jobId,
+        sessionId: pendingSession.id,
+      });
+    }
+
     res.json({ status: "started" });
 
     runIncrementalSync(userId, userEmail).catch((err) => {
@@ -86,24 +98,44 @@ networkRouter.get("/status", async (req: Request, res: Response) => {
     const jobId = typeof req.query.jobId === "string" ? req.query.jobId : undefined;
 
     let job;
+    let pendingSession;
     if (jobId) {
       job = await storage.getNetworkIndexJob(jobId, userId);
     } else {
-      job = await storage.getLatestNetworkIndexJob(userId);
+      pendingSession = await storage.getLatestPendingIndexReviewSession(userId);
+      if (pendingSession?.jobId) {
+        job = await storage.getNetworkIndexJob(pendingSession.jobId, userId);
+      }
+      if (!job) {
+        job = await storage.getLatestNetworkIndexJob(userId);
+      }
     }
 
     if (!job) {
+      if (pendingSession) {
+        return res.json({
+          jobId: pendingSession.jobId,
+          sessionId: pendingSession.id,
+          status: "pending_review",
+          threadsScanned: 0,
+          contactsFound: 0,
+          contactsUpdated: 0,
+          errors: [],
+          startedAt: null,
+          completedAt: null,
+        });
+      }
       return res.json({ status: "none", message: "No index has been run yet" });
     }
 
-    const pendingSession = job.status === "pending_review"
-      ? await storage.getLatestPendingIndexReviewSession(userId)
-      : undefined;
+    if (!pendingSession && job.status === "pending_review") {
+      pendingSession = await storage.getLatestPendingIndexReviewSession(userId);
+    }
 
     res.json({
       jobId: job.id,
       sessionId: pendingSession?.id,
-      status: job.status,
+      status: pendingSession ? "pending_review" : job.status,
       threadsScanned: job.threadsScanned,
       contactsFound: job.contactsFound,
       contactsUpdated: job.contactsUpdated,
