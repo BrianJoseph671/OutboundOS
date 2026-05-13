@@ -12,6 +12,7 @@ import { computeWarmth } from "./warmthClassifier";
 import type { Contact, WarmthTier } from "@shared/schema";
 import { detectActions } from "../agent/services/actionDetector";
 import { classifyEmailTypes, subjectSignatureHash, type EmailTypeCandidate } from "./emailTypeClassifier";
+import { assertReviewItemsDecided, shouldAutoAcceptSignature, shouldPersistContactForSignatures } from "./indexReviewRules";
 
 const PAGE_SIZE = 50;
 const MAX_PAGES = 40; // safety cap: 40 * 50 = 2000 threads max
@@ -368,8 +369,7 @@ function filterContactsByRejectedSignatures(
   const filtered = new Map<string, ScannedContact>();
   for (const [email, scanned] of Array.from(contactMap.entries())) {
     const signatures = signaturesByEmail.get(email);
-    const shouldReject = signatures ? Array.from(signatures).some((sig) => rejected.has(sig)) : false;
-    if (!shouldReject) filtered.set(email, scanned);
+    if (shouldPersistContactForSignatures(signatures, rejected)) filtered.set(email, scanned);
   }
   return filtered;
 }
@@ -500,7 +500,9 @@ export async function prepareIndexReviewSession(
       decision: null,
     });
   }
+  const previouslyRejected = await storage.getRejectedEmailTypeSignatures(userId);
   for (const item of autoAcceptedItems) {
+    if (!shouldAutoAcceptSignature(item.signatureHash, previouslyRejected)) continue;
     await storage.upsertEmailTypeRule(userId, item.signatureHash, {
       label: item.proposedLabel,
       decision: "accept",
@@ -534,12 +536,12 @@ export async function completeIndexReviewSession(
   if (!session) throw new Error("Review session not found");
   if (session.status !== "pending_review") throw new Error("Review session is not pending");
   const items = await storage.getIndexReviewItems(session.id);
+  assertReviewItemsDecided(items);
 
   for (const item of items) {
-    const decision = item.decision || "accept";
     await storage.upsertEmailTypeRule(userId, item.signatureHash, {
       label: item.proposedLabel,
-      decision,
+      decision: item.decision,
       examples: item.exampleSubjects || [],
       createdAt: new Date(),
       updatedAt: new Date(),
