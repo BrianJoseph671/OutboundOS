@@ -1,3 +1,5 @@
+export type ReviewDecision = "accept" | "reject";
+
 export function shouldPersistContactForSignatures(
   signatures: Iterable<string> | undefined,
   rejected: ReadonlySet<string>,
@@ -15,4 +17,13 @@ export function shouldAutoAcceptSignature(
   rejected: ReadonlySet<string>,
 ): boolean {
   return !rejected.has(signatureHash);
+}
+
+export function assertReviewItemsDecided<T extends { decision: unknown }>(
+  items: T[],
+): asserts items is Array<T & { decision: ReviewDecision }> {
+  const hasUndecidedItem = items.some((item) => item.decision !== "accept" && item.decision !== "reject");
+  if (hasUndecidedItem) {
+    throw new Error("All review items must be decided before completion");
+  }
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  assertReviewItemsDecided,
   shouldAutoAcceptSignature,
   shouldPersistContactForSignatures,
 } from "../services/indexReviewRules";
@@ -25,5 +26,12 @@ describe("index review rule filtering", () => {
   it("does not auto-accept a signature the user already rejected", () => {
     expect(shouldAutoAcceptSignature("newsletter", new Set(["newsletter"]))).toBe(false);
     expect(shouldAutoAcceptSignature("direct-thread", new Set(["newsletter"]))).toBe(true);
+  });
+
+  it("requires every visible review item to have an explicit decision", () => {
+    expect(() => assertReviewItemsDecided([{ decision: "accept" }, { decision: "reject" }])).not.toThrow();
+    expect(() => assertReviewItemsDecided([{ decision: "accept" }, { decision: null }])).toThrow(
+      "All review items must be decided before completion",
+    );
   });
 });

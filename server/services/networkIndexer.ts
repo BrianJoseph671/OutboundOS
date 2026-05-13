@@ -12,7 +12,7 @@ import { computeWarmth } from "./warmthClassifier";
 import type { Contact, WarmthTier } from "@shared/schema";
 import { detectActions } from "../agent/services/actionDetector";
 import { classifyEmailTypes, subjectSignatureHash, type EmailTypeCandidate } from "./emailTypeClassifier";
-import { shouldAutoAcceptSignature, shouldPersistContactForSignatures } from "./indexReviewRules";
+import { assertReviewItemsDecided, shouldAutoAcceptSignature, shouldPersistContactForSignatures } from "./indexReviewRules";
 
 const PAGE_SIZE = 50;
 const MAX_PAGES = 40; // safety cap: 40 * 50 = 2000 threads max
@@ -536,10 +536,7 @@ export async function completeIndexReviewSession(
   if (!session) throw new Error("Review session not found");
   if (session.status !== "pending_review") throw new Error("Review session is not pending");
   const items = await storage.getIndexReviewItems(session.id);
-  const undecided = items.filter((item) => item.decision !== "accept" && item.decision !== "reject");
-  if (undecided.length > 0) {
-    throw new Error("All review items must be decided before completion");
-  }
+  assertReviewItemsDecided(items);
 
   for (const item of items) {
     await storage.upsertEmailTypeRule(userId, item.signatureHash, {
