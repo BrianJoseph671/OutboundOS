@@ -45,6 +45,8 @@ declare global {
 }
 
 const BCRYPT_ROUNDS = 12;
+const NOTRE_DAME_GOOGLE_MESSAGE = "Notre Dame accounts must sign in with Google.";
+const GOOGLE_SIGN_IN_MESSAGE = "This account uses Google sign-in";
 
 // ── Module-level passport configuration (registers once on import) ────────────
 
@@ -95,6 +97,25 @@ function logoutHandler(req: Request, res: Response, next: NextFunction) {
 export function isNotreDameEmail(value: unknown): boolean {
   if (typeof value !== "string") return false;
   return value.trim().toLowerCase().endsWith("@nd.edu");
+}
+
+export function passwordLoginRejectionMessage(user: {
+  email: string | null;
+  googleId: string | null;
+  password: string | null;
+}): string | null {
+  if (isNotreDameEmail(user.email)) return NOTRE_DAME_GOOGLE_MESSAGE;
+  if (user.googleId || !user.password) return GOOGLE_SIGN_IN_MESSAGE;
+  return null;
+}
+
+export function googleOAuthAuthenticateOptions(hd?: string) {
+  return {
+    scope: ["profile", "email"],
+    // Google supports select_account for forcing account choice; "login" is not a valid value.
+    prompt: "select_account",
+    ...(hd ? { hd } : {}),
+  };
 }
 
 authRouter.get("/api/auth/me", meHandler);
@@ -237,7 +258,7 @@ export async function setupAuth(app: Express) {
       async (email, password, done) => {
         try {
           if (isNotreDameEmail(email)) {
-            return done(null, false, { message: "Notre Dame accounts must sign in with Google." });
+            return done(null, false, { message: NOTRE_DAME_GOOGLE_MESSAGE });
           }
           const [user] = await db
             .select()
@@ -247,8 +268,12 @@ export async function setupAuth(app: Express) {
           if (!user) {
             return done(null, false, { message: "Invalid email or password" });
           }
+          const rejectionMessage = passwordLoginRejectionMessage(user);
+          if (rejectionMessage) {
+            return done(null, false, { message: rejectionMessage });
+          }
           if (!user.password) {
-            return done(null, false, { message: "This account uses Google sign-in" });
+            return done(null, false, { message: GOOGLE_SIGN_IN_MESSAGE });
           }
           const valid = await verifyPassword(password, user.password);
           if (!valid) {
@@ -302,11 +327,7 @@ export async function setupAuth(app: Express) {
       }
       req.session.save((err) => {
         if (err) return next(err);
-        passport.authenticate("google", {
-          scope: ["profile", "email"],
-          prompt: "login select_account",
-          ...(hd ? { hd } : {}),
-        })(req, res, next);
+        passport.authenticate("google", googleOAuthAuthenticateOptions(hd))(req, res, next);
       });
     };
 
@@ -343,7 +364,7 @@ export async function setupAuth(app: Express) {
         return res.status(400).json({ message: "Email and password are required" });
       }
       if (isNotreDameEmail(email)) {
-        return res.status(400).json({ message: "Notre Dame accounts must sign in with Google." });
+        return res.status(400).json({ message: NOTRE_DAME_GOOGLE_MESSAGE });
       }
       if (password.length < 8) {
         return res.status(400).json({ message: "Password must be at least 8 characters" });
