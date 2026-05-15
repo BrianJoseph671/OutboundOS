@@ -10,9 +10,11 @@ import { users } from "@shared/schema";
 import { eq, or } from "drizzle-orm";
 import bcrypt from "bcrypt";
 import { randomBytes } from "crypto";
+import { buildGoogleAuthOptions } from "./services/googleAuthOptions";
 
 // Export passport so tests can import it directly
 export { passport };
+export { buildGoogleAuthOptions };
 
 /** Same-origin path only — prevents open redirects after OAuth. */
 export function safeOAuthReturnPath(next: unknown): string {
@@ -95,15 +97,6 @@ function logoutHandler(req: Request, res: Response, next: NextFunction) {
 export function isNotreDameEmail(value: unknown): boolean {
   if (typeof value !== "string") return false;
   return value.trim().toLowerCase().endsWith("@nd.edu");
-}
-
-export function buildGoogleAuthOptions(hd?: string) {
-  return {
-    scope: ["profile", "email"],
-    // Google OAuth supports none, consent, and select_account. "login" is rejected.
-    prompt: "select_account",
-    ...(hd ? { hd } : {}),
-  };
 }
 
 authRouter.get("/api/auth/me", meHandler);
