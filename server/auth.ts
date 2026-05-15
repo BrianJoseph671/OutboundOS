@@ -10,9 +10,11 @@ import { users } from "@shared/schema";
 import { eq, or } from "drizzle-orm";
 import bcrypt from "bcrypt";
 import { randomBytes } from "crypto";
+import { buildGoogleAuthOptions } from "./services/googleAuthOptions";
 
 // Export passport so tests can import it directly
 export { passport };
+export { buildGoogleAuthOptions };
 
 /** Same-origin path only — prevents open redirects after OAuth. */
 export function safeOAuthReturnPath(next: unknown): string {
@@ -302,11 +304,7 @@ export async function setupAuth(app: Express) {
       }
       req.session.save((err) => {
         if (err) return next(err);
-        passport.authenticate("google", {
-          scope: ["profile", "email"],
-          prompt: "login select_account",
-          ...(hd ? { hd } : {}),
-        })(req, res, next);
+        passport.authenticate("google", buildGoogleAuthOptions(hd))(req, res, next);
       });
     };
 
