@@ -97,6 +97,15 @@ export function isNotreDameEmail(value: unknown): boolean {
   return value.trim().toLowerCase().endsWith("@nd.edu");
 }
 
+export function buildGoogleAuthOptions(hd?: string) {
+  return {
+    scope: ["profile", "email"],
+    // Google OAuth supports none, consent, and select_account. "login" is rejected.
+    prompt: "select_account",
+    ...(hd ? { hd } : {}),
+  };
+}
+
 authRouter.get("/api/auth/me", meHandler);
 authRouter.get("/auth/me", meHandler);
 authRouter.post("/api/auth/logout", logoutHandler);
@@ -302,11 +311,7 @@ export async function setupAuth(app: Express) {
       }
       req.session.save((err) => {
         if (err) return next(err);
-        passport.authenticate("google", {
-          scope: ["profile", "email"],
-          prompt: "login select_account",
-          ...(hd ? { hd } : {}),
-        })(req, res, next);
+        passport.authenticate("google", buildGoogleAuthOptions(hd))(req, res, next);
       });
     };
 
