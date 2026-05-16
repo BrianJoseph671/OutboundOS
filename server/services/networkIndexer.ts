@@ -501,6 +501,10 @@ export async function prepareIndexReviewSession(
     });
   }
   for (const item of autoAcceptedItems) {
+    const existingRule = await storage.getEmailTypeRuleBySignature(userId, item.signatureHash);
+    if (existingRule?.decision === "reject") {
+      continue;
+    }
     await storage.upsertEmailTypeRule(userId, item.signatureHash, {
       label: item.proposedLabel,
       decision: "accept",
@@ -534,12 +538,15 @@ export async function completeIndexReviewSession(
   if (!session) throw new Error("Review session not found");
   if (session.status !== "pending_review") throw new Error("Review session is not pending");
   const items = await storage.getIndexReviewItems(session.id);
+  const undecidedCount = items.filter((item) => !item.decision).length;
+  if (undecidedCount > 0) {
+    throw new Error("All review items must be decided before completion");
+  }
 
   for (const item of items) {
-    const decision = item.decision || "accept";
     await storage.upsertEmailTypeRule(userId, item.signatureHash, {
       label: item.proposedLabel,
-      decision,
+      decision: item.decision!,
       examples: item.exampleSubjects || [],
       createdAt: new Date(),
       updatedAt: new Date(),
