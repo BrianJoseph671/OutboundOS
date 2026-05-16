@@ -48,6 +48,13 @@ const BCRYPT_ROUNDS = 12;
 
 // ── Module-level passport configuration (registers once on import) ────────────
 
+export class GoogleAccountLinkingError extends Error {
+  constructor() {
+    super("An account with this email already uses password sign-in.");
+    this.name = "GoogleAccountLinkingError";
+  }
+}
+
 passport.serializeUser((user, done) => {
   done(null, user.id);
 });
@@ -97,6 +104,25 @@ export function isNotreDameEmail(value: unknown): boolean {
   return value.trim().toLowerCase().endsWith("@nd.edu");
 }
 
+export function googleOAuthAuthenticateOptions(hd?: string) {
+  return {
+    scope: ["profile", "email"],
+    // Google rejects prompt=login; select_account forces account choice with a supported value.
+    prompt: "select_account",
+    ...(hd ? { hd } : {}),
+  };
+}
+
+export function passwordSignInFailureMessage(user: Pick<Express.User, "email" | "googleId" | "password">): string | null {
+  if (isNotreDameEmail(user.email)) {
+    return "Notre Dame accounts must sign in with Google.";
+  }
+  if (user.googleId || !user.password) {
+    return "This account uses Google sign-in";
+  }
+  return null;
+}
+
 authRouter.get("/api/auth/me", meHandler);
 authRouter.get("/auth/me", meHandler);
 authRouter.post("/api/auth/logout", logoutHandler);
@@ -134,23 +160,41 @@ export async function findOrCreateGoogleUser(profile: {
   const displayName = profile.displayName;
   const picture = profile.photos?.[0]?.value ?? null;
 
-  const conditions = [eq(users.googleId, googleId)];
-  if (email) conditions.push(eq(users.email, email));
+  const [existingGoogleUser] = await db.select().from(users).where(eq(users.googleId, googleId));
 
-  const [existing] = await db.select().from(users).where(or(...conditions));
-
-  if (existing) {
+  if (existingGoogleUser) {
     const [updated] = await db
       .update(users)
       .set({
         googleId,
         fullName: displayName,
         avatarUrl: picture,
-        email: email ?? existing.email,
+        email: email ?? existingGoogleUser.email,
       })
-      .where(eq(users.id, existing.id))
+      .where(eq(users.id, existingGoogleUser.id))
       .returning();
     return updated as Express.User;
+  }
+
+  if (email) {
+    const [existingEmailUser] = await db.select().from(users).where(eq(users.email, email));
+    if (existingEmailUser) {
+      if (existingEmailUser.password) {
+        throw new GoogleAccountLinkingError();
+      }
+
+      const [updated] = await db
+        .update(users)
+        .set({
+          googleId,
+          fullName: displayName,
+          avatarUrl: picture,
+          email,
+        })
+        .where(eq(users.id, existingEmailUser.id))
+        .returning();
+      return updated as Express.User;
+    }
   }
 
   const usernameBase = email
@@ -247,10 +291,11 @@ export async function setupAuth(app: Express) {
           if (!user) {
             return done(null, false, { message: "Invalid email or password" });
           }
-          if (!user.password) {
-            return done(null, false, { message: "This account uses Google sign-in" });
+          const policyFailure = passwordSignInFailureMessage(user as Express.User);
+          if (policyFailure) {
+            return done(null, false, { message: policyFailure });
           }
-          const valid = await verifyPassword(password, user.password);
+          const valid = await verifyPassword(password, user.password!);
           if (!valid) {
             return done(null, false, { message: "Invalid email or password" });
           }
@@ -285,6 +330,9 @@ export async function setupAuth(app: Express) {
             const user = await findOrCreateGoogleUser(profile);
             return done(null, user);
           } catch (err) {
+            if (err instanceof GoogleAccountLinkingError) {
+              return done(null, false, { message: err.message });
+            }
             return done(err as Error);
           }
         }
@@ -302,11 +350,7 @@ export async function setupAuth(app: Express) {
       }
       req.session.save((err) => {
         if (err) return next(err);
-        passport.authenticate("google", {
-          scope: ["profile", "email"],
-          prompt: "login select_account",
-          ...(hd ? { hd } : {}),
-        })(req, res, next);
+        passport.authenticate("google", googleOAuthAuthenticateOptions(hd))(req, res, next);
       });
     };
 
