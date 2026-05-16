@@ -86,9 +86,32 @@ describe("network index review rule preservation", () => {
   });
 
   it("does not auto-accept a type that the user previously rejected", async () => {
-    const rejectedSubject = "Type 20";
+    const subjects = [
+      "Alpha intro",
+      "Bravo intro",
+      "Charlie intro",
+      "Delta intro",
+      "Echo intro",
+      "Foxtrot intro",
+      "Golf intro",
+      "Hotel intro",
+      "India intro",
+      "Juliet intro",
+      "Kilo intro",
+      "Lima intro",
+      "Mike intro",
+      "November intro",
+      "Oscar intro",
+      "Papa intro",
+      "Quebec intro",
+      "Romeo intro",
+      "Sierra intro",
+      "Tango intro",
+      "Uniform intro",
+    ];
+    const rejectedSubject = subjects[20];
     const rejectedSignature = subjectSignatureHash(rejectedSubject).signatureHash;
-    const threads = Array.from({ length: 21 }, (_value, index) => makeThread(`Type ${index}`, index));
+    const threads = subjects.map((subject, index) => makeThread(subject, index));
 
     mockStorage.createNetworkIndexJob.mockResolvedValue({ id: "job-1" });
     mockStorage.updateNetworkIndexJob.mockResolvedValue({});
