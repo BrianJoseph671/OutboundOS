@@ -97,6 +97,13 @@ export function isNotreDameEmail(value: unknown): boolean {
   return value.trim().toLowerCase().endsWith("@nd.edu");
 }
 
+export function shouldBlockLocalPasswordAuthForNotreDame(
+  loginIdentifier: unknown,
+  accountEmail?: unknown,
+): boolean {
+  return isNotreDameEmail(loginIdentifier) || isNotreDameEmail(accountEmail);
+}
+
 authRouter.get("/api/auth/me", meHandler);
 authRouter.get("/auth/me", meHandler);
 authRouter.post("/api/auth/logout", logoutHandler);
@@ -236,7 +243,7 @@ export async function setupAuth(app: Express) {
       { usernameField: "email", passwordField: "password" },
       async (email, password, done) => {
         try {
-          if (isNotreDameEmail(email)) {
+          if (shouldBlockLocalPasswordAuthForNotreDame(email)) {
             return done(null, false, { message: "Notre Dame accounts must sign in with Google." });
           }
           const [user] = await db
@@ -246,6 +253,9 @@ export async function setupAuth(app: Express) {
 
           if (!user) {
             return done(null, false, { message: "Invalid email or password" });
+          }
+          if (shouldBlockLocalPasswordAuthForNotreDame(email, user.email)) {
+            return done(null, false, { message: "Notre Dame accounts must sign in with Google." });
           }
           if (!user.password) {
             return done(null, false, { message: "This account uses Google sign-in" });

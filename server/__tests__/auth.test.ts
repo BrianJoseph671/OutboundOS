@@ -14,7 +14,7 @@ import request from "supertest";
 import { db, pool } from "../db";
 import { users } from "@shared/schema";
 import { eq } from "drizzle-orm";
-import { authRouter, isNotreDameEmail, passport } from "../auth";
+import { authRouter, isNotreDameEmail, passport, shouldBlockLocalPasswordAuthForNotreDame } from "../auth";
 import { requireAuth } from "../middleware/auth";
 
 // ── Test user cleanup ─────────────────────────────────────────────────────────
@@ -134,6 +134,20 @@ describe("isNotreDameEmail", () => {
     expect(isNotreDameEmail("nd.edu")).toBe(false);
     expect(isNotreDameEmail(null)).toBe(false);
     expect(isNotreDameEmail(undefined)).toBe(false);
+  });
+});
+
+describe("shouldBlockLocalPasswordAuthForNotreDame", () => {
+  it("blocks local auth when the login identifier is an nd.edu email", () => {
+    expect(shouldBlockLocalPasswordAuthForNotreDame("user@nd.edu")).toBe(true);
+  });
+
+  it("blocks local auth when the matched account email is nd.edu even if logging in by username", () => {
+    expect(shouldBlockLocalPasswordAuthForNotreDame("irish_user", "user@nd.edu")).toBe(true);
+  });
+
+  it("allows local auth for non-Notre Dame accounts", () => {
+    expect(shouldBlockLocalPasswordAuthForNotreDame("user@example.com", "user@example.com")).toBe(false);
   });
 });
 
