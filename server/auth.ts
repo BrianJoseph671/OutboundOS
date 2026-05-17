@@ -10,9 +10,15 @@ import { users } from "@shared/schema";
 import { eq, or } from "drizzle-orm";
 import bcrypt from "bcrypt";
 import { randomBytes } from "crypto";
+import {
+  NOTRE_DAME_GOOGLE_AUTH_MESSAGE,
+  isNotreDameEmail,
+  shouldBlockLocalPasswordAuthForNotreDame,
+} from "./utils/notreDameAuth";
 
 // Export passport so tests can import it directly
 export { passport };
+export { isNotreDameEmail, shouldBlockLocalPasswordAuthForNotreDame } from "./utils/notreDameAuth";
 
 /** Same-origin path only — prevents open redirects after OAuth. */
 export function safeOAuthReturnPath(next: unknown): string {
@@ -90,18 +96,6 @@ function logoutHandler(req: Request, res: Response, next: NextFunction) {
       res.json({ success: true });
     });
   });
-}
-
-export function isNotreDameEmail(value: unknown): boolean {
-  if (typeof value !== "string") return false;
-  return value.trim().toLowerCase().endsWith("@nd.edu");
-}
-
-export function shouldBlockLocalPasswordAuthForNotreDame(
-  loginIdentifier: unknown,
-  accountEmail?: unknown,
-): boolean {
-  return isNotreDameEmail(loginIdentifier) || isNotreDameEmail(accountEmail);
 }
 
 authRouter.get("/api/auth/me", meHandler);
@@ -244,7 +238,7 @@ export async function setupAuth(app: Express) {
       async (email, password, done) => {
         try {
           if (shouldBlockLocalPasswordAuthForNotreDame(email)) {
-            return done(null, false, { message: "Notre Dame accounts must sign in with Google." });
+            return done(null, false, { message: NOTRE_DAME_GOOGLE_AUTH_MESSAGE });
           }
           const [user] = await db
             .select()
@@ -255,7 +249,7 @@ export async function setupAuth(app: Express) {
             return done(null, false, { message: "Invalid email or password" });
           }
           if (shouldBlockLocalPasswordAuthForNotreDame(email, user.email)) {
-            return done(null, false, { message: "Notre Dame accounts must sign in with Google." });
+            return done(null, false, { message: NOTRE_DAME_GOOGLE_AUTH_MESSAGE });
           }
           if (!user.password) {
             return done(null, false, { message: "This account uses Google sign-in" });
@@ -353,7 +347,7 @@ export async function setupAuth(app: Express) {
         return res.status(400).json({ message: "Email and password are required" });
       }
       if (isNotreDameEmail(email)) {
-        return res.status(400).json({ message: "Notre Dame accounts must sign in with Google." });
+        return res.status(400).json({ message: NOTRE_DAME_GOOGLE_AUTH_MESSAGE });
       }
       if (password.length < 8) {
         return res.status(400).json({ message: "Password must be at least 8 characters" });
