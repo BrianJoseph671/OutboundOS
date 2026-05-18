@@ -98,8 +98,9 @@ export async function fetchEmails(
       cursor = response.next_cursor;
       if (!cursor) break;
     }
-    hitPageLimit = pageCount >= MAX_PAGES_PER_SYNC && !!cursor;
-    hitThreadLimit = threads.length >= MAX_THREADS_PER_SYNC;
+    const hasMorePages = !!cursor;
+    hitPageLimit = pageCount >= MAX_PAGES_PER_SYNC && hasMorePages;
+    hitThreadLimit = threads.length >= MAX_THREADS_PER_SYNC && hasMorePages;
 
     const mapped: SuperhumanEmail[] = [];
     for (const thread of threads) {
@@ -129,7 +130,7 @@ export async function fetchEmails(
       if (!latest) return email.date;
       return Date.parse(email.date) > Date.parse(latest) ? email.date : latest;
     }, null);
-    if (newestEmailDate) {
+    if (newestEmailDate && !hasMorePages) {
       await saveSuperhumanCheckpoint(userId, newestEmailDate);
     }
     console.info("[Sync][Superhuman] fetchEmails completed", {

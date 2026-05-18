@@ -4,8 +4,14 @@ const listThreadsMock = vi.fn();
 const getCheckpointMock = vi.fn();
 const saveCheckpointMock = vi.fn();
 
-vi.mock("../services/mcpClient", () => ({
-  listThreads: listThreadsMock,
+vi.mock("../services/gmailClient", () => ({
+  listGmailThreads: listThreadsMock,
+}));
+
+vi.mock("../storage", () => ({
+  storage: {
+    getContacts: vi.fn(),
+  },
 }));
 
 vi.mock("../agent/services/superhumanSyncState", () => ({
@@ -15,8 +21,11 @@ vi.mock("../agent/services/superhumanSyncState", () => ({
 
 describe("superhuman adapter live mode", () => {
   beforeEach(() => {
+    vi.resetModules();
     vi.clearAllMocks();
     process.env.RELATIONSHIP_PROVIDER_MODE = "live";
+    process.env.SUPERHUMAN_MAX_PAGES_PER_SYNC = "20";
+    process.env.SUPERHUMAN_MAX_THREADS_PER_SYNC = "1000";
     getCheckpointMock.mockResolvedValue(null);
   });
 
@@ -140,5 +149,41 @@ describe("superhuman adapter live mode", () => {
     expect(emails[0].messageId).toBe("new-msg");
     expect(emails[0].subject).toBe("Newer");
     expect(saveCheckpointMock).toHaveBeenCalledWith("u-3", "2026-04-01T12:00:00Z");
+  });
+
+  it("does not advance the checkpoint when more pages remain after hitting the thread limit", async () => {
+    process.env.SUPERHUMAN_MAX_THREADS_PER_SYNC = "1";
+    listThreadsMock.mockResolvedValue({
+      threads: [{
+        thread_id: "thread-4",
+        subject: "S4",
+        snippet: "S4",
+        participants: ["dana@example.com", "brian@nd.edu"],
+        labels: [],
+        last_message_at: "2026-04-01T13:00:00Z",
+        message_count: 1,
+        messages: [{
+          message_id: "m-4",
+          thread_id: "thread-4",
+          from: "dana@example.com",
+          to: ["brian@nd.edu"],
+          subject: "S4",
+          snippet: "S4",
+          sent_at: "2026-04-01T13:00:00Z",
+        }],
+      }],
+      next_cursor: "cursor-with-more-results",
+    });
+
+    const { fetchEmails } = await import("../agent/adapters/superhuman");
+    const emails = await fetchEmails(
+      "2026-04-01T00:00:00.000Z",
+      "2026-04-02T00:00:00.000Z",
+      "brian@nd.edu",
+      "u-4",
+    );
+
+    expect(emails).toHaveLength(1);
+    expect(saveCheckpointMock).not.toHaveBeenCalled();
   });
 });
