@@ -1,5 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { apiRequest, queryClient, getQueryFn } from "@/lib/queryClient";
+import { apiRequest, getQueryFn } from "@/lib/queryClient";
+import { finishLogoutRedirect } from "@/lib/authSession";
 
 export interface AuthUser {
   id: string;
@@ -19,18 +20,7 @@ export function useAuth() {
 
   const logoutMutation = useMutation({
     mutationFn: () => apiRequest("POST", "/api/auth/logout"),
-    onSettled: () => {
-      const keysToRemove = [
-        "userProfile",
-        "outbound-airtable-config",
-        "outbound-user-profile",
-        "outbound-contacts",
-      ];
-      keysToRemove.forEach((k) => localStorage.removeItem(k));
-      queryClient.setQueryData(["/auth/me"], null);
-      queryClient.clear();
-      window.location.href = "/login";
-    },
+    onSettled: finishLogoutRedirect,
   });
 
   return {

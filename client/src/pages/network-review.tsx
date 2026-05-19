@@ -76,7 +76,7 @@ export default function NetworkReviewPage() {
       <div className="space-y-2">
         <h1 className="text-2xl font-semibold">Review Email Types</h1>
         <p className="text-sm text-muted-foreground">
-          Reviewing top 20 types — your Gmail labels and meeting-linked types are prioritized.
+          Reviewing your Gmail labels and top email types; meeting-linked types are prioritized.
         </p>
         <p className="text-sm text-muted-foreground">
           Swipe right/accept for real networking types. Swipe left/reject for types to auto-ignore in future indexing.

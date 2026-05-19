@@ -218,13 +218,14 @@ export async function getGmailThread(
     for (const recipient of msg.to) participantsSet.add(recipient);
     for (const carbonCopy of msg.cc || []) participantsSet.add(carbonCopy);
   }
+  const threadLabels = Array.from(new Set(mappedMessages.flatMap((msg) => msg.labels || [])));
 
   return {
     thread_id: raw.id,
     subject: latest?.subject || "",
     snippet: latest?.snippet || raw.snippet || "",
     participants: Array.from(participantsSet),
-    labels: latest?.labels || [],
+    labels: threadLabels,
     last_message_at: latest?.sent_at || new Date(0).toISOString(),
     message_count: mappedMessages.length,
     messages: mappedMessages,

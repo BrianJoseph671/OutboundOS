@@ -298,4 +298,21 @@ describe("useContacts write-through localStorage cache", () => {
     expect(cached).toEqual(contacts);
     expect(cached[0].name).toBe("Charlie");
   });
+
+  it("clears auth-related localStorage keys during logout cleanup", async () => {
+    const { AUTH_LOCAL_STORAGE_KEYS, clearAuthClientState } = await import("../lib/authSession");
+
+    AUTH_LOCAL_STORAGE_KEYS.forEach((key) => {
+      localStorage.setItem(key, `cached-${key}`);
+    });
+    localStorage.setItem("unrelated", "keep-me");
+
+    clearAuthClientState();
+
+    AUTH_LOCAL_STORAGE_KEYS.forEach((key) => {
+      expect(mockLocalStorage.removeItem).toHaveBeenCalledWith(key);
+      expect(localStorage.getItem(key)).toBeNull();
+    });
+    expect(localStorage.getItem("unrelated")).toBe("keep-me");
+  });
 });

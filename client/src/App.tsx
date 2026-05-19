@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Switch, Route } from "wouter";
 import Login from "@/pages/login";
 import { queryClient, getQueryFn, apiRequest } from "./lib/queryClient";
+import { finishLogoutRedirect } from "@/lib/authSession";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -108,7 +109,7 @@ function AppShell({ user }: { user: AuthUser }) {
     } catch {
       // Proceed with redirect even if the server call fails
     }
-    window.location.href = "/login";
+    finishLogoutRedirect();
   };
 
   return (

@@ -12,10 +12,13 @@ import { computeWarmth } from "./warmthClassifier";
 import type { Contact, WarmthTier } from "@shared/schema";
 import { detectActions } from "../agent/services/actionDetector";
 import { classifyEmailTypes, subjectSignatureHash, type EmailTypeCandidate } from "./emailTypeClassifier";
+import {
+  selectIndexReviewCandidates,
+  shouldPersistAutoAcceptedCandidate,
+} from "./indexReviewSelection";
 
 const PAGE_SIZE = 50;
 const MAX_PAGES = 40; // safety cap: 40 * 50 = 2000 threads max
-const MAX_REVIEW_ITEMS = 20;
 
 // ─── Noise Filtering ─────────────────────────────────────────────────────────
 
@@ -454,8 +457,14 @@ export async function prepareIndexReviewSession(
     }
     return b.messageCount - a.messageCount;
   });
-  const reviewItems = ranked.slice(0, MAX_REVIEW_ITEMS);
-  const autoAcceptedItems = ranked.slice(MAX_REVIEW_ITEMS);
+  const {
+    reviewItems,
+    autoAcceptedItems,
+  } = selectIndexReviewCandidates(ranked);
+  const rejectedSignatures = await storage.getRejectedEmailTypeSignatures(userId);
+  const persistedAutoAcceptedItems = autoAcceptedItems.filter((item) =>
+    shouldPersistAutoAcceptedCandidate(item, rejectedSignatures)
+  );
   const calendarPrioritizedCount = reviewItems.filter((i) => i.hasAnyMeetingLinkedContacts).length;
   const session = await storage.createIndexReviewSession({
     userId,
@@ -474,7 +483,7 @@ export async function prepareIndexReviewSession(
       ),
       totalClassifiedCount: ranked.length,
       reviewVisibleCount: reviewItems.length,
-      autoAcceptedCount: autoAcceptedItems.length,
+      autoAcceptedCount: persistedAutoAcceptedItems.length,
       calendarPrioritizedCount,
       signatureMeetingSignals: Object.fromEntries(
         ranked.map((r) => [
@@ -500,7 +509,7 @@ export async function prepareIndexReviewSession(
       decision: null,
     });
   }
-  for (const item of autoAcceptedItems) {
+  for (const item of persistedAutoAcceptedItems) {
     await storage.upsertEmailTypeRule(userId, item.signatureHash, {
       label: item.proposedLabel,
       decision: "accept",
@@ -520,7 +529,7 @@ export async function prepareIndexReviewSession(
     sessionId: session.id,
     jobId: job.id,
     typeCount: reviewItems.length,
-    autoAcceptedCount: autoAcceptedItems.length,
+    autoAcceptedCount: persistedAutoAcceptedItems.length,
     totalClassifiedCount: ranked.length,
     calendarPrioritizedCount,
   };
