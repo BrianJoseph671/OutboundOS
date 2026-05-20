@@ -134,12 +134,15 @@ export async function findOrCreateGoogleUser(profile: {
   const displayName = profile.displayName;
   const picture = profile.photos?.[0]?.value ?? null;
 
-  const conditions = [eq(users.googleId, googleId)];
-  if (email) conditions.push(eq(users.email, email));
-
-  const [existing] = await db.select().from(users).where(or(...conditions));
+  const [existing] = await db.select().from(users).where(eq(users.googleId, googleId));
 
   if (existing) {
+    if (email && email !== existing.email) {
+      const [emailOwner] = await db.select().from(users).where(eq(users.email, email));
+      if (emailOwner && emailOwner.id !== existing.id) {
+        throw new Error("Google account email is already registered to another account.");
+      }
+    }
     const [updated] = await db
       .update(users)
       .set({
@@ -151,6 +154,13 @@ export async function findOrCreateGoogleUser(profile: {
       .where(eq(users.id, existing.id))
       .returning();
     return updated as Express.User;
+  }
+
+  if (email) {
+    const [emailOwner] = await db.select().from(users).where(eq(users.email, email));
+    if (emailOwner) {
+      throw new Error("Email already registered. Sign in with your password before linking Google.");
+    }
   }
 
   const usernameBase = email
