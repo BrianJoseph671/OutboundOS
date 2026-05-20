@@ -21,7 +21,13 @@ export interface OAuthTokens {
   scope?: string;
 }
 
-const stateStore = new Map<string, { provider: string; createdAt: number }>();
+export interface OAuthState {
+  provider: string;
+  userId: string;
+  createdAt: number;
+}
+
+const stateStore = new Map<string, OAuthState>();
 
 setInterval(() => {
   const now = Date.now();
@@ -86,7 +92,7 @@ export function getProviderConfig(provider: string): OAuthProviderConfig {
   throw new Error(`Unknown OAuth provider: ${provider}`);
 }
 
-export function generateAuthorizationUrl(provider: string): string {
+export function generateAuthorizationUrl(provider: string, userId: string): string {
   const config = getProviderConfig(provider);
   if (provider === "superhuman") {
     throw new Error(
@@ -97,7 +103,7 @@ export function generateAuthorizationUrl(provider: string): string {
     throw new Error(`${provider} OAuth clientId is missing`);
   }
   const state = crypto.randomBytes(32).toString("hex");
-  stateStore.set(state, { provider, createdAt: Date.now() });
+  stateStore.set(state, { provider, userId, createdAt: Date.now() });
 
   const params = new URLSearchParams({
     client_id: config.clientId,
@@ -112,11 +118,11 @@ export function generateAuthorizationUrl(provider: string): string {
   return `${config.authorizationUrl}?${params.toString()}`;
 }
 
-export function validateState(state: string): string | null {
+export function validateState(state: string): OAuthState | null {
   const entry = stateStore.get(state);
   if (!entry) return null;
   stateStore.delete(state);
-  return entry.provider;
+  return entry;
 }
 
 export async function exchangeCodeForTokens(provider: string, code: string): Promise<OAuthTokens> {
