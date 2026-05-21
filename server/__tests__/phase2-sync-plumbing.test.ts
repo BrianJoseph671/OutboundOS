@@ -234,7 +234,7 @@ describe("Criterion 2: Subsequent sync uses incremental window", () => {
 describe("Criterion 3: Non-empty adapter outputs produce interactions and actions", () => {
   it("inbound email produces interaction and follow_up action", async () => {
     const user = await createUser("c3_email");
-    const contact = await createContact(user.id, { email: "alice@test.com" });
+    const contact = await createContact(user.id, { email: "alice@test.com", tier: "warm" });
     const ts = Date.now();
 
     const deps = mockDeps({
@@ -577,7 +577,13 @@ describe("Criterion 6: Idempotency on repeated sync", () => {
 
   it("second sync does not create duplicate actions", async () => {
     const user = await createUser("c6_idem_act");
-    const contact = await createContact(user.id, { email: "idemact@test.com" });
+    const contact = await createContact(user.id, {
+      email: "idemact@test.com",
+      tier: "warm",
+    });
+    await storage.updateContact(contact.id, user.id, {
+      lastInteractionAt: new Date(),
+    });
     const ts = Date.now();
 
     const deps = mockDeps({
