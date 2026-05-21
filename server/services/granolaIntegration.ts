@@ -2,7 +2,7 @@ import { getValidAccessToken } from "./oauth";
 import { storage } from "../storage";
 import type { InsertMeeting } from "@shared/schema";
 
-const GRANOLA_MCP_URL = "https://mcp.granola.ai/mcp";
+const GRANOLA_MCP_URL = process.env.GRANOLA_MCP_URL || "https://mcp.granola.ai/mcp";
 
 interface GranolaMeeting {
   id: string;

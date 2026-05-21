@@ -8,6 +8,7 @@ import type { GranolaMeeting } from "@shared/types/mcp";
 import type { RawInteraction } from "../services/interactionWriter";
 import { matchContact } from "../services/contactMatcher";
 import { getRelationshipProviderMode } from "../providerMode";
+import { syncGranolaMeetings } from "../../services/granolaIntegration";
 import { storage } from "../../storage";
 
 type GranolaTimeRange = "this_week" | "last_week" | "last_30_days";
@@ -30,15 +31,42 @@ export function computeTimeRange(startDate: Date): GranolaTimeRange {
  * fetchMeetings — pull meetings from Granola MCP for a time range.
  * TODO: Replace with real MCP call to `list_meetings` + `get_meetings`.
  */
+function daysBackForRange(timeRange: GranolaTimeRange): number {
+  if (timeRange === "this_week") return 7;
+  if (timeRange === "last_week") return 14;
+  return 30;
+}
+
+function meetingRowsToGranolaMeetings(
+  rows: Awaited<ReturnType<typeof storage.getMeetings>>,
+): GranolaMeeting[] {
+  return rows
+    .filter((m) => m.source === "granola")
+    .map((m) => ({
+      id: m.externalId || m.id,
+      title: m.title || "Meeting",
+      date: (m.startTime || m.createdAt).toISOString().slice(0, 10),
+      knownParticipants: (m.attendees || [])
+        .map((a) => a.email)
+        .filter((e): e is string => Boolean(e)),
+      summary: m.summary || m.notes || "",
+    }));
+}
+
 export async function fetchMeetings(
   timeRange: GranolaTimeRange,
   userId: string,
 ): Promise<GranolaMeeting[]> {
   const providerMode = getRelationshipProviderMode();
   if (providerMode === "live") {
-    throw new Error(
-      "RELATIONSHIP_PROVIDER_MODE=live but Granola MCP adapter is not wired yet"
-    );
+    try {
+      await syncGranolaMeetings(userId, daysBackForRange(timeRange));
+    } catch (err) {
+      console.warn("[Granola] Live sync failed, using cached meetings:", err);
+    }
+    const rows = await storage.getMeetings(userId);
+    const mapped = meetingRowsToGranolaMeetings(rows);
+    if (mapped.length > 0) return mapped;
   }
 
   const contacts = await storage.getContacts(userId);
