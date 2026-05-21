@@ -23,7 +23,6 @@ import { storage } from "../../storage";
 import type { Interaction, InsertAction } from "@shared/schema";
 
 const FORTY_EIGHT_HOURS_MS = 48 * 60 * 60 * 1000;
-const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 const FOURTEEN_DAYS_MS = 14 * 24 * 60 * 60 * 1000;
 
 /**
@@ -69,22 +68,46 @@ export async function detectActions(
       await autoCompleteFollowUp(userId, interaction.contactId);
     }
 
-    // ── follow_up: inbound with no outbound in 7 days ────────────────────────
-    if (interaction.direction === "inbound") {
-      const shouldCreate = await shouldCreateFollowUp(userId, interaction.contactId, interaction.occurredAt);
-      if (shouldCreate) {
-        if (!(await isDuplicate(interaction.contactId, "follow_up"))) {
-          markProposed(interaction.contactId, "follow_up");
-          actionsToCreate.push({
-            userId,
-            contactId: interaction.contactId,
-            actionType: "follow_up",
-            triggerInteractionId: interaction.id,
-            priority: 1,
-            status: "pending",
-            reason: `Inbound message received — no reply sent within 7 days`,
-            snoozedUntil: null,
-          });
+    // ── follow_up: inbound or meeting with no outbound after (VIP/warm only) ─
+    const isFollowUpTrigger =
+      interaction.direction === "inbound" || interaction.channel === "meeting";
+    if (isFollowUpTrigger) {
+      const contact = await storage.getContact(interaction.contactId, userId);
+      const tier = contact?.tier;
+      if (tier === "vip" || tier === "warm") {
+        const shouldCreate = await shouldCreateFollowUp(
+          userId,
+          interaction.contactId,
+          interaction.occurredAt,
+        );
+        if (shouldCreate) {
+          if (!(await isDuplicate(interaction.contactId, "follow_up"))) {
+            markProposed(interaction.contactId, "follow_up");
+            const daysSince = Math.max(
+              1,
+              Math.floor(
+                (Date.now() - interaction.occurredAt.getTime()) / (1000 * 60 * 60 * 24),
+              ),
+            );
+            const dateStr = interaction.occurredAt.toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+            });
+            const reason =
+              interaction.channel === "meeting"
+                ? `Meeting on ${dateStr} — no follow-up sent`
+                : `Received email ${dateStr} — no reply sent`;
+            actionsToCreate.push({
+              userId,
+              contactId: interaction.contactId,
+              actionType: "follow_up",
+              triggerInteractionId: interaction.id,
+              priority: daysSince,
+              status: "pending",
+              reason,
+              snoozedUntil: null,
+            });
+          }
         }
       }
     }
@@ -149,16 +172,20 @@ export async function detectActions(
       if (isStale) {
         if (!(await isDuplicate(contact.id, "reconnect"))) {
           markProposed(contact.id, "reconnect");
-          const reason =
-            contact.lastInteractionAt
-              ? `No interaction with ${contact.name} for over 14 days`
-              : `No interaction on record with ${contact.name}`;
+          const daysSince = contact.lastInteractionAt
+            ? Math.floor(
+                (now.getTime() - contact.lastInteractionAt.getTime()) / (1000 * 60 * 60 * 24),
+              )
+            : 999;
+          const reason = contact.lastInteractionAt
+            ? `Last contact ${daysSince} days ago — relationship cooling`
+            : `No interaction on record with ${contact.name}`;
           actionsToCreate.push({
             userId,
             contactId: contact.id,
             actionType: "reconnect",
             triggerInteractionId: null,
-            priority: 1,
+            priority: Math.max(1, daysSince - 14),
             status: "pending",
             reason,
             snoozedUntil: null,
@@ -189,8 +216,8 @@ async function pendingActionExists(
 }
 
 /**
- * Check if a follow_up action should be created for an inbound interaction.
- * Returns true if there's no outbound interaction for the same contact within 7 days.
+ * Check if a follow_up action should be created for an inbound/meeting interaction.
+ * Returns true if there is no outbound interaction after the trigger occurredAt.
  */
 async function shouldCreateFollowUp(
   userId: string,
@@ -198,24 +225,19 @@ async function shouldCreateFollowUp(
   occurredAt: Date
 ): Promise<boolean> {
   const allInteractions = await storage.getInteractions(userId, contactId);
-  const windowStart = occurredAt.getTime();
-  const windowEnd = windowStart + SEVEN_DAYS_MS;
-
-  const hasOutbound = allInteractions.some(
+  const hasOutboundAfter = allInteractions.some(
     (i) =>
       i.direction === "outbound" &&
-      i.occurredAt.getTime() >= windowStart &&
-      i.occurredAt.getTime() <= windowEnd
+      i.occurredAt.getTime() > occurredAt.getTime(),
   );
-
-  return !hasOutbound;
+  return !hasOutboundAfter;
 }
 
 /**
  * Auto-complete any pending follow_up actions for a contact when an outbound
  * interaction is detected. Sets status to 'completed' with completedAt timestamp.
  */
-async function autoCompleteFollowUp(userId: string, contactId: string): Promise<void> {
+export async function autoCompleteFollowUp(userId: string, contactId: string): Promise<void> {
   const pendingActions = await storage.getActions(userId, { status: "pending" });
   const autoCompletable = pendingActions.filter(
     (a) => a.contactId === contactId && (a.actionType === "follow_up" || a.actionType === "new_reply")

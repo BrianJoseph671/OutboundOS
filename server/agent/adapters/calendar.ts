@@ -8,12 +8,30 @@ import type { CalendarEvent } from "@shared/types/mcp";
 import type { RawInteraction } from "../services/interactionWriter";
 import { matchContact } from "../services/contactMatcher";
 import { getRelationshipProviderMode } from "../providerMode";
+import { syncGoogleCalendarEvents } from "../../services/googleIntegration";
 import { storage } from "../../storage";
 
 /**
  * fetchEvents — pull events from Google Calendar MCP for a time window.
  * TODO: Replace with real MCP call to `gcal_list_events`.
  */
+function meetingRowsToCalendarEvents(
+  rows: Awaited<ReturnType<typeof storage.getMeetings>>,
+): CalendarEvent[] {
+  return rows
+    .filter((m) => m.source === "google_calendar")
+    .map((m) => ({
+      eventId: m.externalId || m.id,
+      title: m.title || "Calendar event",
+      start: (m.startTime || m.createdAt).toISOString(),
+      end: (m.endTime || m.startTime || m.createdAt).toISOString(),
+      attendees: (m.attendees || [])
+        .map((a) => a.email)
+        .filter((e): e is string => Boolean(e)),
+      description: m.notes || m.summary || null,
+    }));
+}
+
 export async function fetchEvents(
   timeMin: string,
   timeMax: string,
@@ -22,9 +40,24 @@ export async function fetchEvents(
 ): Promise<CalendarEvent[]> {
   const providerMode = getRelationshipProviderMode();
   if (providerMode === "live") {
-    throw new Error(
-      "RELATIONSHIP_PROVIDER_MODE=live but Calendar MCP adapter is not wired yet"
-    );
+    try {
+      const start = new Date(timeMin);
+      const end = new Date(timeMax);
+      const daysBack = Math.max(
+        1,
+        Math.ceil((Date.now() - start.getTime()) / (24 * 60 * 60 * 1000)),
+      );
+      const daysForward = Math.max(
+        0,
+        Math.ceil((end.getTime() - Date.now()) / (24 * 60 * 60 * 1000)),
+      );
+      await syncGoogleCalendarEvents(userId, daysBack, daysForward);
+    } catch (err) {
+      console.warn("[Calendar] Live sync failed, using cached events:", err);
+    }
+    const rows = await storage.getMeetings(userId);
+    const mapped = meetingRowsToCalendarEvents(rows);
+    if (mapped.length > 0) return mapped;
   }
 
   const contacts = await storage.getContacts(userId);

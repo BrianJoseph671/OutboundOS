@@ -24,6 +24,7 @@ const NOISE_EMAIL_PATTERNS = [
   /^no-reply@/i,
   /^notifications?@/i,
   /^mailer-daemon@/i,
+  /^reminder@superhuman\.com$/i,
   /^.*@calendar\.google\.com$/i,
   /^.*@resource\.calendar\.google\.com$/i,
   /^mailer-daemon@googlemail\.com$/i,
@@ -36,9 +37,34 @@ const NOISE_EMAIL_PATTERNS = [
   /^donotreply@/i,
 ];
 
+const MASS_OUTBOUND_RECIPIENT_THRESHOLD = 10;
+
 function isNoiseEmail(email: string): boolean {
   const lower = email.toLowerCase().trim();
+  if (lower.includes("undisclosed-recipients")) return true;
   return NOISE_EMAIL_PATTERNS.some((pattern) => pattern.test(lower));
+}
+
+/** Track subject → unique recipient emails to detect mass outbound blasts */
+const subjectRecipientTracker = new Map<string, Set<string>>();
+
+function isMassOutboundSubject(subject: string): boolean {
+  const key = subject.trim().toLowerCase();
+  if (!key) return false;
+  const recipients = subjectRecipientTracker.get(key);
+  return (recipients?.size ?? 0) >= MASS_OUTBOUND_RECIPIENT_THRESHOLD;
+}
+
+function recordSubjectRecipients(subject: string, recipientEmails: string[]): void {
+  const key = subject.trim().toLowerCase();
+  if (!key) return;
+  const set = subjectRecipientTracker.get(key) || new Set<string>();
+  for (const email of recipientEmails) set.add(email);
+  subjectRecipientTracker.set(key, set);
+}
+
+function clearSubjectRecipientTracker(): void {
+  subjectRecipientTracker.clear();
 }
 
 function extractEmailAddress(raw: string): string {
@@ -87,6 +113,7 @@ async function scanThreads(
   const contactMap = new Map<string, ScannedContact>();
   const signaturesByEmail = new Map<string, Set<string>>();
   const typeSignals = new Map<string, { signatureKey: string; count: number; examples: Set<string>; labelName?: string }>();
+  clearSubjectRecipientTracker();
   let threadsScanned = 0;
   let cursor: string | undefined;
 
@@ -173,6 +200,15 @@ function processThread(
 
   const isBidirectional = hasUserSent && hasUserReceived;
   const subject = thread.subject || "";
+  const counterparties = participants.filter((p) => p !== userNorm && !isNoiseEmail(p));
+
+  if (hasUserSent && subject) {
+    recordSubjectRecipients(subject, counterparties);
+  }
+  if (isMassOutboundSubject(subject)) {
+    return;
+  }
+
   const signature = subjectSignatureHash(subject);
   const existingType = typeSignals.get(signature.signatureHash);
   if (existingType) {
@@ -208,9 +244,6 @@ function processThread(
       }
     }
   }
-
-  // Extract counterparty emails (non-user participants)
-  const counterparties = participants.filter((p) => p !== userNorm && !isNoiseEmail(p));
 
   for (const email of counterparties) {
     const setForEmail = signaturesByEmail.get(email) || new Set<string>();
@@ -579,8 +612,7 @@ export async function completeIndexReviewSession(
   );
 
   try {
-    const recentInteractions = await storage.getInteractions(userId);
-    const actionsToCreate = await detectActions(userId, recentInteractions);
+    const actionsToCreate = await detectActions(userId, []);
     for (const action of actionsToCreate) {
       try { await storage.createAction(action); } catch { /* dedup */ }
     }
@@ -729,10 +761,9 @@ export async function runIncrementalSync(
     progress.contactsFound = contactsFound;
     progress.contactsUpdated = contactsUpdated;
 
-    // Run action detection after sync
+    // Reconnect scan only — network sync does not write interactions; agent sync handles follow_up/new_reply
     try {
-      const recentInteractions = await storage.getInteractions(userId);
-      const actionsToCreate = await detectActions(userId, recentInteractions);
+      const actionsToCreate = await detectActions(userId, []);
       for (const action of actionsToCreate) {
         try { await storage.createAction(action); } catch { /* dedup */ }
       }

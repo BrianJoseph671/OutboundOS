@@ -39,6 +39,12 @@ export interface SyncResponse {
   newInteractions: number;
   newActions: number;
   errors: string[];
+  /** Present when orchestrated sync runs network indexer */
+  networkJobId?: string | null;
+  threadsScanned?: number;
+  contactsUpdated?: number;
+  dueStepsProcessed?: number;
+  sequencesAutoCompleted?: number;
 }
 
 /**

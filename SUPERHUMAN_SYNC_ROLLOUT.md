@@ -1,5 +1,7 @@
 # Superhuman Sync Rollout Checklist
 
+See also [docs/PRD_v3_gap_analysis.md](docs/PRD_v3_gap_analysis.md) for architecture notes (unified sync, Gmail API vs MCP, review gate).
+
 ## Configuration
 - Set `RELATIONSHIP_PROVIDER_MODE=live` in the target environment.
 - Set `SUPERHUMAN_MCP_URL` (or rely on default hosted endpoint).

@@ -226,18 +226,16 @@ export const syncRouter = Router();
 
 /**
  * POST /api/sync
- * Trigger a sync of recent interactions via the LangGraph agent.
- * The agent uses MCP tool adapters (TODO placeholders) to pull data from
- * Superhuman, Granola, and Google Calendar.
+ * Orchestrated sync: network incremental index → agent adapters → sequence processing.
  *
- * Returns 200 with { newInteractions: number, newActions: number, errors: string[] }
- * Partial failure: if some MCP sources fail, successful results are still returned.
+ * Returns 200 with SyncResponse (includes network + sequence counts when available).
+ * Partial failure: if some steps fail, successful results are still returned in errors[].
  */
 syncRouter.post("/", async (req: Request, res: Response) => {
   try {
     const userId = req.user!.id;
-    const { runSync } = await import("../agent/index");
-    const result = await runSync(userId);
+    const { runOrchestratedSync } = await import("../services/orchestratedSync");
+    const result = await runOrchestratedSync(userId);
     res.json(result);
   } catch (error) {
     console.error("[POST /sync] Error:", error);

@@ -133,7 +133,7 @@ describe("detectActions — follow_up detection", () => {
   });
 
   it("creates follow_up action for inbound interaction with no outbound reply", async () => {
-    const contact = await createTestContact(userId, { tier: "cool" });
+    const contact = await createTestContact(userId, { tier: "warm" });
     const interaction = await createTestInteraction(userId, contact.id, {
       direction: "inbound",
       occurredAt: new Date("2025-03-01T10:00:00Z"),
@@ -454,7 +454,7 @@ describe("detectActions — in-batch duplicate prevention", () => {
 
   it("3 inbound interactions from the same contact → exactly 1 follow_up action", async () => {
     // Fresh contact with no existing pending actions in DB
-    const contact = await createTestContact(userId, { tier: "cool" });
+    const contact = await createTestContact(userId, { tier: "warm" });
 
     // Create 3 inbound interactions for the same contact
     const inbound1 = await createTestInteraction(userId, contact.id, {
@@ -484,9 +484,9 @@ describe("detectActions — in-batch duplicate prevention", () => {
   });
 
   it("3 inbound interactions from different contacts → 3 follow_up actions", async () => {
-    const contact1 = await createTestContact(userId, { tier: "cool" });
-    const contact2 = await createTestContact(userId, { tier: "cool" });
-    const contact3 = await createTestContact(userId, { tier: "cool" });
+    const contact1 = await createTestContact(userId, { tier: "warm" });
+    const contact2 = await createTestContact(userId, { tier: "warm" });
+    const contact3 = await createTestContact(userId, { tier: "warm" });
 
     const inbound1 = await createTestInteraction(userId, contact1.id, {
       direction: "inbound",

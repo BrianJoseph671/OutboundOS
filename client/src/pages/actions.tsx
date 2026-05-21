@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "wouter";
 import { useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -421,6 +422,12 @@ export default function ActionsPage() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
 
+  const { data: networkStatus } = useQuery<{ status: string; message?: string }>({
+    queryKey: ["/api/network/status"],
+    staleTime: 60_000,
+  });
+  const showIndexBanner = networkStatus?.status === "none";
+
   const [typeFilter, setTypeFilter] = useState<ActionType | "all">("all");
   const [companyFilter, setCompanyFilter] = useState("");
 
@@ -490,9 +497,25 @@ export default function ActionsPage() {
     if (isSyncing) return;
     syncRecent.mutate(undefined, {
       onSuccess: (data) => {
+        const parts = [
+          `${data.newInteractions} new interactions`,
+          `${data.newActions} new actions`,
+        ];
+        if (data.threadsScanned != null && data.threadsScanned > 0) {
+          parts.push(`${data.threadsScanned} threads scanned`);
+        }
+        if (data.contactsUpdated != null && data.contactsUpdated > 0) {
+          parts.push(`${data.contactsUpdated} contacts updated`);
+        }
+        if (data.dueStepsProcessed != null && data.dueStepsProcessed > 0) {
+          parts.push(`${data.dueStepsProcessed} sequence steps due`);
+        }
+        if (data.sequencesAutoCompleted != null && data.sequencesAutoCompleted > 0) {
+          parts.push(`${data.sequencesAutoCompleted} sequences completed`);
+        }
         toast({
           title: "Sync complete",
-          description: `${data.newInteractions} new interactions, ${data.newActions} new actions`,
+          description: parts.join(" · "),
         });
       },
       onError: () => {
@@ -507,6 +530,21 @@ export default function ActionsPage() {
 
   return (
     <div className="flex flex-col h-full">
+      {showIndexBanner && (
+        <div
+          className="mb-4 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 px-4 py-3 flex flex-wrap items-center justify-between gap-2"
+          data-testid="banner-network-index"
+        >
+          <p className="text-sm text-amber-900 dark:text-amber-200">
+            Connect Gmail and index your network to see real follow-ups and warmth-ranked contacts.
+          </p>
+          <Link href="/settings">
+            <Button size="sm" variant="default">
+              Connect &amp; Index
+            </Button>
+          </Link>
+        </div>
+      )}
       {/* Top bar */}
       <div className="flex items-center gap-3 pb-4 border-b flex-wrap">
         <div className="flex items-center gap-2 flex-1 flex-wrap">
