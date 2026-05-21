@@ -10,7 +10,11 @@
  *   - Surface due steps as actions in the action queue
  */
 import { storage } from "../storage";
+import { listGmailThreads } from "./gmailClient";
 import type { Sequence, SequenceStep, InsertSequenceStep } from "@shared/schema";
+
+/** Placeholder until previous step is sent and real scheduledFor is computed */
+const UNSCHEDULED_STEP_DATE = new Date("2099-01-01T00:00:00.000Z");
 
 // ─── Create Sequence ──────────────────────────────────────────────────────────
 
@@ -62,16 +66,10 @@ export async function createSequence(input: CreateSequenceInput): Promise<{
   const steps: SequenceStep[] = [];
 
   for (const def of stepDefs) {
-    let scheduledFor: Date;
-    if (def.stepNumber === 1) {
-      scheduledFor = new Date(now.getTime() + def.delayDays * 24 * 60 * 60 * 1000);
-    } else {
-      // Each step scheduled relative to sequence creation
-      const totalDelay = stepDefs
-        .filter((s) => s.stepNumber <= def.stepNumber)
-        .reduce((sum, s) => sum + s.delayDays, 0);
-      scheduledFor = new Date(now.getTime() + totalDelay * 24 * 60 * 60 * 1000);
-    }
+    const scheduledFor =
+      def.stepNumber === 1
+        ? new Date(now.getTime() + def.delayDays * 24 * 60 * 60 * 1000)
+        : UNSCHEDULED_STEP_DATE;
 
     const step = await storage.createSequenceStep({
       sequenceId: sequence.id,
@@ -177,11 +175,13 @@ export async function markStepSent(
 export async function checkReplyAndAutoComplete(userId: string): Promise<number> {
   const activeSequences = await storage.getSequences(userId, { status: "active" });
   let completed = 0;
+  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const nowIso = new Date().toISOString();
 
   for (const seq of activeSequences) {
-    const contact = await storage.getContactByEmail("", userId);
-    // Check recent inbound interactions for this contact
-    const interactions = await storage.getInteractions(userId, seq.contactId);
+    const contact = await storage.getContact(seq.contactId, userId);
+    if (!contact?.email) continue;
+
     const steps = await storage.getSequenceSteps(seq.id);
     const sentSteps = steps.filter((s) => s.status === "sent");
     if (sentSteps.length === 0) continue;
@@ -189,17 +189,52 @@ export async function checkReplyAndAutoComplete(userId: string): Promise<number>
     const lastSentAt = sentSteps
       .map((s) => s.sentAt)
       .filter(Boolean)
-      .sort((a, b) => b!.getTime() - a!.getTime())[0];
+      .sort((a, b) => b!.getTime() - a!.getTime())[0] as Date;
 
-    if (!lastSentAt) continue;
-
-    // Check if any inbound interaction occurred after the last sent step
-    const replyDetected = interactions.some(
-      (i) => i.direction === "inbound" && i.occurredAt.getTime() > lastSentAt.getTime()
+    const sequenceThreadIds = new Set(
+      sentSteps.map((s) => s.threadId).filter((id): id is string => Boolean(id)),
     );
 
+    let replyDetected = false;
+
+    try {
+      const gmailResult = await listGmailThreads(userId, {
+        start_date: oneDayAgo.toISOString(),
+        end_date: nowIso,
+        from: [contact.email],
+        limit: 30,
+      });
+
+      for (const thread of gmailResult.threads || []) {
+        const threadId = thread.thread_id;
+        if (sequenceThreadIds.size > 0 && threadId && !sequenceThreadIds.has(threadId)) {
+          continue;
+        }
+        const messages = thread.messages || [];
+        const hasInboundAfterSend = messages.some((msg) => {
+          const from = (msg.from || "").toLowerCase();
+          const isFromContact = from.includes(contact.email!.toLowerCase());
+          const msgDate = msg.sent_at ? new Date(msg.sent_at) : null;
+          return isFromContact && msgDate && msgDate.getTime() > lastSentAt.getTime();
+        });
+        if (hasInboundAfterSend) {
+          replyDetected = true;
+          break;
+        }
+      }
+    } catch (err) {
+      console.warn("[SequenceManager] Gmail reply check failed, falling back to interactions:", err);
+      const interactions = await storage.getInteractions(userId, seq.contactId);
+      replyDetected = interactions.some(
+        (i) =>
+          i.direction === "inbound" &&
+          i.channel === "email" &&
+          i.occurredAt.getTime() > lastSentAt.getTime(),
+      );
+    }
+
     if (replyDetected) {
-      await completeSequence(seq.id, userId, "Contact replied");
+      await completeSequence(seq.id, userId, "They replied!");
       completed++;
     }
   }
