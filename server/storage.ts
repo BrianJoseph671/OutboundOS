@@ -206,6 +206,16 @@ export class DatabaseStorage implements IStorage {
           .orderBy(drizzleSql`${contacts.lastInteractionAt} DESC NULLS LAST`);
       }
     }
+    if (options?.sort === "warmth_score") {
+      if (options.order === "asc") {
+        return await db.select().from(contacts)
+          .where(eq(contacts.userId, userId))
+          .orderBy(drizzleSql`${contacts.warmthScore} ASC NULLS LAST`);
+      }
+      return await db.select().from(contacts)
+        .where(eq(contacts.userId, userId))
+        .orderBy(drizzleSql`${contacts.warmthScore} DESC NULLS LAST`);
+    }
     return await db.select().from(contacts)
       .where(eq(contacts.userId, userId))
       .orderBy(contacts.createdAt);
