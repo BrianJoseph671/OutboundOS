@@ -57,6 +57,13 @@
       "when": 1775260800000,
       "tag": "0007_contact_briefs",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1779361237976,
+      "tag": "0008_index_review_gate",
+      "breakpoints": true
     }
   ]
 }

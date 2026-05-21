@@ -94,7 +94,8 @@ function logoutHandler(req: Request, res: Response, next: NextFunction) {
 
 export function isNotreDameEmail(value: unknown): boolean {
   if (typeof value !== "string") return false;
-  return value.trim().toLowerCase().endsWith("@nd.edu");
+  const normalized = value.normalize("NFKC").replace(/[\u200B-\u200D\uFEFF]/g, "").trim().toLowerCase();
+  return normalized.endsWith("@nd.edu");
 }
 
 authRouter.get("/api/auth/me", meHandler);
@@ -246,6 +247,9 @@ export async function setupAuth(app: Express) {
 
           if (!user) {
             return done(null, false, { message: "Invalid email or password" });
+          }
+          if (isNotreDameEmail(user.email)) {
+            return done(null, false, { message: "Notre Dame accounts must sign in with Google." });
           }
           if (!user.password) {
             return done(null, false, { message: "This account uses Google sign-in" });

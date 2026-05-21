@@ -127,6 +127,7 @@ describe("isNotreDameEmail", () => {
     expect(isNotreDameEmail("user@nd.edu")).toBe(true);
     expect(isNotreDameEmail("USER@ND.EDU")).toBe(true);
     expect(isNotreDameEmail("  user@nd.edu  ")).toBe(true);
+    expect(isNotreDameEmail("user@nd.edu\u200b")).toBe(true);
   });
 
   it("returns false for other domains and non-strings", () => {

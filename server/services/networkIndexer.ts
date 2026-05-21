@@ -391,6 +391,7 @@ export async function prepareIndexReviewSession(
     startedAt: new Date(),
   });
 
+  try {
   const sixMonthsAgo = new Date();
   sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
   let userLabelMap: Map<string, string> | undefined;
@@ -501,6 +502,8 @@ export async function prepareIndexReviewSession(
     });
   }
   for (const item of autoAcceptedItems) {
+    const existingRule = await storage.getEmailTypeRuleBySignature(userId, item.signatureHash);
+    if (existingRule?.decision === "reject") continue;
     await storage.upsertEmailTypeRule(userId, item.signatureHash, {
       label: item.proposedLabel,
       decision: "accept",
@@ -524,6 +527,19 @@ export async function prepareIndexReviewSession(
     totalClassifiedCount: ranked.length,
     calendarPrioritizedCount,
   };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    try {
+      await storage.updateNetworkIndexJob(job.id, userId, {
+        status: "failed",
+        errors: [message],
+        completedAt: new Date(),
+      } as any);
+    } catch (updateErr) {
+      console.error("[NetworkIndexer] Failed to mark index job failed", updateErr);
+    }
+    throw err;
+  }
 }
 
 export async function completeIndexReviewSession(
