@@ -307,6 +307,19 @@ function ContactCard({
             <div className="flex items-center justify-between gap-2">
               <h3 className="font-medium truncate">{contact.name}</h3>
               <div className="flex items-center gap-2 flex-shrink-0">
+                {contact.tier && (
+                  <Badge
+                    variant="secondary"
+                    className={`text-xs capitalize ${getTierBadgeClass(contact.tier)}`}
+                  >
+                    {contact.tier}
+                  </Badge>
+                )}
+                {(contact.warmthScore ?? 0) > 0 && (
+                  <span className="text-xs text-muted-foreground tabular-nums" data-testid="text-warmth-score">
+                    {contact.warmthScore}
+                  </span>
+                )}
                 {researchStatus && (
                   <ResearchStatusBadge
                     status={researchStatus}
@@ -604,6 +617,210 @@ function EditContactDialog({
   );
 }
 
+interface ContactSequenceStep {
+  id: string;
+  stepNumber: number;
+  delayDays: number;
+  instructions: string;
+  status: string;
+  scheduledFor: string | null;
+  sentAt: string | null;
+}
+
+interface ContactSequenceRow {
+  id: string;
+  name: string;
+  status: string;
+  steps?: ContactSequenceStep[];
+}
+
+function ContactSequencesPanel({ contactId }: { contactId: string }) {
+  const { toast } = useToast();
+  const [createOpen, setCreateOpen] = useState(false);
+  const [templateId, setTemplateId] = useState("");
+  const [seqName, setSeqName] = useState("");
+
+  const { data: sequences = [], refetch } = useQuery<ContactSequenceRow[]>({
+    queryKey: ["/api/sequences", { contactId }],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/sequences?contactId=${contactId}`);
+      return res.json();
+    },
+  });
+
+  const activeSeq = sequences.find((s) => s.status === "active");
+  const { data: seqDetail } = useQuery<ContactSequenceRow & { steps: ContactSequenceStep[] }>({
+    queryKey: ["/api/sequences", activeSeq?.id],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/sequences/${activeSeq!.id}`);
+      return res.json();
+    },
+    enabled: !!activeSeq?.id,
+  });
+
+  const { data: templates = [] } = useQuery<Array<{ id: string; name: string }>>({
+    queryKey: ["/api/sequence-templates"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/sequence-templates");
+      return res.json();
+    },
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (body: { contactId: string; name: string; templateId: string }) =>
+      apiRequest("POST", "/api/sequences", body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/sequences"] });
+      refetch();
+      setCreateOpen(false);
+      toast({ title: "Sequence started" });
+    },
+    onError: () => toast({ title: "Failed to create sequence", variant: "destructive" }),
+  });
+
+  const patchMutation = useMutation({
+    mutationFn: ({ id, action }: { id: string; action: "pause" | "resume" | "cancel" }) =>
+      apiRequest("PATCH", `/api/sequences/${id}`, { action }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/sequences"] });
+      refetch();
+    },
+  });
+
+  const steps = seqDetail?.steps ?? [];
+
+  return (
+    <div className="space-y-3" data-testid="contact-sequences-panel">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-medium">Email sequence</h3>
+        {!activeSeq && (
+          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm" variant="outline" data-testid="button-start-sequence">
+                <Plus className="w-3 h-3 mr-1" />
+                Start sequence
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Start sequence</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3">
+                <div>
+                  <Label>Template</Label>
+                  <Select
+                    value={templateId}
+                    onValueChange={(v) => {
+                      setTemplateId(v);
+                      const t = templates.find((x) => x.id === v);
+                      if (t && !seqName) setSeqName(t.name);
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose template" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {templates.map((t) => (
+                        <SelectItem key={t.id} value={t.id}>
+                          {t.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Name</Label>
+                  <Input value={seqName} onChange={(e) => setSeqName(e.target.value)} />
+                </div>
+                <Button
+                  className="w-full"
+                  disabled={!templateId || !seqName || createMutation.isPending}
+                  onClick={() =>
+                    createMutation.mutate({
+                      contactId,
+                      name: seqName,
+                      templateId,
+                    })
+                  }
+                >
+                  Activate
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
+      </div>
+
+      {activeSeq && seqDetail && (
+        <Card>
+          <CardContent className="p-4 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-medium text-sm">{activeSeq.name}</span>
+              <Badge variant="secondary" className="capitalize">
+                {activeSeq.status}
+              </Badge>
+            </div>
+            <div className="space-y-2">
+              {steps.map((step) => (
+                <div
+                  key={step.id}
+                  className="flex items-start gap-2 text-sm border-l-2 pl-2 border-muted"
+                >
+                  <span className="font-mono text-xs text-muted-foreground w-6">
+                    {step.stepNumber}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <Badge variant="outline" className="text-xs capitalize mb-1">
+                      {step.status}
+                    </Badge>
+                    <p className="text-muted-foreground line-clamp-2">{step.instructions}</p>
+                    {step.scheduledFor && step.status !== "sent" && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Due {format(new Date(step.scheduledFor), "MMM d")}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              {activeSeq.status === "active" && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => patchMutation.mutate({ id: activeSeq.id, action: "pause" })}
+                >
+                  Pause
+                </Button>
+              )}
+              {activeSeq.status === "paused" && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => patchMutation.mutate({ id: activeSeq.id, action: "resume" })}
+                >
+                  Resume
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => patchMutation.mutate({ id: activeSeq.id, action: "cancel" })}
+              >
+                Cancel
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {!activeSeq && sequences.length === 0 && (
+        <p className="text-sm text-muted-foreground">No active sequence for this contact.</p>
+      )}
+    </div>
+  );
+}
+
 function ContactDetail({
   contact,
   onClose,
@@ -697,6 +914,11 @@ function ContactDetail({
               >
                 {contact.tier}
               </Badge>
+            )}
+            {(contact.warmthScore ?? 0) > 0 && (
+              <span className="text-xs text-muted-foreground">
+                Warmth: <span className="font-medium">{contact.warmthScore}</span>
+              </span>
             )}
             {contact.source && (
               <span
@@ -861,6 +1083,8 @@ function ContactDetail({
       )}
 
       {/* Interaction Timeline */}
+      <ContactSequencesPanel contactId={contact.id} />
+
       <InteractionTimeline contactId={contact.id} />
 
       <div className="space-y-3">
@@ -1747,11 +1971,15 @@ function AirtableCard({
 export default function Contacts() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
-  type SortOption = "newest" | "last_interaction";
-  const [sortBy, setSortBy] = useState<SortOption>("newest");
-  const sortParams = sortBy === "last_interaction"
-    ? { sort: "last_interaction_at", order: "desc" as const }
-    : undefined;
+  type SortOption = "warmth" | "newest" | "last_interaction";
+  const [sortBy, setSortBy] = useState<SortOption>("warmth");
+  const [tierFilter, setTierFilter] = useState<string>("all");
+  const sortParams =
+    sortBy === "last_interaction"
+      ? { sort: "last_interaction_at", order: "desc" as const }
+      : sortBy === "warmth"
+        ? { sort: "warmth_score", order: "desc" as const }
+        : undefined;
   const { contacts, isLoading, deleteContact, deleteContacts, bulkCreate, updateContact, invalidate } = useContacts(sortParams);
   const [search, setSearch] = useState("");
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
@@ -2082,6 +2310,7 @@ export default function Contacts() {
   const sortedContacts = [...contacts];
 
   const filteredContacts = sortedContacts.filter((contact) => {
+    if (tierFilter !== "all" && contact.tier !== tierFilter) return false;
     const searchLower = search.toLowerCase();
     return (
       contact.name.toLowerCase().includes(searchLower) ||
@@ -2215,8 +2444,21 @@ export default function Contacts() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="warmth">Warmth Score</SelectItem>
               <SelectItem value="newest">Newest</SelectItem>
               <SelectItem value="last_interaction">Last Interaction</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={tierFilter} onValueChange={setTierFilter}>
+            <SelectTrigger className="w-28" data-testid="select-tier-filter">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All tiers</SelectItem>
+              <SelectItem value="vip">VIP</SelectItem>
+              <SelectItem value="warm">Warm</SelectItem>
+              <SelectItem value="cool">Cool</SelectItem>
+              <SelectItem value="cold">Cold</SelectItem>
             </SelectContent>
           </Select>
           <div className="flex items-center gap-2 px-2 h-10 border rounded-md bg-muted/30">
