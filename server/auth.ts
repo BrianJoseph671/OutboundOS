@@ -10,6 +10,7 @@ import { users } from "@shared/schema";
 import { eq, or } from "drizzle-orm";
 import bcrypt from "bcrypt";
 import { randomBytes } from "crypto";
+import { isNotreDameEmail } from "./utils/emailDomains";
 
 // Export passport so tests can import it directly
 export { passport };
@@ -92,11 +93,7 @@ function logoutHandler(req: Request, res: Response, next: NextFunction) {
   });
 }
 
-export function isNotreDameEmail(value: unknown): boolean {
-  if (typeof value !== "string") return false;
-  const normalized = value.normalize("NFKC").replace(/[\u200B-\u200D\uFEFF]/g, "").trim().toLowerCase();
-  return normalized.endsWith("@nd.edu");
-}
+export { isNotreDameEmail };
 
 authRouter.get("/api/auth/me", meHandler);
 authRouter.get("/auth/me", meHandler);
