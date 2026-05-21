@@ -143,6 +143,56 @@ export default function DraftWorkspace() {
 
   const { brief, isLoading: briefLoading, isError: briefError, regenerate } = useBrief(action?.contactId);
 
+  const isSequenceStep = action?.actionType === "sequence_step";
+
+  const { data: activeSequenceDetail } = useQuery<{
+    id: string;
+    name: string;
+    steps: Array<{
+      id: string;
+      stepNumber: number;
+      instructions: string;
+      status: string;
+      sentAt: string | null;
+    }>;
+  }>({
+    queryKey: ["/api/sequences", "active", action?.contactId],
+    queryFn: async () => {
+      const listRes = await apiRequest(
+        "GET",
+        `/api/sequences?contactId=${action!.contactId}&status=active`,
+      );
+      const list = await listRes.json();
+      if (!list.length) return null;
+      const detailRes = await apiRequest("GET", `/api/sequences/${list[0].id}`);
+      return detailRes.json();
+    },
+    enabled: !!action?.contactId && isSequenceStep,
+  });
+
+  const dueSequenceStep = activeSequenceDetail?.steps?.find(
+    (s) => s.status === "due" || (s.status === "pending" && s.stepNumber === 1),
+  );
+
+  const { data: contactMeetings = [] } = useQuery<
+    Array<{ meeting: { title: string | null; summary: string | null; notes: string | null; startTime: string | null; source: string } }>
+  >({
+    queryKey: ["/api/integrations/contacts", action?.contactId, "meetings"],
+    queryFn: async () => {
+      const res = await apiRequest(
+        "GET",
+        `/api/integrations/contacts/${action!.contactId}/meetings`,
+      );
+      return res.json();
+    },
+    enabled: !!action?.contactId,
+  });
+
+  const granolaNotes = contactMeetings
+    .map((cm) => cm.meeting)
+    .filter((m) => m.source === "granola" && (m.summary || m.notes))
+    .slice(0, 3);
+
   const [draftTo, setDraftTo] = useState("");
   const [draftSubject, setDraftSubject] = useState("");
   const [draftBody, setDraftBody] = useState("");
@@ -183,6 +233,26 @@ export default function DraftWorkspace() {
       setDraftTo(action.contactEmail);
     }
   }, [action?.contactEmail, draftTo]);
+
+  useEffect(() => {
+    if (!isSequenceStep || !dueSequenceStep || !activeSequenceDetail) return;
+    const priorSent = (activeSequenceDetail.steps || [])
+      .filter((s) => s.status === "sent" && s.sentAt)
+      .map((s) => `Step ${s.stepNumber} sent`)
+      .join("; ");
+    const intro = `Sequence "${activeSequenceDetail.name}" — Step ${dueSequenceStep.stepNumber}:\n${dueSequenceStep.instructions}${
+      priorSent ? `\n\nPrior steps: ${priorSent}` : ""
+    }`;
+    setChatMessages([
+      {
+        id: "sequence-context",
+        role: "assistant",
+        content: intro,
+        timestamp: new Date().toISOString(),
+      },
+    ]);
+    setChatInput(dueSequenceStep.instructions);
+  }, [isSequenceStep, dueSequenceStep?.id, activeSequenceDetail?.id]);
 
   // Esc to go back
   useEffect(() => {
@@ -289,19 +359,36 @@ export default function DraftWorkspace() {
 
   const handleSend = async () => {
     if (!actionId || !draftBody.trim()) return;
-    completeAction.mutate(actionId, {
-      onSuccess: () => {
-        toast({ title: "Draft sent and action completed" });
-        navigate("/actions");
-      },
-      onError: () => {
-        toast({
-          title: "Failed to send",
-          description: "Could not complete the action. Please try again.",
-          variant: "destructive",
-        });
-      },
-    });
+    try {
+      if (isSequenceStep && activeSequenceDetail?.id && dueSequenceStep?.id) {
+        await apiRequest(
+          "POST",
+          `/api/sequences/${activeSequenceDetail.id}/steps/${dueSequenceStep.id}/send`,
+          {
+            draftId: currentDraftId,
+            threadId: currentDraftThreadId,
+          },
+        );
+      }
+      completeAction.mutate(actionId, {
+        onSuccess: () => {
+          toast({ title: "Draft sent and action completed" });
+          navigate("/actions");
+        },
+        onError: () => {
+          toast({
+            title: "Failed to send",
+            description: "Could not complete the action. Please try again.",
+            variant: "destructive",
+          });
+        },
+      });
+    } catch {
+      toast({
+        title: "Failed to mark sequence step",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleBack = () => navigate("/actions");
@@ -588,6 +675,27 @@ export default function DraftWorkspace() {
               <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Context
               </h2>
+
+              {granolaNotes.length > 0 && (
+                <Card data-testid="granola-meeting-notes">
+                  <CardHeader className="p-3 pb-0">
+                    <CardTitle className="text-xs font-medium flex items-center gap-2">
+                      <Video className="h-4 w-4" />
+                      Granola meeting notes
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-3 pt-2 space-y-2">
+                    {granolaNotes.map((m, i) => (
+                      <div key={i} className="text-sm">
+                        <p className="font-medium">{m.title || "Meeting"}</p>
+                        <p className="text-muted-foreground text-xs whitespace-pre-wrap line-clamp-6">
+                          {m.summary || m.notes}
+                        </p>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
 
               {/* Trigger interaction card */}
               {action.triggerInteractionSummary && (
