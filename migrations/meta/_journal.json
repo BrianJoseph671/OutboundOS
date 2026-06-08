@@ -57,6 +57,13 @@
       "when": 1775260800000,
       "tag": "0007_contact_briefs",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1780923600000,
+      "tag": "0008_network_review_and_sequences",
+      "breakpoints": true
     }
   ]
 }
