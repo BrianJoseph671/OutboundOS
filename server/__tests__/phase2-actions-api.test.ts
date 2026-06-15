@@ -342,6 +342,44 @@ describe("GET /api/actions/:id", () => {
   });
 });
 
+describe("GET /api/actions/:id — contact join is scoped to the action owner", () => {
+  let app: express.Application;
+  let userA: typeof users.$inferSelect;
+  let userB: typeof users.$inferSelect;
+  let contactB: typeof contacts.$inferSelect;
+
+  beforeAll(async () => {
+    app = await createFullApp();
+    userA = await createTestUser("join_scope_a");
+    userB = await createTestUser("join_scope_b");
+    contactB = await storage.createContact({
+      userId: userB.id,
+      name: "Victim Contact",
+      email: "victim-contact@example.com",
+      company: "VictimCo",
+    });
+    testIds.contactIds.push(contactB.id);
+  });
+
+  it("does not expose another user's contact fields from an attacker-owned action", async () => {
+    const action = await createTestAction(userA.id, contactB.id, {
+      actionType: "sequence_step",
+      reason: "Cross-tenant reference should not leak joined contact data",
+    });
+    const agent = request.agent(app);
+    await agent.post("/test/login").send({ user: userA }).expect(200);
+
+    const res = await agent.get(`/api/actions/${action.id}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.id).toBe(action.id);
+    expect(res.body.contactId).toBe(contactB.id);
+    expect(res.body.contactName).toBeNull();
+    expect(res.body.contactCompany).toBeNull();
+    expect(res.body.contactEmail).toBeNull();
+  });
+});
+
 // =============================================================================
 // PATCH /api/actions/:id — update action status
 // =============================================================================

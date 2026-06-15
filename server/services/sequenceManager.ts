@@ -30,19 +30,10 @@ export async function createSequence(input: CreateSequenceInput): Promise<{
   sequence: Sequence;
   steps: SequenceStep[];
 }> {
-  // Enforce one active sequence per contact
-  const existing = await storage.getSequences(input.userId, {
-    contactId: input.contactId,
-    status: "active",
-  });
-  if (existing.length > 0) {
-    // Cancel existing active sequence
-    for (const seq of existing) {
-      await cancelSequence(seq.id, input.userId);
-    }
-  }
-
   let stepDefs: Array<{ stepNumber: number; delayDays: number; instructions: string; subject?: string }>;
+
+  const contact = await storage.getContact(input.contactId, input.userId);
+  if (!contact) throw new Error("Contact not found");
 
   if (input.templateId) {
     const template = await storage.getSequenceTemplate(input.templateId, input.userId);
@@ -52,6 +43,21 @@ export async function createSequence(input: CreateSequenceInput): Promise<{
     stepDefs = input.customSteps;
   } else {
     throw new Error("Either templateId or customSteps is required");
+  }
+
+  if (!Array.isArray(stepDefs) || stepDefs.length === 0) {
+    throw new Error("Sequence must include at least one step");
+  }
+
+  // Enforce one active sequence per owned contact only after all inputs are valid.
+  const existing = await storage.getSequences(input.userId, {
+    contactId: input.contactId,
+    status: "active",
+  });
+  if (existing.length > 0) {
+    for (const seq of existing) {
+      await cancelSequence(seq.id, input.userId);
+    }
   }
 
   const sequence = await storage.createSequence({
@@ -97,9 +103,6 @@ export async function processDueSteps(userId: string): Promise<number> {
   let count = 0;
 
   for (const step of dueSteps) {
-    await storage.updateSequenceStep(step.id, { status: "due" });
-
-    // Create an action for the due step
     try {
       await storage.createAction({
         userId,
@@ -111,7 +114,11 @@ export async function processDueSteps(userId: string): Promise<number> {
         reason: `Step ${step.stepNumber} of "${step.sequenceName}" is due`,
         snoozedUntil: null,
       });
-    } catch { /* dedup — action may already exist */ }
+      await storage.updateSequenceStep(step.id, { status: "due" });
+    } catch {
+      // Leave the step pending so transient action queue failures can be retried.
+      continue;
+    }
 
     count++;
   }
@@ -132,6 +139,13 @@ export async function markStepSent(
 
   const seq = await storage.getSequence(step.sequenceId, userId);
   if (!seq) return undefined;
+
+  if (step.status === "sent") {
+    return step;
+  }
+  if (step.status !== "pending" && step.status !== "due") {
+    return undefined;
+  }
 
   const now = new Date();
   const updated = await storage.updateSequenceStep(stepId, {
@@ -253,23 +267,29 @@ export async function resumeSequence(sequenceId: string, userId: string): Promis
 }
 
 export async function cancelSequence(sequenceId: string, userId: string): Promise<Sequence | undefined> {
-  const steps = await storage.getSequenceSteps(sequenceId);
+  const sequence = await storage.getSequence(sequenceId, userId);
+  if (!sequence) return undefined;
+
+  const steps = await storage.getSequenceSteps(sequence.id);
   for (const step of steps) {
     if (step.status === "pending" || step.status === "due") {
       await storage.updateSequenceStep(step.id, { status: "skipped" });
     }
   }
-  return storage.updateSequence(sequenceId, userId, { status: "cancelled" });
+  return storage.updateSequence(sequence.id, userId, { status: "cancelled" });
 }
 
 async function completeSequence(sequenceId: string, userId: string, reason: string): Promise<void> {
-  const steps = await storage.getSequenceSteps(sequenceId);
+  const sequence = await storage.getSequence(sequenceId, userId);
+  if (!sequence) return;
+
+  const steps = await storage.getSequenceSteps(sequence.id);
   for (const step of steps) {
     if (step.status === "pending" || step.status === "due") {
       await storage.updateSequenceStep(step.id, { status: "skipped" });
     }
   }
-  await storage.updateSequence(sequenceId, userId, { status: "completed" });
+  await storage.updateSequence(sequence.id, userId, { status: "completed" });
 }
 
 // ─── Default Templates ────────────────────────────────────────────────────────
