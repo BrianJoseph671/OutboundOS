@@ -175,7 +175,6 @@ export async function markStepSent(
 export async function checkReplyAndAutoComplete(userId: string): Promise<number> {
   const activeSequences = await storage.getSequences(userId, { status: "active" });
   let completed = 0;
-  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const nowIso = new Date().toISOString();
 
   for (const seq of activeSequences) {
@@ -199,7 +198,7 @@ export async function checkReplyAndAutoComplete(userId: string): Promise<number>
 
     try {
       const gmailResult = await listGmailThreads(userId, {
-        start_date: oneDayAgo.toISOString(),
+        start_date: lastSentAt.toISOString(),
         end_date: nowIso,
         from: [contact.email],
         limit: 30,
@@ -224,12 +223,14 @@ export async function checkReplyAndAutoComplete(userId: string): Promise<number>
       }
     } catch (err) {
       console.warn("[SequenceManager] Gmail reply check failed, falling back to interactions:", err);
-      const interactions = await storage.getInteractions(userId, seq.contactId);
-      replyDetected = interactions.some(
-        (i) =>
-          i.direction === "inbound" &&
-          i.channel === "email" &&
-          i.occurredAt.getTime() > lastSentAt.getTime(),
+    }
+
+    if (!replyDetected) {
+      replyDetected = await hasInboundInteractionAfterSend(
+        userId,
+        seq.contactId,
+        lastSentAt,
+        sequenceThreadIds,
       );
     }
 
@@ -240,6 +241,25 @@ export async function checkReplyAndAutoComplete(userId: string): Promise<number>
   }
 
   return completed;
+}
+
+async function hasInboundInteractionAfterSend(
+  userId: string,
+  contactId: string,
+  lastSentAt: Date,
+  sequenceThreadIds: Set<string>,
+): Promise<boolean> {
+  const interactions = await storage.getInteractions(userId, contactId);
+  return interactions.some((i) => {
+    if (
+      i.direction !== "inbound" ||
+      i.channel !== "email" ||
+      i.occurredAt.getTime() <= lastSentAt.getTime()
+    ) {
+      return false;
+    }
+    return sequenceThreadIds.size === 0 || Boolean(i.sourceId && sequenceThreadIds.has(i.sourceId));
+  });
 }
 
 // ─── Pause / Resume / Cancel ──────────────────────────────────────────────────

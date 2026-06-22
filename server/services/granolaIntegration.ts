@@ -21,6 +21,8 @@ interface McpToolCallResult {
   isError?: boolean;
 }
 
+type GranolaTimeRange = "this_week" | "last_week" | "last_30_days";
+
 /**
  * Granola uses Google OAuth for authentication — we pass the user's Google
  * access token directly to Granola's MCP endpoint.
@@ -88,6 +90,22 @@ function extractTextFromMcpResult(result: McpToolCallResult): string {
     .join("\n");
 }
 
+function timeRangeForDaysBack(daysBack: number): GranolaTimeRange {
+  if (daysBack <= 7) return "this_week";
+  if (daysBack <= 14) return "last_week";
+  return "last_30_days";
+}
+
+function normalizeMeetingsList(parsed: unknown): GranolaMeeting[] {
+  if (Array.isArray(parsed)) return parsed as GranolaMeeting[];
+  if (parsed && typeof parsed === "object") {
+    const maybeMeetings = (parsed as { meetings?: unknown }).meetings;
+    if (Array.isArray(maybeMeetings)) return maybeMeetings as GranolaMeeting[];
+    return [parsed as GranolaMeeting];
+  }
+  return [];
+}
+
 export async function syncGranolaMeetings(userId: string, daysBack = 30): Promise<{
   synced: number;
   matched: number;
@@ -103,15 +121,12 @@ export async function syncGranolaMeetings(userId: string, daysBack = 30): Promis
     const toolNames = tools.map((t: any) => t.name);
 
     const listToolName = toolNames.find(
-      (n: string) => n.includes("list_meetings") || n.includes("get_meetings") || n.includes("meetings")
+      (n: string) => n.includes("list_meetings")
     ) || "list_meetings";
-
-    const sinceDate = new Date();
-    sinceDate.setDate(sinceDate.getDate() - daysBack);
 
     const listResult = await callGranolaTool(
       listToolName,
-      { since: sinceDate.toISOString(), limit: 100 },
+      { time_range: timeRangeForDaysBack(daysBack) },
       accessToken
     );
 
@@ -119,14 +134,10 @@ export async function syncGranolaMeetings(userId: string, daysBack = 30): Promis
     let meetingsList: GranolaMeeting[] = [];
 
     try {
-      meetingsList = JSON.parse(rawText);
+      meetingsList = normalizeMeetingsList(JSON.parse(rawText));
     } catch {
       console.log("[Granola] Non-JSON response from list_meetings, attempting text parse");
       meetingsList = [];
-    }
-
-    if (!Array.isArray(meetingsList)) {
-      meetingsList = [meetingsList];
     }
 
     for (const gMeeting of meetingsList) {
@@ -139,19 +150,20 @@ export async function syncGranolaMeetings(userId: string, daysBack = 30): Promis
         let actionItems = gMeeting.actionItems || [];
 
         const detailToolName = toolNames.find(
-          (n: string) => n.includes("get_meeting") || n.includes("meeting_details")
+          (n: string) => n.includes("get_meetings") || n.includes("meeting_details")
         );
 
         if (detailToolName) {
           try {
             const detailResult = await callGranolaTool(
               detailToolName,
-              { meeting_id: gMeeting.id },
+              { meeting_ids: [gMeeting.id] },
               accessToken
             );
             const detailText = extractTextFromMcpResult(detailResult);
             try {
-              const detail = JSON.parse(detailText);
+              const parsedDetail = JSON.parse(detailText);
+              const detail = Array.isArray(parsedDetail) ? parsedDetail[0] : parsedDetail;
               notes = detail.notes || notes;
               transcript = detail.transcript || transcript;
               summary = detail.summary || summary;

@@ -56,17 +56,17 @@ function meetingRowsToGranolaMeetings(
 export async function fetchMeetings(
   timeRange: GranolaTimeRange,
   userId: string,
+  daysBack = daysBackForRange(timeRange),
 ): Promise<GranolaMeeting[]> {
   const providerMode = getRelationshipProviderMode();
   if (providerMode === "live") {
     try {
-      await syncGranolaMeetings(userId, daysBackForRange(timeRange));
+      await syncGranolaMeetings(userId, daysBack);
     } catch (err) {
       console.warn("[Granola] Live sync failed, using cached meetings:", err);
     }
     const rows = await storage.getMeetings(userId);
-    const mapped = meetingRowsToGranolaMeetings(rows);
-    if (mapped.length > 0) return mapped;
+    return meetingRowsToGranolaMeetings(rows);
   }
 
   const contacts = await storage.getContacts(userId);
@@ -107,7 +107,7 @@ export function mapMeetingToInteraction(
     channel: "meeting",
     direction: "mutual",
     occurredAt: new Date(meeting.date),
-    sourceId: meeting.id,
+    sourceId: `${meeting.id}:${contactId}`,
     summary,
     source: "granola",
   };
@@ -126,7 +126,11 @@ export async function fetchAndMapMeetings(
 
   try {
     const timeRange = computeTimeRange(startDate);
-    const meetings = await fetchMeetings(timeRange, userId);
+    const daysBack = Math.max(
+      1,
+      Math.ceil((Date.now() - startDate.getTime()) / (24 * 60 * 60 * 1000)),
+    );
+    const meetings = await fetchMeetings(timeRange, userId, daysBack);
 
     for (const meeting of meetings) {
       for (const participantEmail of meeting.knownParticipants) {

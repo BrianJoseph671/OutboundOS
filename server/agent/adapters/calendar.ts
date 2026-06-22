@@ -56,8 +56,7 @@ export async function fetchEvents(
       console.warn("[Calendar] Live sync failed, using cached events:", err);
     }
     const rows = await storage.getMeetings(userId);
-    const mapped = meetingRowsToCalendarEvents(rows);
-    if (mapped.length > 0) return mapped;
+    return meetingRowsToCalendarEvents(rows);
   }
 
   const contacts = await storage.getContacts(userId);
@@ -98,7 +97,7 @@ export function mapEventToInteraction(
     channel: "meeting",
     direction: "mutual",
     occurredAt: new Date(event.start),
-    sourceId: event.eventId,
+    sourceId: `${event.eventId}:${contactId}`,
     summary: event.title,
     source: "calendar",
   };
