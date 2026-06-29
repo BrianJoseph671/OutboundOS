@@ -95,8 +95,8 @@ export async function computeSyncWindow(userId: string): Promise<{ startDate: Da
 
 // ── runSync (production entry point — uses default adapters) ─────────────────
 
-export async function runSync(userId: string): Promise<SyncResponse> {
-  return runSyncWithDeps(userId, defaultDeps);
+export async function runSync(userId: string, userEmail?: string): Promise<SyncResponse> {
+  return runSyncWithDeps(userId, defaultDeps, userEmail);
 }
 
 // ── runSyncWithDeps (testable — accepts injected adapters) ───────────────────
@@ -104,13 +104,23 @@ export async function runSync(userId: string): Promise<SyncResponse> {
 export async function runSyncWithDeps(
   userId: string,
   deps: RunSyncDeps,
+  userEmailOverride?: string,
 ): Promise<SyncResponse> {
   const syncStartedAt = Date.now();
   const errors: string[] = [];
   let newInteractions = 0;
   let newActions = 0;
 
-  const userEmail = process.env.BRIAN_EMAIL ?? "";
+  const userEmail = userEmailOverride
+    ?? (await storage.getUser(userId))?.email
+    ?? "";
+  if (!userEmail) {
+    return {
+      newInteractions: 0,
+      newActions: 0,
+      errors: ["User email not found. Connect your Google account first."],
+    };
+  }
 
   // ── Step 1: Compute sync window ──────────────────────────────────────────
   const { startDate, endDate } = await computeSyncWindow(userId);

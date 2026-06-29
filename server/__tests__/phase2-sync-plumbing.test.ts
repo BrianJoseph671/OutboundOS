@@ -804,7 +804,7 @@ describe("Adapter mapping functions", () => {
     const r = mapMeetingToInteraction(meeting, "c1");
     expect(r.direction).toBe("mutual");
     expect(r.source).toBe("granola");
-    expect(r.sourceId).toBe("mtg-1");
+    expect(r.sourceId).toBe("mtg-1:c1");
   });
 
   it("mapMeetingToInteraction: summary truncated to 500 chars", () => {
@@ -823,7 +823,7 @@ describe("Adapter mapping functions", () => {
     const r = mapEventToInteraction(event, "c1");
     expect(r.direction).toBe("mutual");
     expect(r.source).toBe("calendar");
-    expect(r.sourceId).toBe("evt-1");
+    expect(r.sourceId).toBe("evt-1:c1");
     expect(r.summary).toBe("Coffee");
   });
 });

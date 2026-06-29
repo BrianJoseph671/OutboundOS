@@ -66,7 +66,7 @@ export async function fetchMeetings(
     }
     const rows = await storage.getMeetings(userId);
     const mapped = meetingRowsToGranolaMeetings(rows);
-    if (mapped.length > 0) return mapped;
+    return mapped;
   }
 
   const contacts = await storage.getContacts(userId);
@@ -91,7 +91,7 @@ export async function fetchMeetings(
  * mapMeetingToInteraction — convert a Granola meeting to a RawInteraction.
  *
  * Direction: always "mutual" (per PRD Section 5.2).
- * sourceId: meeting UUID.
+ * sourceId: meeting UUID plus contactId so multi-attendee meetings create one interaction per contact.
  * summary: first 500 chars of AI summary.
  */
 export function mapMeetingToInteraction(
@@ -107,7 +107,7 @@ export function mapMeetingToInteraction(
     channel: "meeting",
     direction: "mutual",
     occurredAt: new Date(meeting.date),
-    sourceId: meeting.id,
+    sourceId: `${meeting.id}:${contactId}`,
     summary,
     source: "granola",
   };
