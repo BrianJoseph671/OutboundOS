@@ -99,6 +99,29 @@ describe("sequenceManager critical ownership and write-ordering behavior", () =>
     expect(mockStorage.updateSequence).not.toHaveBeenCalled();
   });
 
+  it("dismisses pending sequence actions when a sequence is cancelled", async () => {
+    mockStorage.getSequence.mockResolvedValue({
+      id: "sequence-owned",
+      userId: "user-a",
+      contactId: "contact-owned",
+      name: "Owned",
+      status: "active",
+    });
+    mockStorage.getSequenceSteps.mockResolvedValue([
+      { id: "step-1", status: "due" },
+      { id: "step-2", status: "pending" },
+    ]);
+    mockStorage.getActions.mockResolvedValue([
+      { id: "action-1", contactId: "contact-owned", reason: 'Step 1 of "Owned" is due' },
+      { id: "action-2", contactId: "contact-owned", reason: 'Step 1 of "Other" is due' },
+    ]);
+
+    await cancelSequence("sequence-owned", "user-a");
+
+    expect(mockStorage.updateAction).toHaveBeenCalledTimes(1);
+    expect(mockStorage.updateAction).toHaveBeenCalledWith("action-1", "user-a", { status: "dismissed" });
+  });
+
   it("treats duplicate send calls as idempotent and does not reschedule next steps", async () => {
     const sentStep = {
       id: "step-sent",
@@ -121,6 +144,21 @@ describe("sequenceManager critical ownership and write-ordering behavior", () =>
     expect(result).toBe(sentStep);
     expect(mockStorage.updateSequenceStep).not.toHaveBeenCalled();
     expect(mockStorage.getSequenceSteps).not.toHaveBeenCalled();
+  });
+
+  it("rejects sends when the step does not belong to the requested sequence", async () => {
+    mockStorage.getSequenceStep.mockResolvedValue({
+      id: "step-1",
+      sequenceId: "sequence-other",
+      stepNumber: 1,
+      status: "due",
+    });
+
+    const result = await markStepSent("step-1", "user-a", undefined, undefined, "sequence-owned");
+
+    expect(result).toBeUndefined();
+    expect(mockStorage.getSequence).not.toHaveBeenCalled();
+    expect(mockStorage.updateSequenceStep).not.toHaveBeenCalled();
   });
 
   it("only completes the action for the specific sequence step that was sent", async () => {

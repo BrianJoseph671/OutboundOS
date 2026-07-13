@@ -133,9 +133,11 @@ export async function markStepSent(
   userId: string,
   draftId?: string,
   threadId?: string,
+  sequenceId?: string,
 ): Promise<SequenceStep | undefined> {
   const step = await storage.getSequenceStep(stepId);
   if (!step) return undefined;
+  if (sequenceId && step.sequenceId !== sequenceId) return undefined;
 
   const seq = await storage.getSequence(step.sequenceId, userId);
   if (!seq) return undefined;
@@ -300,6 +302,7 @@ export async function cancelSequence(sequenceId: string, userId: string): Promis
       await storage.updateSequenceStep(step.id, { status: "skipped" });
     }
   }
+  await dismissPendingSequenceActions(userId, sequence.contactId, sequence.name);
   return storage.updateSequence(sequence.id, userId, { status: "cancelled" });
 }
 
@@ -313,7 +316,22 @@ async function completeSequence(sequenceId: string, userId: string, reason: stri
       await storage.updateSequenceStep(step.id, { status: "skipped" });
     }
   }
+  await dismissPendingSequenceActions(userId, sequence.contactId, sequence.name);
   await storage.updateSequence(sequence.id, userId, { status: "completed" });
+}
+
+async function dismissPendingSequenceActions(
+  userId: string,
+  contactId: string,
+  sequenceName: string,
+): Promise<void> {
+  const actions = await storage.getActions(userId, { status: "pending", type: "sequence_step" });
+  const suffix = ` of "${sequenceName}" is due`;
+  for (const action of actions) {
+    if (action.contactId === contactId && action.reason.endsWith(suffix)) {
+      await storage.updateAction(action.id, userId, { status: "dismissed" });
+    }
+  }
 }
 
 // ─── Default Templates ────────────────────────────────────────────────────────
