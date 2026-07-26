@@ -166,7 +166,7 @@ export async function fetchEmails(
       messageId: `mock-email-message-${userId}-${contact.id}`,
       threadId: `mock-email-thread-${userId}-${contact.id}`,
       from: contact.email!,
-      to: [userEmail || "owner@outboundos.local"],
+      to: [userEmail || "owner@kin.local"],
       cc: [],
       subject: `Following up from ${contact.company ?? "our last note"}`,
       date: occurredAt.toISOString(),

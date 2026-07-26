@@ -216,7 +216,7 @@ export async function setupAuth(app: Express) {
         pool,
         tableName: "session",
       }),
-      secret: sessionSecret || "outboundos-dev-only-insecure-secret",
+      secret: sessionSecret || "kin-dev-only-insecure-secret",
       resave: false,
       saveUninitialized: false,
       cookie: {

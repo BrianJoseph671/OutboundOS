@@ -1,4 +1,4 @@
-# OutboundOS — Agent Context
+# Kin — Agent Context
 
 This is the primary context document for all AI coding agents working in this repository. Read this before making any changes.
 
@@ -8,7 +8,7 @@ This is the primary context document for all AI coding agents working in this re
 
 ## Project Overview
 
-**OutboundOS** is a full-stack outbound sales automation platform that replaces manual prospect research with AI-powered workflows. The core value prop: reduce prospect research from 20+ minutes to ~30 seconds, with a demonstrated 44.6% meeting booking rate.
+**Kin** is a full-stack outbound sales automation platform that replaces manual prospect research with AI-powered workflows. The core value prop: reduce prospect research from 20+ minutes to ~30 seconds, with a demonstrated 44.6% meeting booking rate.
 
 **Core workflow:**
 1. Import contacts (CSV, LinkedIn PDF, Google Sheets, or Airtable)
@@ -44,7 +44,7 @@ This is the primary context document for all AI coding agents working in this re
 ### Monorepo Structure
 
 ```
-OutboundOS/
+Kin/
 ├── client/          # React SPA (Vite root)
 ├── server/          # Express API
 ├── shared/          # Types, schemas (imported by both sides)
@@ -391,7 +391,7 @@ This repo is worked on by multiple AI coding agents (Claude Code, Factory, Curso
 
 ## Design System
 
-OutboundOS follows a modern SaaS productivity aesthetic inspired by Linear, Notion, and Attio — **professional, dense, and efficient**.
+Kin follows a modern SaaS productivity aesthetic inspired by Linear, Notion, and Attio — **professional, dense, and efficient**.
 
 ### Typography
 - **Primary:** Inter (all UI text)

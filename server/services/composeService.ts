@@ -134,12 +134,12 @@ async function buildMeetingContext(
     .join("\n");
 }
 
-const COMPOSE_SYSTEM = `You are a professional email composer for a relationship-management tool called Outbound OS.
+const COMPOSE_SYSTEM = `You are a professional email composer for a relationship-management tool called Kin.
 Write a complete email draft ready to send. Output ONLY the email body (no subject line, no greeting header like "Subject:", no markdown fences).
 Use the relationship brief, meeting context, and user instructions to write a concise, personal, and effective email.
 Match the tone to the play type. Keep it under 150 words unless the user explicitly asks for more.`;
 
-const REVISE_SYSTEM = `You are a professional email editor for Outbound OS.
+const REVISE_SYSTEM = `You are a professional email editor for Kin.
 The user will provide their current draft and revision instructions.
 Output ONLY the revised email body. No subject lines, no markdown fences, no explanations.`;
 

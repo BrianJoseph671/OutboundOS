@@ -1,4 +1,4 @@
-# OutboundOS
+# Kin
 
 > AI-powered research and personalization platform for high-velocity outbound
 
@@ -8,11 +8,11 @@
 
 ## What It Does
 
-OutboundOS is a GTM automation platform I built to solve the core bottleneck in outbound sales: prospect research takes too long, and generic messaging gets ignored.
+Kin is a GTM automation platform I built to solve the core bottleneck in outbound sales: prospect research takes too long, and generic messaging gets ignored.
 
 **The problem:** Researching a single prospect traditionally takes 20+ minutes. At scale, this makes personalized outreach impossible.
 
-**The solution:** OutboundOS reduces research time from 20 minutes to 30 seconds using AI-powered workflows that automatically gather context, analyze company positioning, and generate personalized messaging angles.
+**The solution:** Kin reduces research time from 20 minutes to 30 seconds using AI-powered workflows that automatically gather context, analyze company positioning, and generate personalized messaging angles.
 
 ---
 
@@ -131,12 +131,12 @@ Research results are stored in PostgreSQL. Without a database, the app still run
 
 2. **Create a database** (e.g. in `psql` or pgAdmin):
    ```sql
-   CREATE DATABASE outboundos;
+   CREATE DATABASE kin;
    ```
 
 3. **Set `DATABASE_URL` in `.env`** (copy from `.env.example` if needed):
    ```env
-   DATABASE_URL=postgresql://USER:PASSWORD@localhost:5432/outboundos
+   DATABASE_URL=postgresql://USER:PASSWORD@localhost:5432/kin
    ```
    Replace `USER` and `PASSWORD` with your Postgres user and password.
 
@@ -155,7 +155,7 @@ Research results are stored in PostgreSQL. Without a database, the app still run
 - **Speed matters more than perfection** - 80% accuracy in 30 seconds beats 95% accuracy in 20 minutes
 - **Context is everything** - Generic AI messages are worse than no AI; the quality of research directly determines message relevance
 - **Workflows > apps** - n8n workflows let me iterate 10x faster than building a monolithic app
-- **Build for yourself first** - I used OutboundOS for my own job search, which forced me to fix real pain points
+- **Build for yourself first** - I used Kin for my own job search, which forced me to fix real pain points
 
 ---
 

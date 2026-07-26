@@ -1,8 +1,8 @@
-# Outbound OS
+# Kin
 
 ## Overview
 
-Outbound OS is a full-stack web application for managing structured networking outreach messages (SDR/BDR-style). It enables users to craft personalized outreach, run A/B experiments on messaging variants, and track outcomes by outreach type. The system provides a guided composer workflow for creating channel-specific messages (LinkedIn, email), contact management with LinkedIn PDF import, experiment tracking, and a dashboard with funnel metrics and success rates.
+Kin is a full-stack web application for managing structured networking outreach messages (SDR/BDR-style). It enables users to craft personalized outreach, run A/B experiments on messaging variants, and track outcomes by outreach type. The system provides a guided composer workflow for creating channel-specific messages (LinkedIn, email), contact management with LinkedIn PDF import, experiment tracking, and a dashboard with funnel metrics and success rates.
 
 ## User Preferences
 

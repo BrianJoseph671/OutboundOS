@@ -140,7 +140,7 @@ async function getClientForUser(userId: string): Promise<Client> {
   );
 
   const client = new Client({
-    name: "outboundos-server",
+    name: "kin-server",
     version: "1.0.0",
   });
 

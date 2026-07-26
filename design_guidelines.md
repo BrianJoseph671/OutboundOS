@@ -1,4 +1,4 @@
-# Outbound OS - Design Guidelines
+# Kin - Design Guidelines
 
 ## Design Approach
 

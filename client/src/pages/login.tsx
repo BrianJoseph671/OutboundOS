@@ -130,14 +130,14 @@ export default function Login() {
         <div className="text-center mb-8">
           <div className="flex justify-center mb-5">
             <img
-              src="/brand/outbound-os-logo.svg"
-              alt="Outbound OS"
+              src="/brand/kin-logo.svg"
+              alt="Kin"
               className="h-14 w-auto max-w-[220px] object-contain mx-auto"
               width={220}
               height={56}
             />
           </div>
-          <h1 className="text-3xl font-bold tracking-tight">Outbound OS</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Kin</h1>
           <p className="text-muted-foreground mt-2">Your outreach management platform</p>
         </div>
 
@@ -221,7 +221,7 @@ export default function Login() {
             <Card>
               <CardHeader>
                 <CardTitle>Create an account</CardTitle>
-                <CardDescription>Get started with Outbound OS today</CardDescription>
+                <CardDescription>Get started with Kin today</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 {googleEnabled && (

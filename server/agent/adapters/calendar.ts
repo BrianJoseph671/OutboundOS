@@ -77,7 +77,7 @@ export async function fetchEvents(
     title: `Coffee chat with ${contact.name}`,
     start: eventStart.toISOString(),
     end: eventEnd.toISOString(),
-    attendees: [userEmail || "owner@outboundos.local", contact.email!],
+    attendees: [userEmail || "owner@kin.local", contact.email!],
     description: `Reconnect touchpoint with ${contact.name}.`,
   }));
 }

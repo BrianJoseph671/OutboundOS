@@ -81,7 +81,7 @@ function buildSuperhumanProvider(stateKey: string): OAuthClientProvider {
     grant_types: ["authorization_code", "refresh_token"],
     response_types: ["code"],
     token_endpoint_auth_method: "none",
-    client_name: "Outbound OS",
+    client_name: "Kin",
     ...(logoUri ? { logo_uri: logoUri } : {}),
   };
 
