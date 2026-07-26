@@ -382,11 +382,11 @@ export default function ProspectResearch() {
       console.error("Drafting webhook notification failed:", webhookError);
     }
     
-    // Navigate to outreach log page with pre-filled form
-    setLocation("/outreach-log?action=new");
-    toast({ 
-      title: "Opening Outreach Log", 
-      description: "Review and edit your outreach message" 
+    // Navigate to contacts page — the contact record was just created/found above
+    setLocation("/contacts");
+    toast({
+      title: "Draft saved",
+      description: "Message draft saved for this contact"
     });
   };
 

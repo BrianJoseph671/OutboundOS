@@ -2410,7 +2410,6 @@ export default function Contacts() {
             isComplete={isComplete}
             currentContact={currentContact?.contactName}
             completedContacts={completedContacts.map(c => ({ contactName: c.contactName }))}
-            onViewResults={() => setLocation("/decisions")}
           />
         )}
 

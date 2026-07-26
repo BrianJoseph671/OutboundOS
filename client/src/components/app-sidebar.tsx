@@ -19,21 +19,17 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  LayoutDashboard,
   Users,
   FlaskConical,
-  FileText,
   Settings,
   Upload,
-  Brain,
   Heart,
   LogOut,
   ListTodo,
-  BarChart3,
   ListChecks,
 } from "lucide-react";
 
-const BRAND_LOGO_SRC = "/brand/outbound-os-logo.svg";
+const BRAND_LOGO_SRC = "/brand/kin-logo.svg";
 import { useAuth } from "@/hooks/useAuth";
 
 const menuItems = [
@@ -43,10 +39,6 @@ const menuItems = [
   { title: "Import Prospects", url: "/research-setup", icon: Upload },
   { title: "Contacts", url: "/contacts", icon: Users },
   { title: "Relationships", url: "/contacts", icon: Heart },
-  { title: "Outreach Log", url: "/outreach-log", icon: FileText },
-  { title: "ROI Dashboard", url: "/roi", icon: BarChart3 },
-  { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "Decisions", url: "/decisions", icon: Brain },
 ];
 
 export function AppSidebar() {
@@ -62,12 +54,12 @@ export function AppSidebar() {
         <Link href="/" className="flex items-center gap-2 min-w-0">
           <img
             src={BRAND_LOGO_SRC}
-            alt="Outbound OS"
+            alt="Kin"
             className="h-7 w-auto max-w-[100px] object-contain object-left shrink-0"
             width={100}
             height={28}
           />
-          <span className="font-semibold text-lg truncate">Outbound OS</span>
+          <span className="font-semibold text-lg truncate">Kin</span>
         </Link>
       </SidebarHeader>
       <SidebarContent className="pt-4">
@@ -78,7 +70,7 @@ export function AppSidebar() {
                 const isActive =
                   location === item.url ||
                   (item.url !== "/" && location.startsWith(item.url)) ||
-                  (item.url === "/contacts" && location === "/research-queue");
+                  (item.url === "/contacts" && (location === "/research-queue" || location === "/"));
                 return (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton

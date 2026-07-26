@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { Switch, Route } from "wouter";
 import Login from "@/pages/login";
-import { queryClient, getQueryFn, apiRequest } from "./lib/queryClient";
+import { queryClient, getQueryFn } from "./lib/queryClient";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -9,20 +9,16 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
-import { Loader2, LogOut } from "lucide-react";
-import Dashboard from "@/pages/dashboard";
+import { Loader2 } from "lucide-react";
 import Contacts from "@/pages/contacts";
 import ActionsPage from "@/pages/actions";
 import ActionDetailPage from "@/pages/action-detail";
 import DraftWorkspace from "@/pages/draft-workspace";
-import OutreachLog from "@/pages/outreach-log";
 import ProspectResearch from "@/pages/prospect-research";
 import ResearchSetup from "@/pages/research-setup";
 import ResearchQueue from "@/pages/research-queue";
-import Decisions from "@/pages/decisions";
 import Settings from "@/pages/settings";
 import WeeklyBriefPage from "@/pages/weekly-brief";
-import RoiDashboardPage from "@/pages/roi-dashboard";
 import SequencesPage from "@/pages/sequences";
 import NetworkReviewPage from "@/pages/network-review";
 import NotFound from "@/pages/not-found";
@@ -44,15 +40,12 @@ function Router() {
       <Route path="/actions/:id/draft" component={DraftWorkspace} />
       <Route path="/actions/:id" component={ActionDetailPage} />
       <Route path="/actions" component={ActionsPage} />
-      <Route path="/" component={Dashboard} />
+      <Route path="/" component={Contacts} />
       <Route path="/contacts" component={Contacts} />
-      <Route path="/outreach-log" component={OutreachLog} />
       <Route path="/prospect-research" component={ProspectResearch} />
       <Route path="/research-setup" component={ResearchSetup} />
       <Route path="/research-queue" component={ResearchQueue} />
-      <Route path="/decisions" component={Decisions} />
       <Route path="/weekly-brief" component={WeeklyBriefPage} />
-      <Route path="/roi" component={RoiDashboardPage} />
       <Route path="/sequences" component={SequencesPage} />
       <Route path="/network-review/:sessionId" component={NetworkReviewPage} />
       <Route path="/settings" component={Settings} />
@@ -93,22 +86,11 @@ function ErrorScreen({ onRetry }: { onRetry: () => void }) {
 
 /**
  * AppShell is rendered only for authenticated users.
- * It receives the resolved user object so the header can display user info
- * and provide a logout action.
  */
-function AppShell({ user }: { user: AuthUser }) {
+function AppShell() {
   const style = {
     "--sidebar-width": "15rem",
     "--sidebar-width-icon": "3rem",
-  };
-
-  const handleLogout = async () => {
-    try {
-      await apiRequest("POST", "/auth/logout");
-    } catch {
-      // Proceed with redirect even if the server call fails
-    }
-    window.location.href = "/login";
   };
 
   return (
@@ -120,26 +102,6 @@ function AppShell({ user }: { user: AuthUser }) {
             <SidebarTrigger data-testid="button-sidebar-toggle" />
             <div className="flex items-center gap-2">
               <ThemeToggle />
-              {user.fullName && (
-                <span className="text-sm text-muted-foreground hidden sm:inline">
-                  {user.fullName}
-                </span>
-              )}
-              {user.email && (
-                <span className="text-xs text-muted-foreground hidden md:inline">
-                  {user.email}
-                </span>
-              )}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleLogout}
-                className="text-muted-foreground hover:text-foreground"
-                data-testid="button-logout"
-              >
-                <LogOut className="h-4 w-4 mr-1" />
-                Logout
-              </Button>
             </div>
           </header>
           <main className="flex-1 overflow-auto px-6 py-6 min-h-0">
@@ -190,7 +152,7 @@ function AuthGate() {
     return <LoadingScreen />;
   }
 
-  return <AppShell user={user} />;
+  return <AppShell />;
 }
 
 function App() {
