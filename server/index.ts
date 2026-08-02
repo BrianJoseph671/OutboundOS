@@ -100,7 +100,7 @@ app.use((req, res, next) => {
   }
 
   // Port from env (default 5000). In development bind to localhost for Windows compatibility;
-  // production (e.g. Replit) can bind to 0.0.0.0. reusePort is Unix-only.
+  // production binds to 0.0.0.0 for container platforms (e.g. Railway). reusePort is Unix-only.
   const port = parseInt(process.env.PORT || "5000", 10);
   const isProduction = process.env.NODE_ENV === "production";
   const listenOptions: { port: number; host: string; reusePort?: boolean } = {

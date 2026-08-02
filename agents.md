@@ -17,7 +17,7 @@ This is the primary context document for all AI coding agents working in this re
 4. Log outreach attempts and track outcomes
 5. Run A/B experiments on message variants
 
-**Hosting:** Replit (runtime). **GitHub is the single source of truth** for all code.
+**Hosting:** Railway (runtime). **GitHub is the single source of truth** for all code.
 
 ---
 

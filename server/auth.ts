@@ -266,10 +266,7 @@ export async function setupAuth(app: Express) {
   const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
 
   if (googleClientId && googleClientSecret) {
-    const baseUrl = process.env.APP_URL ||
-      (process.env.REPLIT_DOMAINS
-        ? `https://${process.env.REPLIT_DOMAINS.split(",")[0].trim()}`
-        : "http://localhost:5000");
+    const baseUrl = process.env.APP_BASE_URL || "http://localhost:5000";
     const callbackURL = process.env.GOOGLE_CALLBACK_URL || `${baseUrl}/api/auth/google/callback`;
     console.info(`[Auth] Google OAuth callback URL: ${callbackURL}`);
 

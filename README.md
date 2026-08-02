@@ -150,6 +150,30 @@ Research results are stored in PostgreSQL. Without a database, the app still run
 
 ---
 
+## Deployment (Railway)
+
+The app deploys as a single Node service (Express serves both the API and the
+built React SPA, plus a WebSocket server) — Railway's Nixpacks builder picks
+up `npm run build` / `npm run start` automatically via `railway.json`, no
+Dockerfile needed.
+
+1. **Create a Railway project** from this GitHub repo (railway.app → New
+   Project → Deploy from GitHub repo).
+2. **Add a PostgreSQL plugin** in the same Railway project — it auto-injects
+   `DATABASE_URL` into your service's environment, no manual copy-paste
+   needed.
+3. **Set the remaining environment variables** on the Railway service (mirror
+   `.env.example`): `SESSION_SECRET`, `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`
+   (update the OAuth redirect URI in Google Cloud Console to match your
+   Railway domain), `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `ENCRYPTION_KEY`,
+   and `APP_BASE_URL` — set this to your Railway-issued domain (e.g.
+   `https://your-app.up.railway.app`), used to build OAuth callback URLs.
+4. **Run migrations once** after the first deploy: `npm run db:push`
+   (via `railway run npm run db:push`, or a Railway one-off shell).
+5. Railway auto-deploys on every push to `main`.
+
+---
+
 ## What I Learned
 
 - **Speed matters more than perfection** - 80% accuracy in 30 seconds beats 95% accuracy in 20 minutes
@@ -162,8 +186,6 @@ Research results are stored in PostgreSQL. Without a database, the app still run
 ## Demo
 
 **Video Walkthrough:** [Watch on Google Drive](https://drive.google.com/file/d/1sTIIPDmxJZxiHjXrVUVmV9ZcnLJSPjzM/view)
-
-**Live Site:** [Try it out Here](https://networker-master.replit.app)
 
 ---
 

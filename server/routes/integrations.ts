@@ -41,13 +41,7 @@ function getUserId(req: Request): string {
 }
 
 function getBaseUrl(): string {
-  if (process.env.APP_BASE_URL) return process.env.APP_BASE_URL;
-  const replitDomains = process.env.REPLIT_DOMAINS;
-  if (replitDomains) {
-    const domain = replitDomains.split(",")[0].trim();
-    return `https://${domain}`;
-  }
-  return "http://localhost:5000";
+  return process.env.APP_BASE_URL || "http://localhost:5000";
 }
 
 /**
