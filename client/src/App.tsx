@@ -11,6 +11,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import Contacts from "@/pages/contacts";
+import ContactMap from "@/pages/contact-map";
 import ActionsPage from "@/pages/actions";
 import ActionDetailPage from "@/pages/action-detail";
 import DraftWorkspace from "@/pages/draft-workspace";
@@ -42,6 +43,7 @@ function Router() {
       <Route path="/actions" component={ActionsPage} />
       <Route path="/" component={Contacts} />
       <Route path="/contacts" component={Contacts} />
+      <Route path="/map" component={ContactMap} />
       <Route path="/prospect-research" component={ProspectResearch} />
       <Route path="/research-setup" component={ResearchSetup} />
       <Route path="/research-queue" component={ResearchQueue} />

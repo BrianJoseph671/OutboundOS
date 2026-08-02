@@ -27,6 +27,7 @@ import {
   LogOut,
   ListTodo,
   ListChecks,
+  MapPin,
 } from "lucide-react";
 
 const BRAND_LOGO_SRC = "/brand/kin-logo.svg";
@@ -39,6 +40,7 @@ const menuItems = [
   { title: "Import Prospects", url: "/research-setup", icon: Upload },
   { title: "Contacts", url: "/contacts", icon: Users },
   { title: "Relationships", url: "/contacts", icon: Heart },
+  { title: "Map", url: "/map", icon: MapPin },
 ];
 
 export function AppSidebar() {
