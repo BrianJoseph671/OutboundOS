@@ -135,6 +135,11 @@ describe("isNotreDameEmail", () => {
     expect(isNotreDameEmail(null)).toBe(false);
     expect(isNotreDameEmail(undefined)).toBe(false);
   });
+  it("returns false for non-string values", () => {
+    expect(isNotreDameEmail(123)).toBe(false);
+    expect(isNotreDameEmail(null)).toBe(false);
+    expect(isNotreDameEmail(undefined)).toBe(false);
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
