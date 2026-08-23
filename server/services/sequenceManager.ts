@@ -15,6 +15,7 @@ import type { Sequence, SequenceStep, InsertSequenceStep } from "@shared/schema"
 
 /** Placeholder until previous step is sent and real scheduledFor is computed */
 const UNSCHEDULED_STEP_DATE = new Date("2099-01-01T00:00:00.000Z");
+const GMAIL_DATE_QUERY_SLACK_MS = 24 * 60 * 60 * 1000;
 
 // ─── Create Sequence ──────────────────────────────────────────────────────────
 
@@ -175,8 +176,6 @@ export async function markStepSent(
 export async function checkReplyAndAutoComplete(userId: string): Promise<number> {
   const activeSequences = await storage.getSequences(userId, { status: "active" });
   let completed = 0;
-  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const nowIso = new Date().toISOString();
 
   for (const seq of activeSequences) {
     const contact = await storage.getContact(seq.contactId, userId);
@@ -198,9 +197,13 @@ export async function checkReplyAndAutoComplete(userId: string): Promise<number>
     let replyDetected = false;
 
     try {
+      // Gmail's before:/after: operators are date-only, so pad the exact
+      // message timestamp window and keep the precise comparison below.
+      const gmailStartIso = new Date(lastSentAt.getTime() - GMAIL_DATE_QUERY_SLACK_MS).toISOString();
+      const gmailEndIso = new Date(Date.now() + GMAIL_DATE_QUERY_SLACK_MS).toISOString();
       const gmailResult = await listGmailThreads(userId, {
-        start_date: oneDayAgo.toISOString(),
-        end_date: nowIso,
+        start_date: gmailStartIso,
+        end_date: gmailEndIso,
         from: [contact.email],
         limit: 30,
       });

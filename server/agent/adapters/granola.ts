@@ -66,7 +66,7 @@ export async function fetchMeetings(
     }
     const rows = await storage.getMeetings(userId);
     const mapped = meetingRowsToGranolaMeetings(rows);
-    if (mapped.length > 0) return mapped;
+    return mapped;
   }
 
   const contacts = await storage.getContacts(userId);
