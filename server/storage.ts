@@ -789,7 +789,7 @@ export class DatabaseStorage implements IStorage {
         contactEmail: contacts.email,
       })
       .from(actions)
-      .leftJoin(contacts, eq(actions.contactId, contacts.id))
+      .leftJoin(contacts, and(eq(actions.contactId, contacts.id), eq(contacts.userId, userId)))
       .where(and(...conditions))
       .orderBy(desc(actions.priority), desc(actions.createdAt));
 
@@ -820,7 +820,7 @@ export class DatabaseStorage implements IStorage {
         contactEmail: contacts.email,
       })
       .from(actions)
-      .leftJoin(contacts, eq(actions.contactId, contacts.id))
+      .leftJoin(contacts, and(eq(actions.contactId, contacts.id), eq(contacts.userId, userId)))
       .where(and(eq(actions.id, id), eq(actions.userId, userId)));
     return result;
   }
