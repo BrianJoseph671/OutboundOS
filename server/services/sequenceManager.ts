@@ -30,19 +30,10 @@ export async function createSequence(input: CreateSequenceInput): Promise<{
   sequence: Sequence;
   steps: SequenceStep[];
 }> {
-  // Enforce one active sequence per contact
-  const existing = await storage.getSequences(input.userId, {
-    contactId: input.contactId,
-    status: "active",
-  });
-  if (existing.length > 0) {
-    // Cancel existing active sequence
-    for (const seq of existing) {
-      await cancelSequence(seq.id, input.userId);
-    }
-  }
-
   let stepDefs: Array<{ stepNumber: number; delayDays: number; instructions: string; subject?: string }>;
+
+  const contact = await storage.getContact(input.contactId, input.userId);
+  if (!contact) throw new Error("Contact not found");
 
   if (input.templateId) {
     const template = await storage.getSequenceTemplate(input.templateId, input.userId);
@@ -52,6 +43,21 @@ export async function createSequence(input: CreateSequenceInput): Promise<{
     stepDefs = input.customSteps;
   } else {
     throw new Error("Either templateId or customSteps is required");
+  }
+
+  if (!Array.isArray(stepDefs) || stepDefs.length === 0) {
+    throw new Error("Sequence must include at least one step");
+  }
+
+  // Enforce one active sequence per owned contact only after all inputs are valid.
+  const existing = await storage.getSequences(input.userId, {
+    contactId: input.contactId,
+    status: "active",
+  });
+  if (existing.length > 0) {
+    for (const seq of existing) {
+      await cancelSequence(seq.id, input.userId);
+    }
   }
 
   const sequence = await storage.createSequence({
@@ -97,9 +103,6 @@ export async function processDueSteps(userId: string): Promise<number> {
   let count = 0;
 
   for (const step of dueSteps) {
-    await storage.updateSequenceStep(step.id, { status: "due" });
-
-    // Create an action for the due step
     try {
       await storage.createAction({
         userId,
@@ -111,7 +114,11 @@ export async function processDueSteps(userId: string): Promise<number> {
         reason: `Step ${step.stepNumber} of "${step.sequenceName}" is due`,
         snoozedUntil: null,
       });
-    } catch { /* dedup — action may already exist */ }
+      await storage.updateSequenceStep(step.id, { status: "due" });
+    } catch {
+      // Leave the step pending so transient action queue failures can be retried.
+      continue;
+    }
 
     count++;
   }
@@ -126,12 +133,21 @@ export async function markStepSent(
   userId: string,
   draftId?: string,
   threadId?: string,
+  sequenceId?: string,
 ): Promise<SequenceStep | undefined> {
   const step = await storage.getSequenceStep(stepId);
   if (!step) return undefined;
+  if (sequenceId && step.sequenceId !== sequenceId) return undefined;
 
   const seq = await storage.getSequence(step.sequenceId, userId);
   if (!seq) return undefined;
+
+  if (step.status === "sent") {
+    return step;
+  }
+  if (step.status !== "pending" && step.status !== "due") {
+    return undefined;
+  }
 
   const now = new Date();
   const updated = await storage.updateSequenceStep(stepId, {
@@ -157,8 +173,9 @@ export async function markStepSent(
 
   // Auto-complete the sequence_step action
   const actions = await storage.getActions(userId, { status: "pending", type: "sequence_step" });
+  const expectedReason = `Step ${step.stepNumber} of "${seq.name}" is due`;
   for (const action of actions) {
-    if (action.contactId === seq.contactId && action.reason.includes(seq.name)) {
+    if (action.contactId === seq.contactId && action.reason === expectedReason) {
       await storage.updateAction(action.id, userId, { status: "completed" });
     }
   }
@@ -175,7 +192,6 @@ export async function markStepSent(
 export async function checkReplyAndAutoComplete(userId: string): Promise<number> {
   const activeSequences = await storage.getSequences(userId, { status: "active" });
   let completed = 0;
-  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const nowIso = new Date().toISOString();
 
   for (const seq of activeSequences) {
@@ -194,12 +210,15 @@ export async function checkReplyAndAutoComplete(userId: string): Promise<number>
     const sequenceThreadIds = new Set(
       sentSteps.map((s) => s.threadId).filter((id): id is string => Boolean(id)),
     );
+    if (sequenceThreadIds.size === 0) {
+      continue;
+    }
 
     let replyDetected = false;
 
     try {
       const gmailResult = await listGmailThreads(userId, {
-        start_date: oneDayAgo.toISOString(),
+        start_date: lastSentAt.toISOString(),
         end_date: nowIso,
         from: [contact.email],
         limit: 30,
@@ -224,12 +243,14 @@ export async function checkReplyAndAutoComplete(userId: string): Promise<number>
       }
     } catch (err) {
       console.warn("[SequenceManager] Gmail reply check failed, falling back to interactions:", err);
-      const interactions = await storage.getInteractions(userId, seq.contactId);
-      replyDetected = interactions.some(
-        (i) =>
-          i.direction === "inbound" &&
-          i.channel === "email" &&
-          i.occurredAt.getTime() > lastSentAt.getTime(),
+    }
+
+    if (!replyDetected) {
+      replyDetected = await hasInboundInteractionAfterSend(
+        userId,
+        seq.contactId,
+        lastSentAt,
+        sequenceThreadIds,
       );
     }
 
@@ -240,6 +261,25 @@ export async function checkReplyAndAutoComplete(userId: string): Promise<number>
   }
 
   return completed;
+}
+
+async function hasInboundInteractionAfterSend(
+  userId: string,
+  contactId: string,
+  lastSentAt: Date,
+  sequenceThreadIds: Set<string>,
+): Promise<boolean> {
+  const interactions = await storage.getInteractions(userId, contactId);
+  return interactions.some((i) => {
+    if (
+      i.direction !== "inbound" ||
+      i.channel !== "email" ||
+      i.occurredAt.getTime() <= lastSentAt.getTime()
+    ) {
+      return false;
+    }
+    return Boolean(i.sourceId && sequenceThreadIds.has(i.sourceId));
+  });
 }
 
 // ─── Pause / Resume / Cancel ──────────────────────────────────────────────────
@@ -253,23 +293,45 @@ export async function resumeSequence(sequenceId: string, userId: string): Promis
 }
 
 export async function cancelSequence(sequenceId: string, userId: string): Promise<Sequence | undefined> {
-  const steps = await storage.getSequenceSteps(sequenceId);
+  const sequence = await storage.getSequence(sequenceId, userId);
+  if (!sequence) return undefined;
+
+  const steps = await storage.getSequenceSteps(sequence.id);
   for (const step of steps) {
     if (step.status === "pending" || step.status === "due") {
       await storage.updateSequenceStep(step.id, { status: "skipped" });
     }
   }
-  return storage.updateSequence(sequenceId, userId, { status: "cancelled" });
+  await dismissPendingSequenceActions(userId, sequence.contactId, sequence.name);
+  return storage.updateSequence(sequence.id, userId, { status: "cancelled" });
 }
 
 async function completeSequence(sequenceId: string, userId: string, reason: string): Promise<void> {
-  const steps = await storage.getSequenceSteps(sequenceId);
+  const sequence = await storage.getSequence(sequenceId, userId);
+  if (!sequence) return;
+
+  const steps = await storage.getSequenceSteps(sequence.id);
   for (const step of steps) {
     if (step.status === "pending" || step.status === "due") {
       await storage.updateSequenceStep(step.id, { status: "skipped" });
     }
   }
-  await storage.updateSequence(sequenceId, userId, { status: "completed" });
+  await dismissPendingSequenceActions(userId, sequence.contactId, sequence.name);
+  await storage.updateSequence(sequence.id, userId, { status: "completed" });
+}
+
+async function dismissPendingSequenceActions(
+  userId: string,
+  contactId: string,
+  sequenceName: string,
+): Promise<void> {
+  const actions = await storage.getActions(userId, { status: "pending", type: "sequence_step" });
+  const suffix = ` of "${sequenceName}" is due`;
+  for (const action of actions) {
+    if (action.contactId === contactId && action.reason.endsWith(suffix)) {
+      await storage.updateAction(action.id, userId, { status: "dismissed" });
+    }
+  }
 }
 
 // ─── Default Templates ────────────────────────────────────────────────────────

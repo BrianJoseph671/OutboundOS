@@ -129,7 +129,7 @@ export default function DraftWorkspace() {
   const { toast } = useToast();
   const actionId = params?.id;
 
-  const { completeAction } = useActions();
+  const { completeAction, invalidate } = useActions();
   const { compose, revise } = useCompose();
 
   const { data: action, isLoading: actionLoading, isError: actionError } = useQuery<ActionDetail>({
@@ -199,6 +199,7 @@ export default function DraftWorkspace() {
   const [currentDraftId, setCurrentDraftId] = useState<string | null>(null);
   const [currentDraftThreadId, setCurrentDraftThreadId] = useState<string | null>(null);
   const [hasComposed, setHasComposed] = useState(false);
+  const [isSendingSequence, setIsSendingSequence] = useState(false);
 
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     {
@@ -360,15 +361,29 @@ export default function DraftWorkspace() {
   const handleSend = async () => {
     if (!actionId || !draftBody.trim()) return;
     try {
-      if (isSequenceStep && activeSequenceDetail?.id && dueSequenceStep?.id) {
+      if (isSequenceStep) {
+        if (!activeSequenceDetail?.id || !dueSequenceStep?.id) {
+          toast({
+            title: "Sequence step is no longer current",
+            description: "Refresh the action queue before sending this draft.",
+            variant: "destructive",
+          });
+          return;
+        }
+        setIsSendingSequence(true);
         await apiRequest(
           "POST",
           `/api/sequences/${activeSequenceDetail.id}/steps/${dueSequenceStep.id}/send`,
           {
             draftId: currentDraftId,
             threadId: currentDraftThreadId,
+            actionId,
           },
         );
+        invalidate();
+        toast({ title: "Draft sent and sequence step completed" });
+        navigate("/actions");
+        return;
       }
       completeAction.mutate(actionId, {
         onSuccess: () => {
@@ -388,13 +403,15 @@ export default function DraftWorkspace() {
         title: "Failed to mark sequence step",
         variant: "destructive",
       });
+    } finally {
+      setIsSendingSequence(false);
     }
   };
 
   const handleBack = () => navigate("/actions");
 
   const isComposing = compose.isPending || revise.isPending;
-  const isSending = completeAction.isPending;
+  const isSending = completeAction.isPending || isSendingSequence;
 
   // ── Loading skeleton ──────────────────────────────────────────────────────
   if (actionLoading) {

@@ -100,8 +100,32 @@ sequencesRouter.patch("/:id", async (req: Request, res: Response) => {
 sequencesRouter.post("/:id/steps/:stepId/send", async (req: Request, res: Response) => {
   try {
     const userId = req.user!.id;
-    const { draftId, threadId } = req.body;
-    const step = await markStepSent(req.params.stepId, userId, draftId, threadId);
+    const { draftId, threadId, actionId } = req.body as {
+      draftId?: string;
+      threadId?: string;
+      actionId?: string;
+    };
+    const sequence = await storage.getSequence(req.params.id, userId);
+    const currentStep = await storage.getSequenceStep(req.params.stepId);
+    if (!sequence || !currentStep || currentStep.sequenceId !== sequence.id) {
+      return res.status(404).json({ error: "Step not found" });
+    }
+
+    const expectedReason = `Step ${currentStep.stepNumber} of "${sequence.name}" is due`;
+    if (actionId) {
+      const action = await storage.getAction(actionId, userId);
+      if (
+        !action ||
+        action.status !== "pending" ||
+        action.actionType !== "sequence_step" ||
+        action.contactId !== sequence.contactId ||
+        action.reason !== expectedReason
+      ) {
+        return res.status(409).json({ error: "Sequence action is no longer current" });
+      }
+    }
+
+    const step = await markStepSent(req.params.stepId, userId, draftId, threadId, req.params.id);
     if (!step) return res.status(404).json({ error: "Step not found" });
     res.json(step);
   } catch (error) {

@@ -187,6 +187,16 @@ actionsRouter.patch("/:id", async (req: Request, res: Response) => {
     if (priority !== undefined) updateData.priority = priority;
     if (reason !== undefined) updateData.reason = reason;
 
+    const existing = await storage.getAction(req.params.id, userId);
+    if (!existing) {
+      return res.status(404).json({ error: "Action not found" });
+    }
+    if (existing.actionType === "sequence_step" && status === "completed") {
+      return res.status(400).json({
+        error: "Sequence step actions must be completed through the sequence send endpoint",
+      });
+    }
+
     const updated = await storage.updateAction(req.params.id, userId, updateData as Parameters<typeof storage.updateAction>[2]);
     if (!updated) {
       return res.status(404).json({ error: "Action not found" });

@@ -38,6 +38,7 @@ const NOISE_EMAIL_PATTERNS = [
 ];
 
 const MASS_OUTBOUND_RECIPIENT_THRESHOLD = 10;
+type SubjectRecipientTracker = Map<string, Set<string>>;
 
 function isNoiseEmail(email: string): boolean {
   const lower = email.toLowerCase().trim();
@@ -45,26 +46,23 @@ function isNoiseEmail(email: string): boolean {
   return NOISE_EMAIL_PATTERNS.some((pattern) => pattern.test(lower));
 }
 
-/** Track subject → unique recipient emails to detect mass outbound blasts */
-const subjectRecipientTracker = new Map<string, Set<string>>();
-
-function isMassOutboundSubject(subject: string): boolean {
+function isMassOutboundSubject(subject: string, subjectRecipientTracker: SubjectRecipientTracker): boolean {
   const key = subject.trim().toLowerCase();
   if (!key) return false;
   const recipients = subjectRecipientTracker.get(key);
   return (recipients?.size ?? 0) >= MASS_OUTBOUND_RECIPIENT_THRESHOLD;
 }
 
-function recordSubjectRecipients(subject: string, recipientEmails: string[]): void {
+function recordSubjectRecipients(
+  subject: string,
+  recipientEmails: string[],
+  subjectRecipientTracker: SubjectRecipientTracker,
+): void {
   const key = subject.trim().toLowerCase();
   if (!key) return;
   const set = subjectRecipientTracker.get(key) || new Set<string>();
   for (const email of recipientEmails) set.add(email);
   subjectRecipientTracker.set(key, set);
-}
-
-function clearSubjectRecipientTracker(): void {
-  subjectRecipientTracker.clear();
 }
 
 function extractEmailAddress(raw: string): string {
@@ -113,7 +111,7 @@ async function scanThreads(
   const contactMap = new Map<string, ScannedContact>();
   const signaturesByEmail = new Map<string, Set<string>>();
   const typeSignals = new Map<string, { signatureKey: string; count: number; examples: Set<string>; labelName?: string }>();
-  clearSubjectRecipientTracker();
+  const subjectRecipientTracker: SubjectRecipientTracker = new Map();
   let threadsScanned = 0;
   let cursor: string | undefined;
 
@@ -135,7 +133,15 @@ async function scanThreads(
 
     for (const thread of threads) {
       threadsScanned++;
-      processThread(thread, userEmail, contactMap, typeSignals, signaturesByEmail, userLabelMap);
+      processThread(
+        thread,
+        userEmail,
+        contactMap,
+        typeSignals,
+        signaturesByEmail,
+        subjectRecipientTracker,
+        userLabelMap,
+      );
     }
 
     onProgress?.(threadsScanned);
@@ -163,6 +169,7 @@ function processThread(
   contactMap: Map<string, ScannedContact>,
   typeSignals: Map<string, { signatureKey: string; count: number; examples: Set<string>; labelName?: string }>,
   signaturesByEmail: Map<string, Set<string>>,
+  subjectRecipientTracker: SubjectRecipientTracker,
   userLabelMap?: Map<string, string>,
 ) {
   const userNorm = userEmail.toLowerCase().trim();
@@ -203,9 +210,9 @@ function processThread(
   const counterparties = participants.filter((p) => p !== userNorm && !isNoiseEmail(p));
 
   if (hasUserSent && subject) {
-    recordSubjectRecipients(subject, counterparties);
+    recordSubjectRecipients(subject, counterparties, subjectRecipientTracker);
   }
-  if (isMassOutboundSubject(subject)) {
+  if (isMassOutboundSubject(subject, subjectRecipientTracker)) {
     return;
   }
 
@@ -309,30 +316,46 @@ async function persistContacts(
   contactMap: Map<string, ScannedContact>,
   hasGranolaMap: Map<string, boolean>,
   hasCalendarMap: Map<string, boolean>,
+  options: { preserveExistingMetrics?: boolean } = {},
 ): Promise<{ contactsFound: number; contactsUpdated: number }> {
   let contactsUpdated = 0;
   const contactsFound = contactMap.size;
 
   for (const [email, scanned] of Array.from(contactMap.entries())) {
+    const existing = await storage.getContactByEmail(email, userId);
+    const preserveExistingMetrics = options.preserveExistingMetrics && existing;
+    const totalThreads = preserveExistingMetrics
+      ? Math.max(existing.totalThreads ?? 0, scanned.threadCount)
+      : scanned.threadCount;
+    const bidirectionalThreads = preserveExistingMetrics
+      ? Math.max(existing.bidirectionalThreads ?? 0, scanned.bidirectionalThreads)
+      : scanned.bidirectionalThreads;
+    const lastInboundAt = preserveExistingMetrics
+      ? latestDate(existing.lastInboundAt, scanned.lastInbound)
+      : scanned.lastInbound;
+    const lastOutboundAt = preserveExistingMetrics
+      ? latestDate(existing.lastOutboundAt, scanned.lastOutbound)
+      : scanned.lastOutbound;
+    const lastInteractionAt = preserveExistingMetrics
+      ? latestDate(existing.lastInteractionAt, scanned.lastInteraction, lastInboundAt, lastOutboundAt)
+      : scanned.lastInteraction;
+
     const { warmthScore, tier } = computeWarmth({
-      bidirectionalThreads: scanned.bidirectionalThreads,
-      totalThreads: scanned.threadCount,
-      lastInteraction: scanned.lastInteraction,
+      bidirectionalThreads,
+      totalThreads,
+      lastInteraction: lastInteractionAt,
       hasGranolaMeeting: hasGranolaMap.get(email) || false,
       hasCalendarEvent: hasCalendarMap.get(email) || false,
     });
 
-    const lastInteractionAt = scanned.lastInteraction;
-
-    const existing = await storage.getContactByEmail(email, userId);
     if (existing) {
       await storage.updateContact(existing.id, userId, {
         warmthScore,
         tier,
-        bidirectionalThreads: scanned.bidirectionalThreads,
-        totalThreads: scanned.threadCount,
-        lastInboundAt: scanned.lastInbound,
-        lastOutboundAt: scanned.lastOutbound,
+        bidirectionalThreads,
+        totalThreads,
+        lastInboundAt,
+        lastOutboundAt,
         lastInteractionAt,
         indexedAt: new Date(),
         ...(scanned.company && !existing.company ? { company: scanned.company } : {}),
@@ -347,10 +370,10 @@ async function persistContacts(
         source: "gmail",
         tier,
         warmthScore,
-        bidirectionalThreads: scanned.bidirectionalThreads,
-        totalThreads: scanned.threadCount,
-        lastInboundAt: scanned.lastInbound,
-        lastOutboundAt: scanned.lastOutbound,
+        bidirectionalThreads,
+        totalThreads,
+        lastInboundAt,
+        lastOutboundAt,
         lastInteractionAt,
         indexedAt: new Date(),
       });
@@ -359,6 +382,13 @@ async function persistContacts(
   }
 
   return { contactsFound, contactsUpdated };
+}
+
+function latestDate(...dates: Array<Date | null | undefined>): Date | null {
+  return dates.reduce<Date | null>((latest, date) => {
+    if (!date) return latest;
+    return !latest || date > latest ? date : latest;
+  }, null);
 }
 
 // ─── Cross-Reference: Granola & Calendar ──────────────────────────────────────
@@ -756,7 +786,11 @@ export async function runIncrementalSync(
 
     const { hasGranolaMap, hasCalendarMap } = await buildCrossRefMaps(userId);
     const { contactsFound, contactsUpdated } = await persistContacts(
-      userId, filteredMap, hasGranolaMap, hasCalendarMap,
+      userId,
+      filteredMap,
+      hasGranolaMap,
+      hasCalendarMap,
+      { preserveExistingMetrics: true },
     );
     progress.contactsFound = contactsFound;
     progress.contactsUpdated = contactsUpdated;
