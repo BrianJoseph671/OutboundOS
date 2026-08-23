@@ -57,7 +57,7 @@ export async function fetchEvents(
     }
     const rows = await storage.getMeetings(userId);
     const mapped = meetingRowsToCalendarEvents(rows);
-    if (mapped.length > 0) return mapped;
+    return mapped;
   }
 
   const contacts = await storage.getContacts(userId);

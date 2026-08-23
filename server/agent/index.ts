@@ -110,7 +110,15 @@ export async function runSyncWithDeps(
   let newInteractions = 0;
   let newActions = 0;
 
-  const userEmail = process.env.BRIAN_EMAIL ?? "";
+  const user = await storage.getUser(userId);
+  const userEmail = user?.email ?? "";
+  if (!userEmail) {
+    return {
+      newInteractions: 0,
+      newActions: 0,
+      errors: ["User email not found. Connect your Google account first."],
+    };
+  }
 
   // ── Step 1: Compute sync window ──────────────────────────────────────────
   const { startDate, endDate } = await computeSyncWindow(userId);
