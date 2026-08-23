@@ -38,6 +38,7 @@ const NOISE_EMAIL_PATTERNS = [
 ];
 
 const MASS_OUTBOUND_RECIPIENT_THRESHOLD = 10;
+type SubjectRecipientTracker = Map<string, Set<string>>;
 
 function isNoiseEmail(email: string): boolean {
   const lower = email.toLowerCase().trim();
@@ -45,26 +46,23 @@ function isNoiseEmail(email: string): boolean {
   return NOISE_EMAIL_PATTERNS.some((pattern) => pattern.test(lower));
 }
 
-/** Track subject → unique recipient emails to detect mass outbound blasts */
-const subjectRecipientTracker = new Map<string, Set<string>>();
-
-function isMassOutboundSubject(subject: string): boolean {
+function isMassOutboundSubject(subject: string, subjectRecipientTracker: SubjectRecipientTracker): boolean {
   const key = subject.trim().toLowerCase();
   if (!key) return false;
   const recipients = subjectRecipientTracker.get(key);
   return (recipients?.size ?? 0) >= MASS_OUTBOUND_RECIPIENT_THRESHOLD;
 }
 
-function recordSubjectRecipients(subject: string, recipientEmails: string[]): void {
+function recordSubjectRecipients(
+  subject: string,
+  recipientEmails: string[],
+  subjectRecipientTracker: SubjectRecipientTracker,
+): void {
   const key = subject.trim().toLowerCase();
   if (!key) return;
   const set = subjectRecipientTracker.get(key) || new Set<string>();
   for (const email of recipientEmails) set.add(email);
   subjectRecipientTracker.set(key, set);
-}
-
-function clearSubjectRecipientTracker(): void {
-  subjectRecipientTracker.clear();
 }
 
 function extractEmailAddress(raw: string): string {
@@ -113,7 +111,7 @@ async function scanThreads(
   const contactMap = new Map<string, ScannedContact>();
   const signaturesByEmail = new Map<string, Set<string>>();
   const typeSignals = new Map<string, { signatureKey: string; count: number; examples: Set<string>; labelName?: string }>();
-  clearSubjectRecipientTracker();
+  const subjectRecipientTracker: SubjectRecipientTracker = new Map();
   let threadsScanned = 0;
   let cursor: string | undefined;
 
@@ -135,7 +133,15 @@ async function scanThreads(
 
     for (const thread of threads) {
       threadsScanned++;
-      processThread(thread, userEmail, contactMap, typeSignals, signaturesByEmail, userLabelMap);
+      processThread(
+        thread,
+        userEmail,
+        contactMap,
+        typeSignals,
+        signaturesByEmail,
+        subjectRecipientTracker,
+        userLabelMap,
+      );
     }
 
     onProgress?.(threadsScanned);
@@ -163,6 +169,7 @@ function processThread(
   contactMap: Map<string, ScannedContact>,
   typeSignals: Map<string, { signatureKey: string; count: number; examples: Set<string>; labelName?: string }>,
   signaturesByEmail: Map<string, Set<string>>,
+  subjectRecipientTracker: SubjectRecipientTracker,
   userLabelMap?: Map<string, string>,
 ) {
   const userNorm = userEmail.toLowerCase().trim();
@@ -203,9 +210,9 @@ function processThread(
   const counterparties = participants.filter((p) => p !== userNorm && !isNoiseEmail(p));
 
   if (hasUserSent && subject) {
-    recordSubjectRecipients(subject, counterparties);
+    recordSubjectRecipients(subject, counterparties, subjectRecipientTracker);
   }
-  if (isMassOutboundSubject(subject)) {
+  if (isMassOutboundSubject(subject, subjectRecipientTracker)) {
     return;
   }
 

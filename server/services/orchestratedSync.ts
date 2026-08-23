@@ -55,7 +55,7 @@ export async function runOrchestratedSync(userId: string): Promise<OrchestratedS
 
   // 2. Agent sync (Superhuman/Gmail live, Granola, Calendar adapters)
   try {
-    const agentResult = await runSync(userId);
+    const agentResult = await runSync(userId, userEmail);
     newInteractions += agentResult.newInteractions;
     newActions += agentResult.newActions;
     errors.push(...agentResult.errors);
