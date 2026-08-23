@@ -57,7 +57,7 @@ export async function fetchEvents(
     }
     const rows = await storage.getMeetings(userId);
     const mapped = meetingRowsToCalendarEvents(rows);
-    if (mapped.length > 0) return mapped;
+    return mapped;
   }
 
   const contacts = await storage.getContacts(userId);
@@ -86,7 +86,7 @@ export async function fetchEvents(
  * mapEventToInteraction — convert a Calendar event to a RawInteraction.
  *
  * Direction: always "mutual" (per PRD Section 5.2).
- * sourceId: eventId.
+ * sourceId: eventId plus contactId so multi-attendee events create one interaction per contact.
  * summary: event title.
  */
 export function mapEventToInteraction(
@@ -98,7 +98,7 @@ export function mapEventToInteraction(
     channel: "meeting",
     direction: "mutual",
     occurredAt: new Date(event.start),
-    sourceId: event.eventId,
+    sourceId: `${event.eventId}:${contactId}`,
     summary: event.title,
     source: "calendar",
   };
