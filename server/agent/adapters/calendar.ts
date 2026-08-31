@@ -56,8 +56,8 @@ export async function fetchEvents(
       console.warn("[Calendar] Live sync failed, using cached events:", err);
     }
     const rows = await storage.getMeetings(userId);
-    const mapped = meetingRowsToCalendarEvents(rows);
-    if (mapped.length > 0) return mapped;
+    // Live mode must never fall through to mock fabrication — empty cache is a valid result.
+    return meetingRowsToCalendarEvents(rows);
   }
 
   const contacts = await storage.getContacts(userId);
