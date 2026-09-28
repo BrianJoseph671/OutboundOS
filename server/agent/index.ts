@@ -110,7 +110,8 @@ export async function runSyncWithDeps(
   let newInteractions = 0;
   let newActions = 0;
 
-  const userEmail = process.env.BRIAN_EMAIL ?? "";
+  const user = await storage.getUser(userId);
+  const userEmail = user?.email ?? process.env.BRIAN_EMAIL ?? "";
 
   // ── Step 1: Compute sync window ──────────────────────────────────────────
   const { startDate, endDate } = await computeSyncWindow(userId);

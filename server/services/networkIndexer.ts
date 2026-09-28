@@ -304,35 +304,65 @@ function extractCompanyFromEmail(email: string): string | null {
 
 // ─── Persistence ──────────────────────────────────────────────────────────────
 
+function latestDate(...dates: Array<Date | null | undefined>): Date | null {
+  return dates.reduce<Date | null>((latest, date) => {
+    if (!date) return latest;
+    return !latest || date > latest ? date : latest;
+  }, null);
+}
+
 async function persistContacts(
   userId: string,
   contactMap: Map<string, ScannedContact>,
   hasGranolaMap: Map<string, boolean>,
   hasCalendarMap: Map<string, boolean>,
+  options: { preserveExistingMetrics?: boolean } = {},
 ): Promise<{ contactsFound: number; contactsUpdated: number }> {
   let contactsUpdated = 0;
   const contactsFound = contactMap.size;
 
   for (const [email, scanned] of Array.from(contactMap.entries())) {
+    const existing = await storage.getContactByEmail(email, userId);
+    let totalThreads = scanned.threadCount;
+    let bidirectionalThreads = scanned.bidirectionalThreads;
+    let lastInboundAt = scanned.lastInbound;
+    let lastOutboundAt = scanned.lastOutbound;
+    let lastInteractionAt = scanned.lastInteraction;
+
+    // Incremental 7-day scans must not overwrite lifetime warmth metrics
+    // with the current window (that demotes VIP/warm contacts after Sync Recent).
+    if (options.preserveExistingMetrics && existing) {
+      totalThreads = Math.max(existing.totalThreads ?? 0, scanned.threadCount);
+      bidirectionalThreads = Math.max(
+        existing.bidirectionalThreads ?? 0,
+        scanned.bidirectionalThreads,
+      );
+      lastInboundAt = latestDate(existing.lastInboundAt, scanned.lastInbound);
+      lastOutboundAt = latestDate(existing.lastOutboundAt, scanned.lastOutbound);
+      lastInteractionAt = latestDate(
+        existing.lastInteractionAt,
+        scanned.lastInteraction,
+        lastInboundAt,
+        lastOutboundAt,
+      );
+    }
+
     const { warmthScore, tier } = computeWarmth({
-      bidirectionalThreads: scanned.bidirectionalThreads,
-      totalThreads: scanned.threadCount,
-      lastInteraction: scanned.lastInteraction,
+      bidirectionalThreads,
+      totalThreads,
+      lastInteraction: lastInteractionAt,
       hasGranolaMeeting: hasGranolaMap.get(email) || false,
       hasCalendarEvent: hasCalendarMap.get(email) || false,
     });
 
-    const lastInteractionAt = scanned.lastInteraction;
-
-    const existing = await storage.getContactByEmail(email, userId);
     if (existing) {
       await storage.updateContact(existing.id, userId, {
         warmthScore,
         tier,
-        bidirectionalThreads: scanned.bidirectionalThreads,
-        totalThreads: scanned.threadCount,
-        lastInboundAt: scanned.lastInbound,
-        lastOutboundAt: scanned.lastOutbound,
+        bidirectionalThreads,
+        totalThreads,
+        lastInboundAt,
+        lastOutboundAt,
         lastInteractionAt,
         indexedAt: new Date(),
         ...(scanned.company && !existing.company ? { company: scanned.company } : {}),
@@ -347,10 +377,10 @@ async function persistContacts(
         source: "gmail",
         tier,
         warmthScore,
-        bidirectionalThreads: scanned.bidirectionalThreads,
-        totalThreads: scanned.threadCount,
-        lastInboundAt: scanned.lastInbound,
-        lastOutboundAt: scanned.lastOutbound,
+        bidirectionalThreads,
+        totalThreads,
+        lastInboundAt,
+        lastOutboundAt,
         lastInteractionAt,
         indexedAt: new Date(),
       });
@@ -757,6 +787,7 @@ export async function runIncrementalSync(
     const { hasGranolaMap, hasCalendarMap } = await buildCrossRefMaps(userId);
     const { contactsFound, contactsUpdated } = await persistContacts(
       userId, filteredMap, hasGranolaMap, hasCalendarMap,
+      { preserveExistingMetrics: true },
     );
     progress.contactsFound = contactsFound;
     progress.contactsUpdated = contactsUpdated;
