@@ -65,8 +65,9 @@ export async function fetchMeetings(
       console.warn("[Granola] Live sync failed, using cached meetings:", err);
     }
     const rows = await storage.getMeetings(userId);
-    const mapped = meetingRowsToGranolaMeetings(rows);
-    if (mapped.length > 0) return mapped;
+    // Live mode must never fall through to mock generation — an empty
+    // cache (or a failed sync that left nothing cached) is a real result.
+    return meetingRowsToGranolaMeetings(rows);
   }
 
   const contacts = await storage.getContacts(userId);

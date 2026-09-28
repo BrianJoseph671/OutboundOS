@@ -253,6 +253,9 @@ export async function resumeSequence(sequenceId: string, userId: string): Promis
 }
 
 export async function cancelSequence(sequenceId: string, userId: string): Promise<Sequence | undefined> {
+  const seq = await storage.getSequence(sequenceId, userId);
+  if (!seq) return undefined;
+
   const steps = await storage.getSequenceSteps(sequenceId);
   for (const step of steps) {
     if (step.status === "pending" || step.status === "due") {
