@@ -10,6 +10,12 @@ import { users } from "@shared/schema";
 import { eq, or } from "drizzle-orm";
 import bcrypt from "bcrypt";
 import { randomBytes } from "crypto";
+import {
+  localPasswordBlockReason,
+  planGoogleAccountLink,
+  readGoogleEmailVerified,
+  type GoogleAccountCandidate,
+} from "./authPolicy";
 
 // Export passport so tests can import it directly
 export { passport };
@@ -123,23 +129,48 @@ async function verifyPassword(password: string, hash: string): Promise<boolean> 
   return bcrypt.compare(password, hash);
 }
 
+export class GoogleAccountLinkError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "GoogleAccountLinkError";
+  }
+}
+
 export async function findOrCreateGoogleUser(profile: {
   id: string;
   displayName: string;
-  emails?: Array<{ value: string }>;
+  emails?: Array<{ value: string; verified?: boolean | string }>;
   photos?: Array<{ value: string }>;
+  _json?: { email_verified?: boolean | string };
 }): Promise<Express.User> {
   const googleId = profile.id;
   const email = profile.emails?.[0]?.value ?? null;
   const displayName = profile.displayName;
   const picture = profile.photos?.[0]?.value ?? null;
+  const emailVerified = readGoogleEmailVerified(profile);
 
-  const conditions = [eq(users.googleId, googleId)];
-  if (email) conditions.push(eq(users.email, email));
+  const [byGoogleId] = await db.select().from(users).where(eq(users.googleId, googleId));
+  const byEmail = email
+    ? (await db.select().from(users).where(eq(users.email, email)))[0]
+    : undefined;
 
-  const [existing] = await db.select().from(users).where(or(...conditions));
+  const plan = planGoogleAccountLink({
+    googleId,
+    email,
+    emailVerified,
+    byGoogleId: (byGoogleId as GoogleAccountCandidate | undefined) ?? null,
+    byEmail: (byEmail as GoogleAccountCandidate | undefined) ?? null,
+  });
 
-  if (existing) {
+  if (plan.action === "reject") {
+    throw new GoogleAccountLinkError(plan.message);
+  }
+
+  if (plan.action === "update") {
+    const existing = byGoogleId?.id === plan.userId ? byGoogleId : byEmail;
+    if (!existing) {
+      throw new GoogleAccountLinkError("Account link target was not found.");
+    }
     const [updated] = await db
       .update(users)
       .set({
@@ -147,8 +178,11 @@ export async function findOrCreateGoogleUser(profile: {
         fullName: displayName,
         avatarUrl: picture,
         email: email ?? existing.email,
+        ...(plan.invalidatePassword
+          ? { password: await hashPassword(randomBytes(24).toString("hex")) }
+          : {}),
       })
-      .where(eq(users.id, existing.id))
+      .where(eq(users.id, plan.userId))
       .returning();
     return updated as Express.User;
   }
@@ -247,6 +281,10 @@ export async function setupAuth(app: Express) {
           if (!user) {
             return done(null, false, { message: "Invalid email or password" });
           }
+          const passwordBlock = localPasswordBlockReason(user);
+          if (passwordBlock) {
+            return done(null, false, { message: passwordBlock });
+          }
           if (!user.password) {
             return done(null, false, { message: "This account uses Google sign-in" });
           }
@@ -282,6 +320,9 @@ export async function setupAuth(app: Express) {
             const user = await findOrCreateGoogleUser(profile);
             return done(null, user);
           } catch (err) {
+            if (err instanceof GoogleAccountLinkError) {
+              return done(null, false, { message: err.message });
+            }
             return done(err as Error);
           }
         }
