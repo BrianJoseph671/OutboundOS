@@ -114,8 +114,8 @@ sequencesRouter.post("/:id/steps/:stepId/send", async (req: Request, res: Respon
 sequencesRouter.post("/process-due", async (req: Request, res: Response) => {
   try {
     const userId = req.user!.id;
-    const dueCount = await processDueSteps(userId);
     const completedCount = await checkReplyAndAutoComplete(userId);
+    const dueCount = await processDueSteps(userId);
     res.json({ dueStepsProcessed: dueCount, sequencesAutoCompleted: completedCount });
   } catch (error) {
     console.error("[POST /sequences/process-due]", error);

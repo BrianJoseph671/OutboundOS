@@ -10,7 +10,13 @@
  *   - Surface due steps as actions in the action queue
  */
 import { storage } from "../storage";
-import { listGmailThreads } from "./gmailClient";
+import { getGmailThread, listGmailThreads } from "./gmailClient";
+import {
+  actionMatchesSequence,
+  gmailThreadIds,
+  replyLookupWindow,
+  threadHasContactReplyAfter,
+} from "./sequenceReply";
 import type { Sequence, SequenceStep, InsertSequenceStep } from "@shared/schema";
 
 /** Placeholder until previous step is sent and real scheduledFor is computed */
@@ -155,13 +161,7 @@ export async function markStepSent(
     }
   }
 
-  // Auto-complete the sequence_step action
-  const actions = await storage.getActions(userId, { status: "pending", type: "sequence_step" });
-  for (const action of actions) {
-    if (action.contactId === seq.contactId && action.reason.includes(seq.name)) {
-      await storage.updateAction(action.id, userId, { status: "completed" });
-    }
-  }
+  await completeOpenSequenceActions(userId, seq.contactId, seq.name);
 
   return updated;
 }
@@ -175,8 +175,6 @@ export async function markStepSent(
 export async function checkReplyAndAutoComplete(userId: string): Promise<number> {
   const activeSequences = await storage.getSequences(userId, { status: "active" });
   let completed = 0;
-  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const nowIso = new Date().toISOString();
 
   for (const seq of activeSequences) {
     const contact = await storage.getContact(seq.contactId, userId);
@@ -191,37 +189,12 @@ export async function checkReplyAndAutoComplete(userId: string): Promise<number>
       .filter(Boolean)
       .sort((a, b) => b!.getTime() - a!.getTime())[0] as Date;
 
-    const sequenceThreadIds = new Set(
-      sentSteps.map((s) => s.threadId).filter((id): id is string => Boolean(id)),
-    );
+    const sequenceThreadIds = gmailThreadIds(sentSteps.map((s) => s.threadId));
 
     let replyDetected = false;
 
     try {
-      const gmailResult = await listGmailThreads(userId, {
-        start_date: oneDayAgo.toISOString(),
-        end_date: nowIso,
-        from: [contact.email],
-        limit: 30,
-      });
-
-      for (const thread of gmailResult.threads || []) {
-        const threadId = thread.thread_id;
-        if (sequenceThreadIds.size > 0 && threadId && !sequenceThreadIds.has(threadId)) {
-          continue;
-        }
-        const messages = thread.messages || [];
-        const hasInboundAfterSend = messages.some((msg) => {
-          const from = (msg.from || "").toLowerCase();
-          const isFromContact = from.includes(contact.email!.toLowerCase());
-          const msgDate = msg.sent_at ? new Date(msg.sent_at) : null;
-          return isFromContact && msgDate && msgDate.getTime() > lastSentAt.getTime();
-        });
-        if (hasInboundAfterSend) {
-          replyDetected = true;
-          break;
-        }
-      }
+      replyDetected = await detectSequenceReply(userId, contact.email, lastSentAt, sequenceThreadIds);
     } catch (err) {
       console.warn("[SequenceManager] Gmail reply check failed, falling back to interactions:", err);
       const interactions = await storage.getInteractions(userId, seq.contactId);
@@ -262,7 +235,56 @@ export async function cancelSequence(sequenceId: string, userId: string): Promis
   return storage.updateSequence(sequenceId, userId, { status: "cancelled" });
 }
 
-async function completeSequence(sequenceId: string, userId: string, reason: string): Promise<void> {
+async function detectSequenceReply(
+  userId: string,
+  contactEmail: string,
+  lastSentAt: Date,
+  sequenceThreadIds: string[],
+): Promise<boolean> {
+  if (sequenceThreadIds.length > 0) {
+    let loadedAny = false;
+    for (const threadId of sequenceThreadIds) {
+      try {
+        const thread = await getGmailThread(userId, threadId);
+        loadedAny = true;
+        if (threadHasContactReplyAfter(thread, contactEmail, lastSentAt)) return true;
+      } catch (err) {
+        console.warn("[SequenceManager] Failed to load sequence thread", threadId, err);
+      }
+    }
+    if (loadedAny) return false;
+    throw new Error("Failed to load sequence threads");
+  }
+
+  const window = replyLookupWindow(lastSentAt);
+  const gmailResult = await listGmailThreads(userId, {
+    ...window,
+    from: [contactEmail],
+    limit: 30,
+  });
+  return (gmailResult.threads || []).some((thread) =>
+    threadHasContactReplyAfter(thread, contactEmail, lastSentAt),
+  );
+}
+
+async function completeOpenSequenceActions(
+  userId: string,
+  contactId: string,
+  sequenceName: string,
+): Promise<void> {
+  const actions = await storage.getActions(userId, { type: "sequence_step" });
+  for (const action of actions) {
+    if (action.status !== "pending" && action.status !== "snoozed") continue;
+    if (action.contactId === contactId && actionMatchesSequence(action.reason, sequenceName)) {
+      await storage.updateAction(action.id, userId, { status: "completed" });
+    }
+  }
+}
+
+async function completeSequence(sequenceId: string, userId: string, _reason: string): Promise<void> {
+  const seq = await storage.getSequence(sequenceId, userId);
+  if (!seq) return;
+
   const steps = await storage.getSequenceSteps(sequenceId);
   for (const step of steps) {
     if (step.status === "pending" || step.status === "due") {
@@ -270,6 +292,7 @@ async function completeSequence(sequenceId: string, userId: string, reason: stri
     }
   }
   await storage.updateSequence(sequenceId, userId, { status: "completed" });
+  await completeOpenSequenceActions(userId, seq.contactId, seq.name);
 }
 
 // ─── Default Templates ────────────────────────────────────────────────────────

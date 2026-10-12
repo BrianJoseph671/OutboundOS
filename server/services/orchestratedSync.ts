@@ -64,19 +64,20 @@ export async function runOrchestratedSync(userId: string): Promise<OrchestratedS
     errors.push(`Agent sync failed: ${msg}`);
   }
 
-  // 3. Sequence due steps + reply auto-complete
-  try {
-    dueStepsProcessed = await processDueSteps(userId);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    errors.push(`Sequence due processing failed: ${msg}`);
-  }
-
+  // 3. Reply auto-complete before due steps, so a reply skips remaining
+  // steps instead of surfacing the next follow-up in the same sync.
   try {
     sequencesAutoCompleted = await checkReplyAndAutoComplete(userId);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     errors.push(`Sequence reply detection failed: ${msg}`);
+  }
+
+  try {
+    dueStepsProcessed = await processDueSteps(userId);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    errors.push(`Sequence due processing failed: ${msg}`);
   }
 
   return {
