@@ -85,6 +85,11 @@ interface ScannedContact {
   company: string | null;
 }
 
+/** One thread's contribution to a contact, tagged with the type signatures on that thread. */
+interface ContactContribution extends ScannedContact {
+  signatures: string[];
+}
+
 interface IndexProgress {
   jobId: string;
   threadsScanned: number;
@@ -109,9 +114,11 @@ async function scanThreads(
   threadsScanned: number;
   emailTypeCandidates: EmailTypeCandidate[];
   signaturesByEmail: Map<string, Set<string>>;
+  contactContributions: ContactContribution[];
 }> {
   const contactMap = new Map<string, ScannedContact>();
   const signaturesByEmail = new Map<string, Set<string>>();
+  const contactContributions: ContactContribution[] = [];
   const typeSignals = new Map<string, { signatureKey: string; count: number; examples: Set<string>; labelName?: string }>();
   clearSubjectRecipientTracker();
   let threadsScanned = 0;
@@ -135,7 +142,7 @@ async function scanThreads(
 
     for (const thread of threads) {
       threadsScanned++;
-      processThread(thread, userEmail, contactMap, typeSignals, signaturesByEmail, userLabelMap);
+      processThread(thread, userEmail, contactMap, typeSignals, signaturesByEmail, contactContributions, userLabelMap);
     }
 
     onProgress?.(threadsScanned);
@@ -154,7 +161,7 @@ async function scanThreads(
       labelName: v.labelName,
     }),
   );
-  return { contactMap, threadsScanned, emailTypeCandidates, signaturesByEmail };
+  return { contactMap, threadsScanned, emailTypeCandidates, signaturesByEmail, contactContributions };
 }
 
 function processThread(
@@ -163,6 +170,7 @@ function processThread(
   contactMap: Map<string, ScannedContact>,
   typeSignals: Map<string, { signatureKey: string; count: number; examples: Set<string>; labelName?: string }>,
   signaturesByEmail: Map<string, Set<string>>,
+  contactContributions: ContactContribution[],
   userLabelMap?: Map<string, string>,
 ) {
   const userNorm = userEmail.toLowerCase().trim();
@@ -245,40 +253,66 @@ function processThread(
     }
   }
 
+  const threadSignatures = [
+    signature.signatureHash,
+    ...labelSignatures.map((ls) => ls.signatureHash),
+  ];
+  const newest = [latestInbound, latestOutbound].filter(Boolean).sort((a, b) => b!.getTime() - a!.getTime())[0] || null;
+
   for (const email of counterparties) {
     const setForEmail = signaturesByEmail.get(email) || new Set<string>();
-    setForEmail.add(signature.signatureHash);
-    for (const ls of labelSignatures) setForEmail.add(ls.signatureHash);
+    for (const sig of threadSignatures) setForEmail.add(sig);
     signaturesByEmail.set(email, setForEmail);
+
+    const contribution: ContactContribution = {
+      email,
+      name: extractNameFromParticipants(thread.participants || [], email) || email.split("@")[0],
+      threadCount: 1,
+      bidirectionalThreads: isBidirectional ? 1 : 0,
+      lastInbound: latestInbound,
+      lastOutbound: latestOutbound,
+      lastInteraction: newest,
+      company: extractCompanyFromEmail(email),
+      signatures: threadSignatures,
+    };
+    contactContributions.push(contribution);
+
     const existing = contactMap.get(email);
     if (existing) {
-      existing.threadCount++;
-      if (isBidirectional) existing.bidirectionalThreads++;
-      if (latestInbound && (!existing.lastInbound || latestInbound > existing.lastInbound)) {
-        existing.lastInbound = latestInbound;
-      }
-      if (latestOutbound && (!existing.lastOutbound || latestOutbound > existing.lastOutbound)) {
-        existing.lastOutbound = latestOutbound;
-      }
-      const newest = [latestInbound, latestOutbound].filter(Boolean).sort((a, b) => b!.getTime() - a!.getTime())[0] || null;
-      if (newest && (!existing.lastInteraction || newest > existing.lastInteraction)) {
-        existing.lastInteraction = newest;
-      }
+      mergeContactContribution(existing, contribution);
     } else {
-      const newest = [latestInbound, latestOutbound].filter(Boolean).sort((a, b) => b!.getTime() - a!.getTime())[0] || null;
-      // Extract name from participant string or derive from email
-      const nameFromParticipant = extractNameFromParticipants(thread.participants || [], email);
-      contactMap.set(email, {
-        email,
-        name: nameFromParticipant || email.split("@")[0],
-        threadCount: 1,
-        bidirectionalThreads: isBidirectional ? 1 : 0,
-        lastInbound: latestInbound,
-        lastOutbound: latestOutbound,
-        lastInteraction: newest,
-        company: extractCompanyFromEmail(email),
-      });
+      contactMap.set(email, stripContribution(contribution));
     }
+  }
+}
+
+function stripContribution(contribution: ContactContribution): ScannedContact {
+  return {
+    email: contribution.email,
+    name: contribution.name,
+    threadCount: contribution.threadCount,
+    bidirectionalThreads: contribution.bidirectionalThreads,
+    lastInbound: contribution.lastInbound,
+    lastOutbound: contribution.lastOutbound,
+    lastInteraction: contribution.lastInteraction,
+    company: contribution.company,
+  };
+}
+
+function mergeContactContribution(existing: ScannedContact, contribution: ScannedContact): void {
+  existing.threadCount += contribution.threadCount;
+  existing.bidirectionalThreads += contribution.bidirectionalThreads;
+  if (contribution.lastInbound && (!existing.lastInbound || contribution.lastInbound > existing.lastInbound)) {
+    existing.lastInbound = contribution.lastInbound;
+  }
+  if (contribution.lastOutbound && (!existing.lastOutbound || contribution.lastOutbound > existing.lastOutbound)) {
+    existing.lastOutbound = contribution.lastOutbound;
+  }
+  if (contribution.lastInteraction && (!existing.lastInteraction || contribution.lastInteraction > existing.lastInteraction)) {
+    existing.lastInteraction = contribution.lastInteraction;
+  }
+  if (contribution.company && !existing.company) {
+    existing.company = contribution.company;
   }
 }
 
@@ -309,6 +343,7 @@ async function persistContacts(
   contactMap: Map<string, ScannedContact>,
   hasGranolaMap: Map<string, boolean>,
   hasCalendarMap: Map<string, boolean>,
+  options?: { skipExistingEmails?: Set<string> },
 ): Promise<{ contactsFound: number; contactsUpdated: number }> {
   let contactsUpdated = 0;
   const contactsFound = contactMap.size;
@@ -325,6 +360,11 @@ async function persistContacts(
     const lastInteractionAt = scanned.lastInteraction;
 
     const existing = await storage.getContactByEmail(email, userId);
+    if (existing && options?.skipExistingEmails?.has(email)) {
+      // Recent-window stats are not a full recount. Leave the stored contact
+      // alone when this sync mixed accepted threads with a rejected type.
+      continue;
+    }
     if (existing) {
       await storage.updateContact(existing.id, userId, {
         warmthScore,
@@ -392,6 +432,97 @@ async function buildCrossRefMaps(userId: string): Promise<{
   return { hasGranolaMap, hasCalendarMap };
 }
 
+function contributionIsRejected(signatures: string[], rejected: Set<string>): boolean {
+  return signatures.some((sig) => rejected.has(sig));
+}
+
+/**
+ * Rebuild contact stats from per-thread contributions.
+ * A rejected type drops only the threads that carry it. Contacts that still
+ * have an accepted thread are kept, and their counts exclude the rejected threads.
+ * Emails present in both sets also had a rejected thread in this scan.
+ */
+function contactsFromContributions(
+  contributions: ContactContribution[],
+  rejected: Set<string>,
+): { contactMap: Map<string, ScannedContact>; partialEmails: Set<string> } {
+  const grouped = new Map<string, ContactContribution[]>();
+  for (const contribution of contributions) {
+    const list = grouped.get(contribution.email) || [];
+    list.push(contribution);
+    grouped.set(contribution.email, list);
+  }
+
+  const contactMap = new Map<string, ScannedContact>();
+  const partialEmails = new Set<string>();
+  for (const [email, list] of Array.from(grouped.entries())) {
+    const accepted = list.filter((contribution) => !contributionIsRejected(contribution.signatures, rejected));
+    if (accepted.length === 0) continue;
+    if (accepted.length !== list.length) partialEmails.add(email);
+
+    let merged: ScannedContact | null = null;
+    for (const contribution of accepted) {
+      if (!merged) {
+        merged = stripContribution(contribution);
+      } else {
+        mergeContactContribution(merged, contribution);
+      }
+    }
+    if (merged) contactMap.set(email, merged);
+  }
+
+  return { contactMap, partialEmails };
+}
+
+function serializeContactContribution(contribution: ContactContribution) {
+  return {
+    email: contribution.email,
+    name: contribution.name,
+    threadCount: contribution.threadCount,
+    bidirectionalThreads: contribution.bidirectionalThreads,
+    lastInbound: contribution.lastInbound?.toISOString() || null,
+    lastOutbound: contribution.lastOutbound?.toISOString() || null,
+    lastInteraction: contribution.lastInteraction?.toISOString() || null,
+    company: contribution.company,
+    signatures: contribution.signatures,
+  };
+}
+
+function parseStoredDate(value: unknown): Date | null {
+  if (typeof value !== "string" || !value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function contactsFromStoredContributions(
+  raw: unknown,
+  rejected: Set<string>,
+): { contactMap: Map<string, ScannedContact>; partialEmails: Set<string> } | null {
+  if (!Array.isArray(raw)) return null;
+  const contributions: ContactContribution[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const row = item as Record<string, unknown>;
+    const email = typeof row.email === "string" ? row.email.trim().toLowerCase() : "";
+    if (!email) continue;
+    const signatures = Array.isArray(row.signatures)
+      ? row.signatures.filter((sig): sig is string => typeof sig === "string")
+      : [];
+    contributions.push({
+      email,
+      name: typeof row.name === "string" && row.name ? row.name : email.split("@")[0],
+      threadCount: typeof row.threadCount === "number" ? row.threadCount : 1,
+      bidirectionalThreads: typeof row.bidirectionalThreads === "number" ? row.bidirectionalThreads : 0,
+      lastInbound: parseStoredDate(row.lastInbound),
+      lastOutbound: parseStoredDate(row.lastOutbound),
+      lastInteraction: parseStoredDate(row.lastInteraction),
+      company: typeof row.company === "string" ? row.company : null,
+      signatures,
+    });
+  }
+  return contactsFromContributions(contributions, rejected);
+}
+
 function filterContactsByRejectedSignatures(
   contactMap: Map<string, ScannedContact>,
   signaturesByEmail: Map<string, Set<string>>,
@@ -401,8 +532,11 @@ function filterContactsByRejectedSignatures(
   const filtered = new Map<string, ScannedContact>();
   for (const [email, scanned] of Array.from(contactMap.entries())) {
     const signatures = signaturesByEmail.get(email);
-    const shouldReject = signatures ? Array.from(signatures).some((sig) => rejected.has(sig)) : false;
-    if (!shouldReject) filtered.set(email, scanned);
+    const signatureList = signatures ? Array.from(signatures) : [];
+    // Drop a contact only when every recorded thread type was rejected.
+    // One rejected type must not erase their other threads.
+    const everySignatureRejected = signatureList.length > 0 && signatureList.every((sig) => rejected.has(sig));
+    if (!everySignatureRejected) filtered.set(email, scanned);
   }
   return filtered;
 }
@@ -487,8 +621,12 @@ export async function prepareIndexReviewSession(
     }
     return b.messageCount - a.messageCount;
   });
+  const previouslyRejected = await storage.getRejectedEmailTypeSignatures(userId);
   const reviewItems = ranked.slice(0, MAX_REVIEW_ITEMS);
-  const autoAcceptedItems = ranked.slice(MAX_REVIEW_ITEMS);
+  // Types past the review cap are stored as accepted, except signatures already rejected.
+  const autoAcceptedItems = ranked
+    .slice(MAX_REVIEW_ITEMS)
+    .filter((item) => !previouslyRejected.has(item.signatureHash));
   const calendarPrioritizedCount = reviewItems.filter((i) => i.hasAnyMeetingLinkedContacts).length;
   const session = await storage.createIndexReviewSession({
     userId,
@@ -502,6 +640,7 @@ export async function prepareIndexReviewSession(
         lastOutbound: c.lastOutbound?.toISOString() || null,
         lastInteraction: c.lastInteraction?.toISOString() || null,
       })),
+      contactContributions: scan.contactContributions.map(serializeContactContribution),
       signaturesByEmail: Object.fromEntries(
         Array.from(scan.signaturesByEmail.entries()).map(([email, set]) => [email, Array.from(set)]),
       ),
@@ -602,7 +741,10 @@ export async function completeIndexReviewSession(
     signaturesByEmail.set(email, new Set(Array.isArray(signatures) ? signatures : []));
   }
 
-  const filteredMap = filterContactsByRejectedSignatures(contactMap, signaturesByEmail, rejected);
+  const rebuilt = contactsFromStoredContributions(summary.contactContributions, rejected);
+  const filteredMap = rebuilt
+    ? rebuilt.contactMap
+    : filterContactsByRejectedSignatures(contactMap, signaturesByEmail, rejected);
   const { hasGranolaMap, hasCalendarMap } = await buildCrossRefMaps(userId);
   const { contactsFound, contactsUpdated } = await persistContacts(
     userId,
@@ -724,39 +866,20 @@ export async function runIncrementalSync(
       userLabelMap,
     );
 
-    // Merge contact maps + signature maps
-    const mergedMap = new Map(Array.from(outbound.contactMap.entries()));
-    const mergedSignatures = new Map(Array.from(outbound.signaturesByEmail.entries()));
-    for (const [email, scanned] of Array.from(inbound.contactMap.entries())) {
-      const existing = mergedMap.get(email);
-      if (existing) {
-        existing.threadCount += scanned.threadCount;
-        existing.bidirectionalThreads += scanned.bidirectionalThreads;
-        if (scanned.lastInbound && (!existing.lastInbound || scanned.lastInbound > existing.lastInbound)) {
-          existing.lastInbound = scanned.lastInbound;
-        }
-        if (scanned.lastOutbound && (!existing.lastOutbound || scanned.lastOutbound > existing.lastOutbound)) {
-          existing.lastOutbound = scanned.lastOutbound;
-        }
-        const newest = [existing.lastInbound, existing.lastOutbound, scanned.lastInbound, scanned.lastOutbound]
-          .filter(Boolean)
-          .sort((a, b) => b!.getTime() - a!.getTime())[0] || null;
-        if (newest) existing.lastInteraction = newest;
-      } else {
-        mergedMap.set(email, scanned);
-      }
-      const existingSignatures = mergedSignatures.get(email) || new Set<string>();
-      const inboundSignatures = inbound.signaturesByEmail.get(email) || new Set<string>();
-      for (const sig of Array.from(inboundSignatures)) existingSignatures.add(sig);
-      mergedSignatures.set(email, existingSignatures);
-    }
+    const { contactMap: filteredMap, partialEmails } = contactsFromContributions(
+      [...outbound.contactContributions, ...inbound.contactContributions],
+      rejected,
+    );
 
     progress.threadsScanned = outbound.threadsScanned + inbound.threadsScanned;
-    const filteredMap = filterContactsByRejectedSignatures(mergedMap, mergedSignatures, rejected);
 
     const { hasGranolaMap, hasCalendarMap } = await buildCrossRefMaps(userId);
     const { contactsFound, contactsUpdated } = await persistContacts(
-      userId, filteredMap, hasGranolaMap, hasCalendarMap,
+      userId,
+      filteredMap,
+      hasGranolaMap,
+      hasCalendarMap,
+      { skipExistingEmails: partialEmails },
     );
     progress.contactsFound = contactsFound;
     progress.contactsUpdated = contactsUpdated;
