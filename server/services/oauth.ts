@@ -1,6 +1,6 @@
-import crypto from "crypto";
 import { encrypt, decrypt } from "../utils/encryption";
 import { storage } from "../storage";
+import { consumeOAuthState, createOAuthState, type OAuthState } from "./oauthState";
 
 export interface OAuthProviderConfig {
   provider: string;
@@ -20,17 +20,6 @@ export interface OAuthTokens {
   tokenType?: string;
   scope?: string;
 }
-
-const stateStore = new Map<string, { provider: string; createdAt: number }>();
-
-setInterval(() => {
-  const now = Date.now();
-  const keys = Array.from(stateStore.keys());
-  for (const key of keys) {
-    const val = stateStore.get(key);
-    if (val && now - val.createdAt > 10 * 60 * 1000) stateStore.delete(key);
-  }
-}, 60_000);
 
 function getBaseUrl(): string {
   return process.env.APP_BASE_URL || "http://localhost:5000";
@@ -80,7 +69,7 @@ export function getProviderConfig(provider: string): OAuthProviderConfig {
   throw new Error(`Unknown OAuth provider: ${provider}`);
 }
 
-export function generateAuthorizationUrl(provider: string): string {
+export function generateAuthorizationUrl(provider: string, userId: string): string {
   const config = getProviderConfig(provider);
   if (provider === "superhuman") {
     throw new Error(
@@ -90,8 +79,7 @@ export function generateAuthorizationUrl(provider: string): string {
   if (!config.clientId) {
     throw new Error(`${provider} OAuth clientId is missing`);
   }
-  const state = crypto.randomBytes(32).toString("hex");
-  stateStore.set(state, { provider, createdAt: Date.now() });
+  const state = createOAuthState(provider, userId);
 
   const params = new URLSearchParams({
     client_id: config.clientId,
@@ -106,11 +94,8 @@ export function generateAuthorizationUrl(provider: string): string {
   return `${config.authorizationUrl}?${params.toString()}`;
 }
 
-export function validateState(state: string): string | null {
-  const entry = stateStore.get(state);
-  if (!entry) return null;
-  stateStore.delete(state);
-  return entry.provider;
+export function validateState(state: string): OAuthState | null {
+  return consumeOAuthState(state);
 }
 
 export async function exchangeCodeForTokens(provider: string, code: string): Promise<OAuthTokens> {
