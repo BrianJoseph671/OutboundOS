@@ -7,6 +7,7 @@ import {
   exchangeCodeForTokens,
   saveTokens,
 } from "../services/oauth";
+import { decideOAuthCallback } from "../services/oauthState";
 import { syncGoogleCalendarEvents } from "../services/googleIntegration";
 import { auth, type OAuthClientProvider, type OAuthDiscoveryState } from "@modelcontextprotocol/sdk/client/auth.js";
 import type { OAuthClientInformationMixed, OAuthClientMetadata, OAuthTokens as SdkOAuthTokens } from "@modelcontextprotocol/sdk/shared/auth.js";
@@ -245,7 +246,7 @@ router.post("/:provider/connect", async (req, res) => {
       return res.json({ connected: true, via: "google" });
     }
 
-    const url = generateAuthorizationUrl(provider);
+    const url = generateAuthorizationUrl(provider, userId);
     res.json({ authorizationUrl: url });
   } catch (error: any) {
     res.status(400).json({ error: error.message || "Failed to start OAuth flow" });
@@ -303,15 +304,19 @@ router.get("/callback/:provider", async (req, res) => {
       return res.redirect("/settings?integration_error=missing_params");
     }
 
-    const provider = validateState(String(state));
-    if (!provider) {
-      return res.redirect("/settings?integration_error=invalid_state");
+    const decision = decideOAuthCallback({
+      state: validateState(String(state)),
+      sessionUserId: req.user?.id,
+      requestedProvider: req.params.provider,
+    });
+    if (!decision.ok) {
+      if (decision.error === "session_mismatch") {
+        console.warn("[integrations] OAuth callback: session user does not match connect state");
+      }
+      return res.redirect(`/settings?integration_error=${decision.error}`);
     }
 
-    const userId = req.user?.id;
-    if (!userId) {
-      return res.redirect("/settings?integration_error=not_authenticated");
-    }
+    const { provider, userId } = decision;
 
     const tokens = await exchangeCodeForTokens(provider, String(code));
     await saveTokens(provider, userId, tokens);
