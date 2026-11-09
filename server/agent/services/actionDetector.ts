@@ -13,13 +13,15 @@
  *
  * 4. new_reply: inbound email received in last 48 hours with no outbound reply.
  *
- * 5. Auto-complete: for each new outbound interaction, check if a pending follow_up
- *    or new_reply action exists for that contact. If yes, mark it completed.
+ * 5. Auto-complete: for each new outbound interaction, check if an open follow_up
+ *    or new_reply (pending or snoozed) exists for that contact. If yes, mark it completed.
  *
- * Dedup: before creating any action, check if a pending action already exists for
- * the same (contactId, actionType). If yes, skip.
+ * Dedup: before creating any action, check if an open action already exists for
+ * the same (contactId, actionType). Pending and snoozed both count as open —
+ * a future snooze must survive the next sync, and an expired snooze already
+ * resurfaces in the pending query. Completed and dismissed do not block.
  */
-import { storage } from "../../storage";
+import { storage, type ActionWithContact } from "../../storage";
 import type { Interaction, InsertAction } from "@shared/schema";
 
 const FORTY_EIGHT_HOURS_MS = 48 * 60 * 60 * 1000;
@@ -44,13 +46,13 @@ export async function detectActions(
   const proposedThisBatch = new Set<string>();
 
   /**
-   * Check both the DB (for pre-existing pending actions) and the in-memory
+   * Check both the DB (for pre-existing open actions) and the in-memory
    * batch set (for actions already proposed in this same call).
    */
   async function isDuplicate(contactId: string, actionType: string): Promise<boolean> {
     const batchKey = `${contactId}:${actionType}`;
     if (proposedThisBatch.has(batchKey)) return true;
-    return pendingActionExists(userId, contactId, actionType);
+    return openActionExists(userId, contactId, actionType);
   }
 
   /**
@@ -201,16 +203,33 @@ export async function detectActions(
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
- * Check whether a pending action already exists for (userId, contactId, actionType).
- * Used to prevent duplicate action creation.
+ * Pending actions plus every snoozed action. Expired snoozes are already
+ * included in the pending query, so this union is exactly the set that is
+ * still on the user's queue. Completed and dismissed actions are omitted
+ * and may be recreated.
  */
-async function pendingActionExists(
+async function listOpenActions(userId: string): Promise<ActionWithContact[]> {
+  const [pendingActions, snoozedActions] = await Promise.all([
+    storage.getActions(userId, { status: "pending" }),
+    storage.getActions(userId, { status: "snoozed" }),
+  ]);
+  const byId = new Map<string, ActionWithContact>();
+  for (const action of pendingActions) byId.set(action.id, action);
+  for (const action of snoozedActions) byId.set(action.id, action);
+  return Array.from(byId.values());
+}
+
+/**
+ * Check whether an open action already exists for (userId, contactId, actionType).
+ * Used to prevent duplicate action creation while a snooze is in effect.
+ */
+async function openActionExists(
   userId: string,
   contactId: string,
   actionType: string
 ): Promise<boolean> {
-  const pendingActions = await storage.getActions(userId, { status: "pending" });
-  return pendingActions.some(
+  const openActions = await listOpenActions(userId);
+  return openActions.some(
     (a) => a.contactId === contactId && a.actionType === actionType
   );
 }
@@ -234,12 +253,14 @@ async function shouldCreateFollowUp(
 }
 
 /**
- * Auto-complete any pending follow_up actions for a contact when an outbound
- * interaction is detected. Sets status to 'completed' with completedAt timestamp.
+ * Auto-complete any open follow_up or new_reply for a contact when an outbound
+ * interaction is detected, including ones the user snoozed. Sets status to
+ * 'completed' with completedAt timestamp so a later snooze expiry cannot
+ * resurface work that was already sent.
  */
 export async function autoCompleteFollowUp(userId: string, contactId: string): Promise<void> {
-  const pendingActions = await storage.getActions(userId, { status: "pending" });
-  const autoCompletable = pendingActions.filter(
+  const openActions = await listOpenActions(userId);
+  const autoCompletable = openActions.filter(
     (a) => a.contactId === contactId && (a.actionType === "follow_up" || a.actionType === "new_reply")
   );
 
