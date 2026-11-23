@@ -782,7 +782,7 @@ describe("Adapter mapping functions", () => {
     const r = mapEmailToInteraction(mockEmail, "c1", "brian@nd.edu");
     expect(r.direction).toBe("inbound");
     expect(r.channel).toBe("email");
-    expect(r.sourceId).toBe("thread-abc");
+    expect(r.sourceId).toBe("msg-1");
     expect(r.source).toBe("superhuman");
   });
 

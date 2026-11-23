@@ -180,7 +180,12 @@ export async function fetchEmails(
  * mapEmailToInteraction — convert a Superhuman email to a RawInteraction.
  *
  * Direction: outbound if `from` matches userEmail (case-insensitive), inbound otherwise.
- * sourceId: thread_id (stable per-conversation identity for idempotent dedupe).
+ * sourceId: message id. Sync stores the latest message of a thread, and
+ * writeInteractions skips an existing (channel, sourceId). Keying by thread id
+ * therefore drops every later message on a thread that was already synced,
+ * including the reply that should open a follow-up. The same message id still
+ * dedupes on the next sync. Fall back to the thread id only when Gmail did not
+ * return a message id.
  * summary: subject + snippet truncated to 200 chars.
  */
 export function mapEmailToInteraction(
@@ -194,13 +199,14 @@ export function mapEmailToInteraction(
 
   const fullSummary = `${email.subject} — ${email.snippet}`;
   const summary = fullSummary.length > 200 ? fullSummary.slice(0, 200) : fullSummary;
+  const messageId = email.messageId?.trim();
 
   return {
     contactId,
     channel: "email",
     direction,
     occurredAt: new Date(email.date),
-    sourceId: email.threadId,
+    sourceId: messageId || email.threadId,
     summary,
     source: "superhuman",
   };
